@@ -532,6 +532,12 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
     repository.ai.pc.baseUrl = _pcUrl.value
     repository.ai.pc.preferredModel = _pcModel.value
     refreshActiveAi()
+    // The "answering with" label must follow downloads, deletions and model switches.
+    repository.ai.phone?.let { phone ->
+      viewModelScope.launch {
+        kotlinx.coroutines.flow.combine(phone.installed, phone.selected) { _, _ -> }.collect { refreshActiveAi() }
+      }
+    }
 
     // Sample data is only added automatically for the first guest launch; signed-in accounts start empty.
     if (_currentUser.value.id == GUEST_USER_ID) {

@@ -7,6 +7,7 @@ import com.example.data.ai.llm.LlmRequest
 import com.example.data.ai.llm.LlmTurn
 import com.example.data.ai.llm.OllamaClient
 import com.example.data.ai.llm.PhoneModels
+import com.example.data.ai.llm.PlainMath
 import com.example.data.ai.llm.extractJson
 import com.example.data.model.ChatMessage
 import com.example.data.model.ExtractedConcept
@@ -81,8 +82,12 @@ class StudyAi(context: Context?) {
       return builtIn(note)
     }
 
+    val system = "$systemInstruction $PLAIN_MATH_RULE"
     val text = try {
-      backend.generate(LlmRequest(systemInstruction, toTurns(history), temperature = 0.6, maxOutputTokens = 1200), onPartial)
+      backend.generate(
+        LlmRequest(system, toTurns(history), temperature = 0.6, maxOutputTokens = 1200),
+        onPartial?.let { show -> { partial: String -> show(PlainMath.convert(partial)) } }
+      ).let(PlainMath::convert)
     } catch (e: Exception) {
       Log.w(TAG, "${backend.label} failed", e)
       return builtIn("${backend.label} didn't answer (${e.message}), so this is a built-in answer.")
@@ -131,8 +136,10 @@ class StudyAi(context: Context?) {
     - "questionType": "MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER" or "CODING"
     - "difficulty": "$difficulty"
     - "questionText": string
-    - "optionsJson": 4 comma-separated options for MULTIPLE_CHOICE, "True,False" for TRUE_FALSE, otherwise ""
-    - "correctAnswer": for choice questions, exactly one of the options; otherwise a short model answer
+    - "optionsJson": for MULTIPLE_CHOICE a JSON array of the 4 option texts (the full text, not letters);
+      ["True", "False"] for TRUE_FALSE; otherwise []
+    - "correctAnswer": for choice questions, the full text of the correct option; otherwise a short model answer
+    Write maths as plain text (λ, x², ≤), not LaTeX.
     - "explanation": why the answer is correct
     - "codeStarter": starter code for CODING, otherwise null
   """.trimIndent()
@@ -192,38 +199,50 @@ class StudyAi(context: Context?) {
     val array = if (json.startsWith("{")) {
       JSONObject(json).let { obj -> obj.keys().asSequence().mapNotNull { obj.optJSONArray(it) }.firstOrNull() ?: JSONArray().put(obj) }
     } else JSONArray(json)
-    (0 until array.length()).mapNotNull { i ->
-      val obj = array.optJSONObject(i) ?: return@mapNotNull null
-      val text = obj.optString("questionText")
-      val answer = obj.optString("correctAnswer")
-      if (text.isBlank() || answer.isBlank()) return@mapNotNull null
-      val type = obj.optString("questionType", "SHORT_ANSWER").uppercase()
-        .takeIf { it in setOf("MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "CODING") } ?: "SHORT_ANSWER"
-      val options = when (val raw = obj.opt("optionsJson")) {
-        is JSONArray -> (0 until raw.length()).joinToString(",") { raw.optString(it) }
-        null -> ""
-        else -> raw.toString()
-      }
-      // A choice question whose answer isn't one of its options can't be graded; keep it as short answer.
-      val safeType = if (type == "MULTIPLE_CHOICE" && options.split(",").none { it.trim().equals(answer.trim(), true) }) "SHORT_ANSWER" else type
-      attach(
-        QuizQuestion(
-          topicId = 0L,
-          subjectName = "",
-          topicTitle = "",
-          questionType = safeType,
-          difficulty = obj.optString("difficulty", difficulty),
-          questionText = text,
-          optionsJson = if (safeType == "SHORT_ANSWER" || safeType == "CODING") "" else options,
-          correctAnswer = answer,
-          explanation = obj.optString("explanation"),
-          codeStarter = obj.optString("codeStarter").takeIf { !obj.isNull("codeStarter") && it.isNotBlank() }
-        )
-      )
-    }
+    (0 until array.length()).mapNotNull { i -> array.optJSONObject(i)?.let { toQuestion(it, difficulty) }?.let(attach) }
   } catch (e: Exception) {
     Log.w(TAG, "Could not parse generated questions", e)
     emptyList()
+  }
+
+  private fun toQuestion(obj: JSONObject, difficulty: String): QuizQuestion? {
+    var text = PlainMath.convert(obj.optString("questionText")).trim()
+    var answer = PlainMath.convert(obj.optString("correctAnswer")).trim()
+    if (text.isBlank() || answer.isBlank()) return null
+    var type = obj.optString("questionType", "SHORT_ANSWER").uppercase()
+      .takeIf { it in setOf("MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "CODING") } ?: "SHORT_ANSWER"
+    var options = when (val rawOptions = obj.opt("optionsJson")) {
+      is JSONArray -> (0 until rawOptions.length()).map { rawOptions.optString(it) }
+      is String -> rawOptions.split(if ('|' in rawOptions) "|" else ",")
+      else -> emptyList()
+    }.map { PlainMath.convert(it).trim() }.filter { it.isNotBlank() }
+
+    // Some models list "A) ... B) ..." inside the question and give only letters as options.
+    if (options.isNotEmpty() && options.all { it.length == 1 && it[0].isLetter() }) {
+      val listed = OPTION_LINE.findAll(text).associate { it.groupValues[1].uppercase() to it.groupValues[2].trim() }
+      if (listed.size >= 2) {
+        answer = listed[answer.trim().take(1).uppercase()] ?: answer
+        options = listed.values.toList()
+        text = OPTION_LINE.replace(text, "").trim()
+      }
+    }
+
+    // A choice question whose answer isn't one of its options can't be graded; keep it as short answer.
+    if (type == "MULTIPLE_CHOICE" && options.none { it.equals(answer, ignoreCase = true) }) type = "SHORT_ANSWER"
+    if (type == "SHORT_ANSWER" || type == "CODING") options = emptyList()
+    return QuizQuestion(
+      topicId = 0L,
+      subjectName = "",
+      topicTitle = "",
+      questionType = type,
+      difficulty = obj.optString("difficulty", difficulty),
+      questionText = text,
+      // "|" when an option contains a comma; the quiz screen accepts either separator.
+      optionsJson = options.joinToString(if (options.any { ',' in it }) "|" else ","),
+      correctAnswer = answer,
+      explanation = PlainMath.convert(obj.optString("explanation")),
+      codeStarter = obj.optString("codeStarter").takeIf { !obj.isNull("codeStarter") && it.isNotBlank() }
+    )
   }
 
   // --- Grading ---
@@ -239,7 +258,7 @@ class StudyAi(context: Context?) {
       Context: "${question.explanation}"
       Student answer: "$userAnswer"
 
-      Is the student's answer conceptually correct? Reply with JSON only: {"isCorrect": true or false, "feedback": "1-2 sentences"}
+      Is the student's answer conceptually correct? Reply with JSON only: {"isCorrect": true or false, "feedback": "1-2 sentences to the student, addressed as you"}
     """.trimIndent()
     prompt(prompt, "You grade student answers fairly and briefly.", 0.1, json = true)?.let { raw ->
       try {
@@ -254,7 +273,9 @@ class StudyAi(context: Context?) {
 
   companion object {
     private const val TAG = "StudyAi"
+    private val OPTION_LINE = Regex("""(?m)^\s*([A-Da-d])[).:]\s+(.+)$""")
     const val DEFAULT_SYSTEM_PROMPT = "You are StudyPilot, a tutor for university students. Be accurate and direct."
+    private const val PLAIN_MATH_RULE = "Write maths as plain text with Unicode symbols (for example Av = λv, x², √2, ≤), never LaTeX."
     private const val QUIZ_SYSTEM_PROMPT = "You write university exam questions. You reply with JSON only."
   }
 }

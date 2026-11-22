@@ -152,6 +152,9 @@ fun AiTutorScreen(
 
   val listState = rememberLazyListState()
 
+  // The PC may have come online or gone away since the tutor was last opened.
+  LaunchedEffect(Unit) { viewModel.refreshActiveAi() }
+
   // Auto scroll to bottom when new messages arrive in Chat tab
   LaunchedEffect(messages.size, messages.lastOrNull()?.text?.length?.div(200)) {
     if (messages.isNotEmpty() && selectedTab == TutorTab.CHAT) {

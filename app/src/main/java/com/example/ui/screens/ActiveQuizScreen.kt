@@ -279,7 +279,9 @@ fun ActiveQuizScreen(
         item {
           when (currentQuestion.questionType) {
             "MULTIPLE_CHOICE" -> {
-              val options = currentQuestion.optionsJson.split(",").map { it.trim() }.filter { it.isNotBlank() }
+              val options = currentQuestion.optionsJson
+                .split(if ('|' in currentQuestion.optionsJson) "|" else ",")
+                .map { it.trim() }.filter { it.isNotBlank() }
               Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 options.forEach { opt ->
                   val isSelected = userAnswer.equals(opt, ignoreCase = true)

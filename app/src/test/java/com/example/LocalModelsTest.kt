@@ -4,10 +4,12 @@ import com.example.data.ai.StudyAi
 import com.example.data.ai.llm.LlmRequest
 import com.example.data.ai.llm.LlmTurn
 import com.example.data.ai.llm.OllamaClient
+import com.example.data.ai.llm.PlainMath
 import com.example.data.ai.llm.extractJson
 import com.example.data.ai.llm.stripThinking
 import com.sun.net.httpserver.HttpServer
 import kotlinx.coroutines.runBlocking
+import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -148,5 +150,40 @@ class LocalModelsTest {
     // An answer that isn't one of the options can't be graded as multiple choice.
     assertEquals("SHORT_ANSWER", parsed[1].questionType)
     assertTrue(parsed[1].optionsJson.isEmpty())
+  }
+
+  @Test
+  fun lettersOnlyOptionsAreRecoveredFromTheQuestionText() {
+    // What Gemma 4 E2B produced on a Galaxy S25.
+    val raw = JSONArray().put(
+      JSONObject()
+        .put("questionType", "MULTIPLE_CHOICE")
+        .put("questionText", "Which SOLID principle dictates that a class should have only one reason to change? \n\nA) Open/Closed Principle (OCP)\nB) Liskov Substitution Principle (LSP)\nC) Single Responsibility Principle (SRP)\nD) Dependency Inversion Principle (DIP)")
+        .put("optionsJson", "A,B,C,D")
+        .put("correctAnswer", "C")
+    ).toString()
+    val q = StudyAi(null).parseQuestions(raw, "MEDIUM") { it }.single()
+    assertEquals("Which SOLID principle dictates that a class should have only one reason to change?", q.questionText)
+    assertEquals("Single Responsibility Principle (SRP)", q.correctAnswer)
+    assertEquals("MULTIPLE_CHOICE", q.questionType)
+    assertEquals(4, q.optionsJson.split(",").size)
+  }
+
+  @Test
+  fun optionsContainingCommasUseAPipeSeparator() {
+    val raw = """[{"questionType":"MULTIPLE_CHOICE","questionText":"Pick one","optionsJson":["a, b","c","d","e"],"correctAnswer":"c"}]"""
+    val q = StudyAi(null).parseQuestions(raw, "EASY") { it }.single()
+    assertEquals("a, b|c|d|e", q.optionsJson)
+  }
+
+  @Test
+  fun latexFromModelsIsShownAsPlainMaths() {
+    val raw = "An eigenvector \$\\mathbf{v}\$ satisfies \$A\\mathbf{v} = \\lambda\\mathbf{v}\$, so \$x^2 \\le \\frac{1}{2}\$."
+    assertEquals("An eigenvector v satisfies Av = λv, so x² ≤ (1)/(2).", PlainMath.convert(raw))
+    // Prices and ordinary text are untouched.
+    assertEquals("It costs \$5 and \$10.", PlainMath.convert("It costs \$5 and \$10."))
+    assertEquals("No maths here.", PlainMath.convert("No maths here."))
+    // Seen from Gemma on a real phone: a Greek letter run into the variable name.
+    assertEquals("Av = λv.", PlainMath.convert("Av = \\lambdav."))
   }
 }
