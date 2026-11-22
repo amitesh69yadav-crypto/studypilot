@@ -2,6 +2,8 @@ package com.example.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -55,6 +58,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.QuizAttempt
@@ -107,7 +111,10 @@ fun QuizScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
           ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              modifier = Modifier.weight(1f).padding(end = 8.dp)
+            ) {
               Box(
                 modifier = Modifier
                   .size(44.dp)
@@ -162,18 +169,19 @@ fun QuizScreen(
               onClick = { viewModel.startWeekendQuiz(forceWeakOnly = false) },
               enabled = !isAiLoading && topics.isNotEmpty(),
               shape = RoundedCornerShape(12.dp),
+              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 6.dp),
               modifier = Modifier
                 .weight(1f)
-                .height(44.dp)
+                .heightIn(min = 48.dp)
             ) {
               if (isAiLoading) {
                 CircularProgressIndicator(modifier = Modifier.size(18.dp), color = MaterialTheme.colorScheme.onPrimary)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Assembling...")
+                Text("Assembling...", maxLines = 1, softWrap = false)
               } else {
                 Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("Start Weekend Quiz", fontWeight = FontWeight.SemiBold)
+                Text("Start Quiz", fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
               }
             }
 
@@ -182,13 +190,14 @@ fun QuizScreen(
                 onClick = { viewModel.startWeekendQuiz(forceWeakOnly = true) },
                 enabled = !isAiLoading,
                 shape = RoundedCornerShape(12.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                 modifier = Modifier
                   .weight(1f)
-                  .height(44.dp)
+                  .heightIn(min = 48.dp)
               ) {
                 Icon(Icons.Default.Bolt, contentDescription = null, tint = RoseError, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("Revise Weak (${strugglingTopics.size})", fontWeight = FontWeight.SemiBold)
+                Text("Revise (${strugglingTopics.size})", fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
               }
             }
           }
@@ -212,12 +221,16 @@ fun QuizScreen(
 
             // Quiz Days
             Text("Scheduled Days:", style = MaterialTheme.typography.labelSmall)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            FlowRow(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.spacedBy(6.dp),
+              verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
               listOf("Saturday", "Sunday", "Both").forEach { day ->
                 FilterChip(
                   selected = quizConfig.quizDays.contains(day, ignoreCase = true),
                   onClick = { viewModel.updateQuizConfig(quizConfig.copy(quizDays = day)) },
-                  label = { Text(day, fontSize = 12.sp) },
+                  label = { Text(day, fontSize = 12.sp, maxLines = 1, softWrap = false) },
                   shape = RoundedCornerShape(10.dp)
                 )
               }
@@ -226,12 +239,16 @@ fun QuizScreen(
             Spacer(modifier = Modifier.height(8.dp))
             // Question Count
             Text("Number of Questions:", style = MaterialTheme.typography.labelSmall)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            FlowRow(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.spacedBy(6.dp),
+              verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
               listOf(5, 10, 15, 20).forEach { count ->
                 FilterChip(
                   selected = quizConfig.questionCount == count,
                   onClick = { viewModel.updateQuizConfig(quizConfig.copy(questionCount = count)) },
-                  label = { Text("$count Qs", fontSize = 12.sp) },
+                  label = { Text("$count Qs", fontSize = 12.sp, maxLines = 1, softWrap = false) },
                   shape = RoundedCornerShape(10.dp)
                 )
               }
@@ -240,12 +257,41 @@ fun QuizScreen(
             Spacer(modifier = Modifier.height(8.dp))
             // Difficulty
             Text("Difficulty Level:", style = MaterialTheme.typography.labelSmall)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            FlowRow(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.spacedBy(6.dp),
+              verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
               listOf("MIXED", "EASY", "MEDIUM", "HARD").forEach { diff ->
                 FilterChip(
                   selected = quizConfig.difficulty == diff,
                   onClick = { viewModel.updateQuizConfig(quizConfig.copy(difficulty = diff)) },
-                  label = { Text(diff, fontSize = 12.sp) },
+                  label = { Text(diff, fontSize = 12.sp, maxLines = 1, softWrap = false) },
+                  shape = RoundedCornerShape(10.dp)
+                )
+              }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            // Question Source Selection
+            Text("Question Source:", style = MaterialTheme.typography.labelSmall)
+            Row(
+              modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+              horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+              val sources = listOf(
+                "ALL" to "All Combined",
+                "IMPORTED_CHAT" to "Imported AI Chats",
+                "MANUAL" to "Recorded Topics",
+                "UPLOAD" to "Study Materials"
+              )
+              sources.forEach { (srcKey, srcLabel) ->
+                FilterChip(
+                  selected = quizConfig.questionSource == srcKey,
+                  onClick = { viewModel.updateQuizConfig(quizConfig.copy(questionSource = srcKey)) },
+                  label = { Text(srcLabel, fontSize = 12.sp, maxLines = 1, softWrap = false) },
                   shape = RoundedCornerShape(10.dp)
                 )
               }
@@ -258,7 +304,7 @@ fun QuizScreen(
               horizontalArrangement = Arrangement.SpaceBetween,
               verticalAlignment = Alignment.CenterVertically
             ) {
-              Column {
+              Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
                 Text("Prioritize Weak Topics", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
                 Text("Give overdue and struggling concepts higher weight", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
               }

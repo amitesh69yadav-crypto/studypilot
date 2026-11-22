@@ -3,6 +3,7 @@ package com.example.ui.screens
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -10,6 +11,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -78,7 +82,9 @@ import kotlinx.coroutines.launch
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -109,13 +115,13 @@ fun LoginScreen(
 ) {
   var authMode by remember { mutableStateOf(AuthMode.SIGN_IN) }
 
-  // Input states
-  var email by remember { mutableStateOf("amitesh69.yadav@gmail.com") }
-  var password by remember { mutableStateOf("academic2024") }
-  var name by remember { mutableStateOf("Amitesh Yadav") }
-  var university by remember { mutableStateOf("Imperial College London") }
-  var studentId by remember { mutableStateOf("CS-2024-8841") }
-  var confirmPassword by remember { mutableStateOf("academic2024") }
+  // Input states (blank by default unless a logged-in user previously opted to remember their email)
+  var email by remember { mutableStateOf(viewModel.getRememberedEmail()) }
+  var password by remember { mutableStateOf("") }
+  var name by remember { mutableStateOf("") }
+  var university by remember { mutableStateOf("") }
+  var studentId by remember { mutableStateOf("") }
+  var confirmPassword by remember { mutableStateOf("") }
   var rememberMe by remember { mutableStateOf(true) }
 
   var isPasswordVisible by remember { mutableStateOf(false) }
@@ -170,16 +176,14 @@ fun LoginScreen(
             )
           } else {
             isSigningInGoogle = false
-            viewModel.loginWithGoogle()
-            onLoginSuccess()
+            errorMessage = "Google Sign-In did not return account credentials. Please sign in with email or continue in Guest Mode."
           }
         } catch (_: androidx.credentials.exceptions.GetCredentialCancellationException) {
           isSigningInGoogle = false
         } catch (e: Exception) {
           isSigningInGoogle = false
-          android.util.Log.w("LoginScreen", "Google Sign-In fallback: ${e.message}")
-          viewModel.loginWithGoogle()
-          onLoginSuccess()
+          android.util.Log.w("LoginScreen", "Google Sign-In unavailable: ${e.message}")
+          errorMessage = e.localizedMessage ?: "Google Sign-In failed. Please sign in with email or continue in Guest Mode."
         }
       }
     }
@@ -233,17 +237,17 @@ fun LoginScreen(
               ) {
                 Surface(
                   shape = RoundedCornerShape(14.dp),
-                  color = PalettePaleCeladon,
-                  modifier = Modifier.size(54.dp)
+                  color = Color(0xFF17253B),
+                  modifier = Modifier
+                    .size(56.dp)
+                    .testTag("wide_login_logo")
                 ) {
-                  Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                      imageVector = Icons.Default.School,
-                      contentDescription = "StudyPilot Logo",
-                      tint = PaletteDeepSage,
-                      modifier = Modifier.size(30.dp)
-                    )
-                  }
+                  Image(
+                    painter = painterResource(id = R.drawable.studypilot_logo),
+                    contentDescription = "StudyPilot Logo",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize()
+                  )
                 }
                 Column {
                   Text(
@@ -444,17 +448,17 @@ fun LoginScreen(
         // Mobile Header Brand
         Surface(
           shape = RoundedCornerShape(16.dp),
-          color = PaletteDeepSage,
-          modifier = Modifier.size(56.dp)
+          color = Color(0xFF17253B),
+          modifier = Modifier
+            .size(64.dp)
+            .testTag("mobile_login_logo")
         ) {
-          Box(contentAlignment = Alignment.Center) {
-            Icon(
-              imageVector = Icons.Default.School,
-              contentDescription = "StudyPilot Logo",
-              tint = PaletteCreamIvory,
-              modifier = Modifier.size(32.dp)
-            )
-          }
+          Image(
+            painter = painterResource(id = R.drawable.studypilot_logo),
+            contentDescription = "StudyPilot Logo",
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.fillMaxSize()
+          )
         }
 
         Spacer(modifier = Modifier.height(10.dp))
@@ -697,6 +701,7 @@ private fun AcademicPerkItem(
   }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun AuthFormContent(
   authMode: AuthMode,
@@ -860,7 +865,7 @@ private fun AuthFormContent(
       OutlinedTextField(
         value = studentId,
         onValueChange = onStudentIdChange,
-        label = { Text("Student ID (e.g. CS-2024-8841)") },
+        label = { Text("Student ID (Optional)") },
         leadingIcon = { Icon(Icons.Default.Badge, contentDescription = null, tint = PaletteDeepSage) },
         singleLine = true,
         shape = RoundedCornerShape(12.dp),
@@ -880,8 +885,8 @@ private fun AuthFormContent(
     OutlinedTextField(
       value = email,
       onValueChange = onEmailChange,
-      label = { Text("University Email *") },
-      placeholder = { Text("student@university.ac.uk") },
+      label = { Text("Email Address *") },
+      placeholder = { Text("name@university.edu") },
       leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, tint = PaletteDeepSage) },
       singleLine = true,
       keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
@@ -965,7 +970,10 @@ private fun AuthFormContent(
     ) {
       Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.clickable { onRememberMeChange(!rememberMe) }
+        modifier = Modifier
+          .weight(1f)
+          .padding(end = 8.dp)
+          .clickable { onRememberMeChange(!rememberMe) }
       ) {
         Checkbox(
           checked = rememberMe,
@@ -976,20 +984,25 @@ private fun AuthFormContent(
         Text(
           text = "Remember me",
           fontSize = 12.sp,
-          color = MaterialTheme.colorScheme.onSurfaceVariant
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis
         )
       }
 
       if (authMode == AuthMode.SIGN_IN) {
         TextButton(
           onClick = onForgotPasswordClick,
-          contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+          contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+          modifier = Modifier.heightIn(min = 40.dp)
         ) {
           Text(
             text = "Forgot password?",
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
-            color = PaletteDeepSage
+            color = PaletteDeepSage,
+            maxLines = 1,
+            softWrap = false
           )
         }
       }
@@ -1056,7 +1069,7 @@ private fun AuthFormContent(
       border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage),
       modifier = Modifier
         .fillMaxWidth()
-        .height(46.dp)
+        .heightIn(min = 48.dp)
         .testTag("login_google_button")
     ) {
       Row(
@@ -1077,7 +1090,10 @@ private fun AuthFormContent(
           text = "Continue with Google Student SSO",
           fontSize = 12.sp,
           fontWeight = FontWeight.SemiBold,
-          color = PaletteDarkText
+          color = PaletteDarkText,
+          maxLines = 1,
+          softWrap = false,
+          overflow = TextOverflow.Ellipsis
         )
       }
     }
@@ -1091,7 +1107,7 @@ private fun AuthFormContent(
       border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage.copy(alpha = 0.6f)),
       modifier = Modifier
         .fillMaxWidth()
-        .height(44.dp)
+        .heightIn(min = 48.dp)
         .testTag("login_guest_button")
     ) {
       Row(
@@ -1106,10 +1122,12 @@ private fun AuthFormContent(
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text(
-          text = "Explore in Guest Demo Mode",
+          text = "Continue in Guest Mode",
           fontSize = 12.sp,
           fontWeight = FontWeight.Medium,
-          color = PaletteDarkText
+          color = PaletteDarkText,
+          maxLines = 1,
+          softWrap = false
         )
       }
     }
@@ -1117,26 +1135,30 @@ private fun AuthFormContent(
     Spacer(modifier = Modifier.height(16.dp))
 
     // Mode Toggle footer
-    Row(
-      horizontalArrangement = Arrangement.Center,
-      verticalAlignment = Alignment.CenterVertically
+    FlowRow(
+      modifier = Modifier.fillMaxWidth(),
+      horizontalArrangement = Arrangement.Center
     ) {
       Text(
         text = if (authMode == AuthMode.SIGN_IN) "Don't have an academic account yet?" else "Already registered?",
         fontSize = 12.sp,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.align(Alignment.CenterVertically)
       )
       TextButton(
         onClick = {
           onAuthModeChange(if (authMode == AuthMode.SIGN_IN) AuthMode.SIGN_UP else AuthMode.SIGN_IN)
         },
-        contentPadding = PaddingValues(horizontal = 6.dp)
+        contentPadding = PaddingValues(horizontal = 6.dp),
+        modifier = Modifier.align(Alignment.CenterVertically)
       ) {
         Text(
           text = if (authMode == AuthMode.SIGN_IN) "Create one now" else "Sign in",
           fontSize = 12.sp,
           fontWeight = FontWeight.Bold,
-          color = PaletteDeepSage
+          color = PaletteDeepSage,
+          maxLines = 1,
+          softWrap = false
         )
       }
     }

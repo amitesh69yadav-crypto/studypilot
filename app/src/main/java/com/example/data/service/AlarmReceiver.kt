@@ -59,11 +59,11 @@ class AlarmReceiver : BroadcastReceiver() {
     when (intent.action) {
       ACTION_TRIGGER_STUDY_ALARM -> {
         val sessionId = intent.getLongExtra(EXTRA_SESSION_ID, 0L)
-        val subjectName = intent.getStringExtra(EXTRA_SUBJECT_NAME) ?: "Class Session"
-        val topic = intent.getStringExtra(EXTRA_TOPIC) ?: "Study Session"
+        val subjectName = intent.getStringExtra(EXTRA_SUBJECT_NAME) ?: "Alarm"
+        val topic = intent.getStringExtra(EXTRA_TOPIC) ?: "Scheduled Alarm"
         val startTime = intent.getStringExtra(EXTRA_START_TIME) ?: "Now"
         val endTime = intent.getStringExtra(EXTRA_END_TIME) ?: ""
-        val location = intent.getStringExtra(EXTRA_LOCATION) ?: "Campus"
+        val location = intent.getStringExtra(EXTRA_LOCATION) ?: ""
         val notes = intent.getStringExtra(EXTRA_NOTES) ?: ""
 
         val session = TimetableSession(

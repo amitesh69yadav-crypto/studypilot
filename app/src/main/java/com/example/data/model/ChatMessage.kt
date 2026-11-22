@@ -9,7 +9,8 @@ data class ChatMessage(
   val searchGroundingUsed: Boolean = false,
   val groundingSources: List<GroundingSource> = emptyList(),
   val searchQueries: List<String> = emptyList(),
-  val isError: Boolean = false
+  val isError: Boolean = false,
+  val relatedTopics: List<String> = emptyList()
 )
 
 data class GroundingSource(
@@ -23,22 +24,28 @@ enum class TutorModel(
   val description: String,
   val iconBadge: String
 ) {
-  FLASH_LITE(
-    modelId = "gemini-2.0-flash-lite",
-    displayName = "Flash-Lite",
-    description = "Ultra-fast quick definitions & answers",
-    iconBadge = "⚡ Fast"
-  ),
   FLASH(
-    modelId = "gemini-2.5-flash",
-    displayName = "Flash 2.5 (Default)",
-    description = "Balanced academic tutor + Google Search grounding",
-    iconBadge = "🎯 Balanced"
+    modelId = "gemini-3.8-flash",
+    displayName = "Gemini 3.8 Flash",
+    description = "Primary Cloud AI with Google Search grounding",
+    iconBadge = "⚡ Flash"
+  ),
+  FLASH_LITE(
+    modelId = "gemini-3.1-flash-lite-preview",
+    displayName = "Flash-Lite 3.1",
+    description = "Fast low-latency definitions and formulas",
+    iconBadge = "🚀 Fast"
   ),
   PRO(
-    modelId = "gemini-2.5-pro",
-    displayName = "Pro 2.5",
-    description = "Deep mathematical proofs, coding & complex reasoning",
-    iconBadge = "🧠 Complex"
+    modelId = "gemini-3.1-pro-preview",
+    displayName = "Gemini 3.1 Pro",
+    description = "Deep mathematical proofs, research & complex reasoning",
+    iconBadge = "🧠 Pro"
+  ),
+  LOCAL_AI(
+    modelId = "local-ai-academic",
+    displayName = "Local Llama / Academic AI",
+    description = "On-device Llama 3 & Deep Academic Engine (Zero vague answers)",
+    iconBadge = "🦙 Local Llama"
   )
 }

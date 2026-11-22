@@ -3,6 +3,7 @@ package com.example.ui.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.ai.LocalAiEngine
 import com.example.data.local.AppDatabase
 import com.example.data.model.ChatMessage
 import com.example.data.model.QuizAttempt
@@ -15,10 +16,21 @@ import com.example.data.model.TimetableSession
 import com.example.data.model.TutorMessageEntity
 import com.example.data.model.TutorModel
 import com.example.data.model.TutorSession
+import com.example.data.model.ImportedChat
+import com.example.data.model.ExtractedConcept
+import com.example.data.ai.ChatKnowledgeExtractor
+import com.example.data.remote.ChatLinkFetcher
 import com.example.data.remote.EvaluationResult
 import com.example.data.repository.StudyPilotRepository
+import com.example.ui.components.formatTimeRange
+import com.example.ui.components.formatTo12Hour
 import org.json.JSONArray
 import org.json.JSONObject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -26,11 +38,13 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.withContext
 import com.example.data.service.AlarmAndCalendarService
 import com.example.data.service.CurrentScheduleStatus
 import com.example.data.service.ScheduleState
@@ -48,6 +62,7 @@ sealed class Screen(val title: String) {
   object Progress : Screen("Progress")
   object Tasks : Screen("Tasks & Exams")
   object Settings : Screen("Settings")
+  object AiChatImport : Screen("AI Chat Import & Memory")
 }
 
 data class ActiveQuizState(
@@ -69,7 +84,7 @@ data class ActiveQuizState(
 class StudyPilotViewModel(application: Application) : AndroidViewModel(application) {
 
   val repository: StudyPilotRepository =
-    StudyPilotRepository(AppDatabase.getDatabase(application).studyPilotDao())
+    StudyPilotRepository(AppDatabase.getDatabase(application).studyPilotDao(), context = application)
 
   // --- AI API Keys & Provider Settings ---
   private val aiPrefs = application.getSharedPreferences("studypilot_ai_config", Context.MODE_PRIVATE)
@@ -77,22 +92,9 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
   private val _customGeminiKey = MutableStateFlow(aiPrefs.getString("custom_gemini_key", "") ?: "")
   val customGeminiKey: StateFlow<String> = _customGeminiKey.asStateFlow()
 
-  private val _customGroqKey = MutableStateFlow(aiPrefs.getString("custom_groq_key", "") ?: "")
-  val customGroqKey: StateFlow<String> = _customGroqKey.asStateFlow()
-
-  private val _customOpenAIKey = MutableStateFlow(aiPrefs.getString("custom_openai_key", "") ?: "")
-  val customOpenAIKey: StateFlow<String> = _customOpenAIKey.asStateFlow()
-
-  private val _customDeepSeekKey = MutableStateFlow(aiPrefs.getString("custom_deepseek_key", "") ?: "")
-  val customDeepSeekKey: StateFlow<String> = _customDeepSeekKey.asStateFlow()
-
-  private val _customClaudeKey = MutableStateFlow(aiPrefs.getString("custom_claude_key", "") ?: "")
-  val customClaudeKey: StateFlow<String> = _customClaudeKey.asStateFlow()
-
-  private val _customOpenRouterKey = MutableStateFlow(aiPrefs.getString("custom_openrouter_key", "") ?: "")
-  val customOpenRouterKey: StateFlow<String> = _customOpenRouterKey.asStateFlow()
-
-  private val _aiProviderMode = MutableStateFlow(aiPrefs.getString("ai_provider_mode", "AUTO") ?: "AUTO")
+  private val _aiProviderMode = MutableStateFlow(
+    repository.geminiService.normalizeProviderMode(aiPrefs.getString("ai_provider_mode", "AUTO") ?: "AUTO")
+  )
   val aiProviderMode: StateFlow<String> = _aiProviderMode.asStateFlow()
 
   private val _apiTestStatus = MutableStateFlow<String?>(null)
@@ -111,7 +113,30 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
   private val _isCalendarConnected = MutableStateFlow(true)
   val isCalendarConnected: StateFlow<Boolean> = _isCalendarConnected.asStateFlow()
 
-  val calendarAccountEmail = "amitesh69.yadav@gmail.com"
+  companion object {
+    const val GUEST_USER_ID = "guest_user"
+    private const val MIGRATION_CLEARED_DEFAULT_LOGIN_V1 = "cleared_default_login_v1"
+    private val LEGACY_DEFAULT_ACCOUNT_IDS = setOf(
+      "student_amitesh",
+      "student_sarah",
+      "student_marcus",
+      "guest_demo"
+    )
+
+    fun createGuestProfile(): UserProfile = UserProfile(
+      id = GUEST_USER_ID,
+      name = "Guest",
+      email = "",
+      role = "Guest Mode",
+      university = "Local Session",
+      studentId = "GUEST",
+      avatarInitials = "G",
+      isLoggedIn = false,
+      authProvider = "Guest Mode",
+      rememberMe = false,
+      lastLoginTime = System.currentTimeMillis()
+    )
+  }
 
   private val _ringingAlarmSession = MutableStateFlow<TimetableSession?>(null)
   val ringingAlarmSession: StateFlow<TimetableSession?> = _ringingAlarmSession.asStateFlow()
@@ -119,75 +144,87 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
   // --- Registered Student Accounts & Multi-Student Account Isolation ---
   private val authPrefs = application.getSharedPreferences("studypilot_auth_prefs", Context.MODE_PRIVATE)
 
-  private val defaultAccounts = listOf(
-    UserProfile(
-      id = "student_amitesh",
-      name = "Amitesh Yadav",
-      email = "amitesh69.yadav@gmail.com",
-      role = "Computer Science Scholar",
-      university = "Imperial College London",
-      studentId = "CS-2024-8841",
-      avatarInitials = "AY",
-      isLoggedIn = true,
-      authProvider = "Google / Academic SSO"
-    ),
-    UserProfile(
-      id = "student_sarah",
-      name = "Sarah Chen",
-      email = "sarah.chen@cambridge.ac.uk",
-      role = "Bioinformatics & Pre-Med",
-      university = "University of Cambridge",
-      studentId = "MED-2024-1049",
-      avatarInitials = "SC",
-      isLoggedIn = false,
-      authProvider = "Cambridge Student Portal"
-    ),
-    UserProfile(
-      id = "student_marcus",
-      name = "Marcus Vance",
-      email = "marcus.vance@mit.edu",
-      role = "Mechanical Engineering Scholar",
-      university = "Massachusetts Institute of Technology",
-      studentId = "ME-2024-7723",
-      avatarInitials = "MV",
-      isLoggedIn = false,
-      authProvider = "MIT Kerberos SSO"
-    )
-  )
+  private val legacyDefaultsCleared: Boolean = clearLegacyDefaultAccountsIfNeeded()
 
-  private fun loadRegisteredAccounts(): List<UserProfile> {
-    val jsonStr = authPrefs.getString("registered_students_json", null) ?: return defaultAccounts
+  private fun clearLegacyDefaultAccountsIfNeeded(): Boolean {
+    if (authPrefs.getBoolean(MIGRATION_CLEARED_DEFAULT_LOGIN_V1, false)) return true
+    val editor = authPrefs.edit()
+    val rawAccounts = authPrefs.getString("registered_students_json", null)
+    if (!rawAccounts.isNullOrBlank()) {
+      try {
+        val arr = JSONArray(rawAccounts)
+        val filtered = JSONArray()
+        for (i in 0 until arr.length()) {
+          val obj = arr.getJSONObject(i)
+          val id = obj.optString("id", "")
+          if (id.isNotBlank() && id !in LEGACY_DEFAULT_ACCOUNT_IDS && id != GUEST_USER_ID) {
+            filtered.put(obj)
+          }
+        }
+        editor.putString("registered_students_json", filtered.toString())
+      } catch (_: Exception) {
+        editor.remove("registered_students_json")
+      }
+    }
+    val activeId = authPrefs.getString("active_user_id", null)
+    if (activeId == null || activeId in LEGACY_DEFAULT_ACCOUNT_IDS) {
+      editor
+        .putString("active_user_id", GUEST_USER_ID)
+        .putBoolean("is_logged_in", false)
+        .remove("user_name")
+        .remove("user_email")
+        .remove("user_role")
+        .remove("user_university")
+        .remove("user_student_id")
+        .remove("user_initials")
+        .remove("auth_provider")
+        .remove("remembered_email")
+    }
+    editor.putBoolean(MIGRATION_CLEARED_DEFAULT_LOGIN_V1, true).apply()
+    return true
+  }
+
+  private fun parseRegisteredAccounts(jsonStr: String?): List<UserProfile> {
+    if (jsonStr.isNullOrBlank()) return emptyList()
     return try {
       val arr = JSONArray(jsonStr)
       val list = mutableListOf<UserProfile>()
       for (i in 0 until arr.length()) {
         val obj = arr.getJSONObject(i)
+        val id = obj.optString("id", "")
+        if (id.isBlank() || id == GUEST_USER_ID || id in LEGACY_DEFAULT_ACCOUNT_IDS) continue
         list.add(
           UserProfile(
-            id = obj.optString("id", "user_${System.currentTimeMillis()}"),
-            name = obj.optString("name", "Student Scholar"),
-            email = obj.optString("email", "student@university.edu"),
-            role = obj.optString("role", "University Scholar"),
-            university = obj.optString("university", "Academic University"),
-            studentId = obj.optString("studentId", "ID-2024"),
+            id = id,
+            name = obj.optString("name", "Student"),
+            email = obj.optString("email", ""),
+            role = obj.optString("role", "Student"),
+            university = obj.optString("university", "Independent Scholar"),
+            studentId = obj.optString("studentId", ""),
             avatarInitials = obj.optString("avatarInitials", "ST"),
             isLoggedIn = obj.optBoolean("isLoggedIn", false),
-            authProvider = obj.optString("authProvider", "Academic Portal"),
+            authProvider = obj.optString("authProvider", "Email & Password"),
             rememberMe = obj.optBoolean("rememberMe", true),
             lastLoginTime = obj.optLong("lastLoginTime", System.currentTimeMillis())
           )
         )
       }
-      if (list.isEmpty()) defaultAccounts else list
+      list
     } catch (_: Exception) {
-      defaultAccounts
+      emptyList()
     }
+  }
+
+  private fun loadRegisteredAccounts(): List<UserProfile> {
+    val jsonStr = authPrefs.getString("registered_students_json", null)
+    return parseRegisteredAccounts(jsonStr)
   }
 
   private fun saveRegisteredAccounts(list: List<UserProfile>) {
     try {
       val arr = JSONArray()
       for (u in list) {
+        if (u.id.isBlank() || u.id == GUEST_USER_ID) continue
         arr.put(JSONObject().apply {
           put("id", u.id)
           put("name", u.name)
@@ -207,34 +244,52 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
   }
 
   private fun loadSavedUser(): UserProfile {
-    val activeId = authPrefs.getString("active_user_id", "student_amitesh") ?: "student_amitesh"
+    val isLoggedIn = authPrefs.getBoolean("is_logged_in", false)
+    val activeId = authPrefs.getString("active_user_id", GUEST_USER_ID) ?: GUEST_USER_ID
+    if (!isLoggedIn || activeId == GUEST_USER_ID || activeId in LEGACY_DEFAULT_ACCOUNT_IDS) {
+      return createGuestProfile()
+    }
+
     val accounts = loadRegisteredAccounts()
     val match = accounts.find { it.id == activeId }
-    if (match != null) return match
+    if (match != null) return match.copy(isLoggedIn = true)
 
-    val name = authPrefs.getString("user_name", "Amitesh Yadav") ?: "Amitesh Yadav"
-    val email = authPrefs.getString("user_email", "amitesh69.yadav@gmail.com") ?: "amitesh69.yadav@gmail.com"
-    val role = authPrefs.getString("user_role", "Computer Science Scholar") ?: "Computer Science Scholar"
-    val uni = authPrefs.getString("user_university", "Imperial College London") ?: "Imperial College London"
-    val studentId = authPrefs.getString("user_student_id", "CS-2024-8841") ?: "CS-2024-8841"
-    val initials = authPrefs.getString("user_initials", "AY") ?: "AY"
-    val provider = authPrefs.getString("auth_provider", "Academic SSO") ?: "Academic SSO"
-    val isLoggedIn = authPrefs.getBoolean("is_logged_in", true)
+    val storedName = authPrefs.getString("user_name", null)
+    val storedEmail = authPrefs.getString("user_email", null)
+    if (storedName.isNullOrBlank() && storedEmail.isNullOrBlank()) {
+      return createGuestProfile()
+    }
     return UserProfile(
       id = activeId,
-      name = name,
-      email = email,
-      role = role,
-      university = uni,
-      studentId = studentId,
-      avatarInitials = initials,
-      isLoggedIn = isLoggedIn,
-      authProvider = provider
+      name = storedName ?: storedEmail?.substringBefore("@") ?: "Student",
+      email = storedEmail ?: "",
+      role = authPrefs.getString("user_role", "Student") ?: "Student",
+      university = authPrefs.getString("user_university", "Independent Scholar") ?: "Independent Scholar",
+      studentId = authPrefs.getString("user_student_id", "") ?: "",
+      avatarInitials = authPrefs.getString("user_initials", "ST") ?: "ST",
+      isLoggedIn = true,
+      authProvider = authPrefs.getString("auth_provider", "Email & Password") ?: "Email & Password",
+      rememberMe = true
     )
   }
 
   private fun saveUser(user: UserProfile, isLoggedIn: Boolean) {
-    authPrefs.edit()
+    if (user.id == GUEST_USER_ID || !isLoggedIn) {
+      authPrefs.edit()
+        .putString("active_user_id", GUEST_USER_ID)
+        .putBoolean("is_logged_in", false)
+        .remove("user_name")
+        .remove("user_email")
+        .remove("user_role")
+        .remove("user_university")
+        .remove("user_student_id")
+        .remove("user_initials")
+        .remove("auth_provider")
+        .apply()
+      return
+    }
+
+    val editor = authPrefs.edit()
       .putString("active_user_id", user.id)
       .putString("user_name", user.name)
       .putString("user_email", user.email)
@@ -243,19 +298,28 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
       .putString("user_student_id", user.studentId)
       .putString("user_initials", user.avatarInitials)
       .putString("auth_provider", user.authProvider)
-      .putBoolean("is_logged_in", isLoggedIn)
-      .apply()
+      .putBoolean("is_logged_in", user.rememberMe)
+    if (user.rememberMe && user.email.isNotBlank()) {
+      editor.putString("remembered_email", user.email)
+    }
+    editor.apply()
 
-    val currentList = _savedAccounts.value.toMutableList()
-    val idx = currentList.indexOfFirst { it.id == user.id || it.email.equals(user.email, ignoreCase = true) }
+    val currentList = _savedAccounts.value.filter { it.id != GUEST_USER_ID }.toMutableList()
+    val idx = currentList.indexOfFirst {
+      it.id == user.id || (user.email.isNotBlank() && it.email.equals(user.email, ignoreCase = true))
+    }
+    val storedUser = user.copy(isLoggedIn = true)
     if (idx >= 0) {
-      currentList[idx] = user.copy(isLoggedIn = isLoggedIn)
+      currentList[idx] = storedUser
     } else {
-      currentList.add(user.copy(isLoggedIn = isLoggedIn))
+      currentList.add(storedUser)
     }
     _savedAccounts.value = currentList
     saveRegisteredAccounts(currentList)
+    repository.saveUserProfile(storedUser)
   }
+
+  fun getRememberedEmail(): String = authPrefs.getString("remembered_email", "") ?: ""
 
   private val _savedAccounts = MutableStateFlow<List<UserProfile>>(loadRegisteredAccounts())
   val savedAccounts: StateFlow<List<UserProfile>> = _savedAccounts.asStateFlow()
@@ -263,7 +327,9 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
   private val _currentUser = MutableStateFlow<UserProfile>(loadSavedUser())
   val currentUser: StateFlow<UserProfile> = _currentUser.asStateFlow()
 
-  private val _isAuthenticated = MutableStateFlow(authPrefs.getBoolean("is_logged_in", true))
+  private val _isAuthenticated = MutableStateFlow(
+    _currentUser.value.isLoggedIn && _currentUser.value.id != GUEST_USER_ID
+  )
   val isAuthenticated: StateFlow<Boolean> = _isAuthenticated.asStateFlow()
 
   // --- Reactive States (Per-Student Isolated Data Stream) ---
@@ -302,12 +368,125 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
     .flatMapLatest { user -> repository.getScheduleFormatsForUser(user.id) }
     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+  @OptIn(ExperimentalCoroutinesApi::class)
+  val importedChats: StateFlow<List<ImportedChat>> = _currentUser
+    .flatMapLatest { user -> repository.getImportedChatsForUser(user.id) }
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+  @OptIn(ExperimentalCoroutinesApi::class)
+  val extractedConcepts: StateFlow<List<ExtractedConcept>> = _currentUser
+    .flatMapLatest { user -> repository.getExtractedConceptsForUser(user.id) }
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+  // --- AI Chat History Import & Intelligent Learning Memory States ---
+  private val _isImportProcessing = MutableStateFlow(false)
+  val isImportProcessing: StateFlow<Boolean> = _isImportProcessing.asStateFlow()
+
+  private val _importProcessingProgress = MutableStateFlow(0f)
+  val importProcessingProgress: StateFlow<Float> = _importProcessingProgress.asStateFlow()
+
+  private val _importProcessingStatusText = MutableStateFlow("")
+  val importProcessingStatusText: StateFlow<String> = _importProcessingStatusText.asStateFlow()
+
+  private val _extractionPreview = MutableStateFlow<ChatKnowledgeExtractor.ChatExtractionResult?>(null)
+  val extractionPreview: StateFlow<ChatKnowledgeExtractor.ChatExtractionResult?> = _extractionPreview.asStateFlow()
+
+  private val _previewTitle = MutableStateFlow("")
+  val previewTitle: StateFlow<String> = _previewTitle.asStateFlow()
+
+  private val _previewSubject = MutableStateFlow<Subject?>(null)
+  val previewSubject: StateFlow<Subject?> = _previewSubject.asStateFlow()
+
+  private val _previewSubjectSuggestion = MutableStateFlow<ChatKnowledgeExtractor.SubjectSuggestion?>(null)
+  val previewSubjectSuggestion: StateFlow<ChatKnowledgeExtractor.SubjectSuggestion?> = _previewSubjectSuggestion.asStateFlow()
+
+  private val _previewTags = MutableStateFlow("")
+  val previewTags: StateFlow<String> = _previewTags.asStateFlow()
+
+  private val _previewRawText = MutableStateFlow("")
+  val previewRawText: StateFlow<String> = _previewRawText.asStateFlow()
+
+  private val _previewSourceUrl = MutableStateFlow("")
+  val previewSourceUrl: StateFlow<String> = _previewSourceUrl.asStateFlow()
+
+  private val _previewPlatform = MutableStateFlow("Auto-detect")
+  val previewPlatform: StateFlow<String> = _previewPlatform.asStateFlow()
+
+  val studyStreak: StateFlow<Int> = kotlinx.coroutines.flow.combine(
+    topics,
+    quizAttempts,
+    sessions,
+    tutorSessions
+  ) { tList, aList, sList, tsList ->
+    calculateRealStudyStreak(tList, aList, sList, tsList)
+  }.flowOn(Dispatchers.Default)
+    .distinctUntilChanged()
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+  private fun calculateRealStudyStreak(
+    topicsList: List<StudyTopic>,
+    attemptsList: List<QuizAttempt>,
+    sessionsList: List<TimetableSession>,
+    tutorSessionsList: List<TutorSession>
+  ): Int {
+    val activeDates = mutableSetOf<String>()
+    val df = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+
+    for (t in topicsList) {
+      if (t.dateStudied.isNotBlank()) activeDates.add(t.dateStudied)
+    }
+    for (a in attemptsList) {
+      if (a.dateAttempted.isNotBlank()) {
+        activeDates.add(a.dateAttempted.take(10))
+      }
+    }
+    for (s in sessionsList) {
+      if (s.date.isNotBlank() && (s.status == "COMPLETED" || s.status == "ATTENDED")) {
+        activeDates.add(s.date)
+      }
+    }
+    for (ts in tutorSessionsList) {
+      activeDates.add(df.format(java.util.Date(ts.createdAt)))
+    }
+
+    if (activeDates.isEmpty()) return 0
+
+    val cal = java.util.Calendar.getInstance()
+    var streak = 0
+    val todayStr = df.format(cal.time)
+
+    if (activeDates.contains(todayStr)) {
+      streak++
+      cal.add(java.util.Calendar.DAY_OF_YEAR, -1)
+    } else {
+      cal.add(java.util.Calendar.DAY_OF_YEAR, -1)
+      val yesterdayStr = df.format(cal.time)
+      if (!activeDates.contains(yesterdayStr)) {
+        return 0
+      }
+    }
+
+    while (true) {
+      val dateStr = df.format(cal.time)
+      if (activeDates.contains(dateStr)) {
+        streak++
+        cal.add(java.util.Calendar.DAY_OF_YEAR, -1)
+      } else {
+        break
+      }
+    }
+    return streak
+  }
+
   private val dismissedSessionIdsToday = java.util.Collections.synchronizedSet(mutableSetOf<Long>())
 
   private val currentTimeFlow = kotlinx.coroutines.flow.flow {
     while (true) {
-      emit(java.util.Date())
-      kotlinx.coroutines.delay(1000)
+      val now = System.currentTimeMillis()
+      emit(java.util.Date(now))
+      val millisIntoMinute = now % 60_000L
+      val delayMs = (60_000L - millisIntoMinute + 50L).coerceIn(1000L, 60_050L)
+      kotlinx.coroutines.delay(delayMs)
     }
   }
 
@@ -316,20 +495,17 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
     currentTimeFlow
   ) { list, now ->
     alarmAndCalendarService.evaluateCurrentStatus(list, now)
-  }.stateIn(
-    viewModelScope,
-    SharingStarted.WhileSubscribed(5000),
-    CurrentScheduleStatus(ScheduleState.FREE_TIME, formattedStatusText = "Checking mobile schedule status...")
-  )
+  }.flowOn(Dispatchers.Default)
+    .distinctUntilChanged()
+    .stateIn(
+      viewModelScope,
+      SharingStarted.WhileSubscribed(5000),
+      CurrentScheduleStatus(ScheduleState.FREE_TIME, formattedStatusText = "Checking mobile schedule status...")
+    )
 
   init {
-    // Sync initial saved AI keys and provider mode
+    // Sync initial saved AI keys and provider mode (Gemini & Local AI only)
     repository.geminiService.customGeminiKey = _customGeminiKey.value
-    repository.geminiService.customGroqKey = _customGroqKey.value
-    repository.geminiService.customOpenAIKey = _customOpenAIKey.value
-    repository.geminiService.customDeepSeekKey = _customDeepSeekKey.value
-    repository.geminiService.customClaudeKey = _customClaudeKey.value
-    repository.geminiService.customOpenRouterKey = _customOpenRouterKey.value
     repository.geminiService.preferredProviderMode = _aiProviderMode.value
 
     viewModelScope.launch {
@@ -375,16 +551,18 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     // 2. Real-time in-app alarm trigger: checks upcoming sessions every 1 second based on mobile clock
-    viewModelScope.launch {
+    viewModelScope.launch(Dispatchers.Default) {
       val triggeredSessionIdsToday = mutableSetOf<Long>()
       val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
       while (true) {
         kotlinx.coroutines.delay(1000)
         try {
+          val currentSessions = sessions.value
+          if (currentSessions.none { it.isAlarmEnabled }) continue
           val now = System.currentTimeMillis()
           val todayStr = dateFormat.format(java.util.Date(now))
-          val activeSessions = sessions.value.filter { it.isAlarmEnabled }
-          for (session in activeSessions) {
+          for (session in currentSessions) {
+            if (!session.isAlarmEnabled) continue
             val isForToday = session.date.isBlank() || session.date == todayStr
             if (!isForToday) continue
             if (triggeredSessionIdsToday.contains(session.id) || dismissedSessionIdsToday.contains(session.id)) continue
@@ -399,26 +577,28 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
             val exactStartMs = cal.timeInMillis
 
             // Trigger ONLY when the event is starting exactly (at exactStartMs, within 5-minute window)
-            // No early reminder and not when ending
             if (now >= exactStartMs && now <= exactStartMs + 300_000) {
               triggeredSessionIdsToday.add(session.id)
               triggerTestAlarm(session)
               break
             }
           }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
           // Ignore
         }
       }
     }
 
-    // 3. Automatically schedule exact alarms for all enabled sessions
-    viewModelScope.launch {
-      sessions.collect { list ->
-        list.filter { it.isAlarmEnabled }.forEach { s ->
-          alarmAndCalendarService.scheduleSessionAlarm(s)
+    // 3. Automatically schedule exact alarms for all enabled sessions (only when enabled set changes)
+    viewModelScope.launch(Dispatchers.Default) {
+      sessions
+        .map { list -> list.filter { it.isAlarmEnabled } }
+        .distinctUntilChanged()
+        .collect { enabledList ->
+          enabledList.forEach { s ->
+            alarmAndCalendarService.scheduleSessionAlarm(s)
+          }
         }
-      }
     }
   }
 
@@ -433,62 +613,13 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
     }
   }
 
-  fun saveCustomGroqKey(key: String) {
-    val trimmed = key.trim()
-    aiPrefs.edit().putString("custom_groq_key", trimmed).apply()
-    _customGroqKey.value = trimmed
-    repository.geminiService.customGroqKey = trimmed
-    viewModelScope.launch {
-      _snackbarMessage.emit(if (trimmed.isNotBlank()) "Saved Custom Groq API Key!" else "Cleared Custom Groq Key (Using Default Build Key)")
-    }
-  }
-
-  fun saveCustomOpenAIKey(key: String) {
-    val trimmed = key.trim()
-    aiPrefs.edit().putString("custom_openai_key", trimmed).apply()
-    _customOpenAIKey.value = trimmed
-    repository.geminiService.customOpenAIKey = trimmed
-    viewModelScope.launch {
-      _snackbarMessage.emit(if (trimmed.isNotBlank()) "Saved Custom OpenAI (ChatGPT) API Key!" else "Cleared OpenAI Key")
-    }
-  }
-
-  fun saveCustomDeepSeekKey(key: String) {
-    val trimmed = key.trim()
-    aiPrefs.edit().putString("custom_deepseek_key", trimmed).apply()
-    _customDeepSeekKey.value = trimmed
-    repository.geminiService.customDeepSeekKey = trimmed
-    viewModelScope.launch {
-      _snackbarMessage.emit(if (trimmed.isNotBlank()) "Saved Custom DeepSeek API Key!" else "Cleared DeepSeek Key")
-    }
-  }
-
-  fun saveCustomClaudeKey(key: String) {
-    val trimmed = key.trim()
-    aiPrefs.edit().putString("custom_claude_key", trimmed).apply()
-    _customClaudeKey.value = trimmed
-    repository.geminiService.customClaudeKey = trimmed
-    viewModelScope.launch {
-      _snackbarMessage.emit(if (trimmed.isNotBlank()) "Saved Custom Anthropic Claude API Key!" else "Cleared Claude Key")
-    }
-  }
-
-  fun saveCustomOpenRouterKey(key: String) {
-    val trimmed = key.trim()
-    aiPrefs.edit().putString("custom_openrouter_key", trimmed).apply()
-    _customOpenRouterKey.value = trimmed
-    repository.geminiService.customOpenRouterKey = trimmed
-    viewModelScope.launch {
-      _snackbarMessage.emit(if (trimmed.isNotBlank()) "Saved Custom OpenRouter API Key!" else "Cleared OpenRouter Key")
-    }
-  }
-
   fun setAiProviderMode(mode: String) {
-    aiPrefs.edit().putString("ai_provider_mode", mode).apply()
-    _aiProviderMode.value = mode
-    repository.geminiService.preferredProviderMode = mode
+    val normalized = repository.geminiService.normalizeProviderMode(mode)
+    aiPrefs.edit().putString("ai_provider_mode", normalized).apply()
+    _aiProviderMode.value = normalized
+    repository.geminiService.preferredProviderMode = normalized
     viewModelScope.launch {
-      _snackbarMessage.emit("AI Provider Mode set to '$mode'")
+      _snackbarMessage.emit("AI Provider Mode set to '$normalized'")
     }
   }
 
@@ -505,6 +636,44 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
 
   fun clearApiTestStatus() {
     _apiTestStatus.value = null
+  }
+
+  val localOllamaUrl: StateFlow<String> = MutableStateFlow(
+    aiPrefs.getString("local_ollama_url", "http://10.0.2.2:11434") ?: "http://10.0.2.2:11434"
+  ).asStateFlow()
+
+  val localOllamaModel: StateFlow<String> = MutableStateFlow(
+    aiPrefs.getString("local_ollama_model", "llama3.2") ?: "llama3.2"
+  ).asStateFlow()
+
+  private val _ollamaTestStatus = MutableStateFlow<String?>(null)
+  val ollamaTestStatus: StateFlow<String?> = _ollamaTestStatus.asStateFlow()
+
+  fun setLocalOllamaConfig(url: String, model: String) {
+    val cleanUrl = url.trim().ifBlank { "http://10.0.2.2:11434" }
+    val cleanModel = model.trim().ifBlank { "llama3.2" }
+    aiPrefs.edit()
+      .putString("local_ollama_url", cleanUrl)
+      .putString("local_ollama_model", cleanModel)
+      .apply()
+    LocalAiEngine.localOllamaUrl = cleanUrl
+    LocalAiEngine.localOllamaModel = cleanModel
+    viewModelScope.launch {
+      _snackbarMessage.emit("Updated Local Llama configuration ($cleanModel @ $cleanUrl)")
+    }
+  }
+
+  fun testLocalOllamaConnection(url: String) {
+    viewModelScope.launch {
+      _ollamaTestStatus.value = "Connecting to Local Ollama/Llama daemon at $url..."
+      val (_, msg) = LocalAiEngine.testOllamaConnection(url)
+      _ollamaTestStatus.value = msg
+      _snackbarMessage.emit(msg)
+    }
+  }
+
+  fun clearOllamaTestStatus() {
+    _ollamaTestStatus.value = null
   }
 
   // --- Account Actions ---
@@ -526,25 +695,12 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
           switchAccount(nextUser)
           _snackbarMessage.emit("Deleted profile for $userName. Switched to ${nextUser.name}.")
         } else {
-          val defaultUser = UserProfile(
-            id = "student_amitesh",
-            name = "Amitesh Yadav",
-            email = "amitesh69.yadav@gmail.com",
-            role = "Computer Science Scholar",
-            university = "Imperial College London",
-            studentId = "CS-2024-8841",
-            avatarInitials = "AY",
-            isLoggedIn = true,
-            authProvider = "Google Authentication (Firebase)",
-            rememberMe = true,
-            lastLoginTime = System.currentTimeMillis()
-          )
-          saveUser(defaultUser, isLoggedIn = true)
-          _currentUser.value = defaultUser
-          _savedAccounts.value = listOf(defaultUser)
-          saveRegisteredAccounts(listOf(defaultUser))
-          repository.seedSampleUniversityData(defaultUser.id)
-          _snackbarMessage.emit("Profile for $userName removed.")
+          val guest = createGuestProfile()
+          saveUser(guest, isLoggedIn = false)
+          authPrefs.edit().remove("remembered_email").apply()
+          _currentUser.value = guest
+          _isAuthenticated.value = false
+          _snackbarMessage.emit("Profile for $userName removed. Switched to Guest Mode.")
         }
       } else {
         _snackbarMessage.emit("Profile for $userName deleted.")
@@ -554,13 +710,23 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
 
   fun syncCloudData() {
     viewModelScope.launch {
+      val user = _currentUser.value
+      if (user.id == GUEST_USER_ID || !user.isLoggedIn) {
+        _snackbarMessage.emit("Sign in to sync your profile and coursework with the cloud.")
+        return@launch
+      }
       _snackbarMessage.emit("Syncing coursework with cloud...")
-      repository.pullUserDataFromFirestore(_currentUser.value.id)
+      repository.saveUserProfile(user)
+      repository.pullUserDataFromFirestore(user.id)
       _snackbarMessage.emit("Cloud sync complete! Devices are in sync.")
     }
   }
 
   fun switchAccount(user: UserProfile) {
+    if (user.id == GUEST_USER_ID) {
+      loginAsGuest()
+      return
+    }
     val updated = user.copy(isLoggedIn = true, lastLoginTime = System.currentTimeMillis())
     saveUser(updated, isLoggedIn = true)
     _currentUser.value = updated
@@ -568,7 +734,7 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
     _currentScreen.value = Screen.Dashboard
     viewModelScope.launch {
       repository.seedSampleUniversityData(updated.id)
-      _snackbarMessage.emit("Switched to student ${updated.name} (${updated.studentId})")
+      _snackbarMessage.emit("Switched to ${updated.name}")
     }
   }
 
@@ -587,21 +753,23 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
     val userToActivate = if (existing != null) {
       existing.copy(isLoggedIn = true, rememberMe = rememberMe, lastLoginTime = System.currentTimeMillis())
     } else {
-      val namePart = cleanEmail.substringBefore("@").replace(".", " ").split(" ")
+      val namePart = cleanEmail.substringBefore("@").replace(".", " ").replace("_", " ").split(" ")
+        .filter { it.isNotBlank() }
         .joinToString(" ") { it.replaceFirstChar { c -> c.uppercase() } }
+        .ifBlank { "Student" }
       val initials = namePart.split(" ").mapNotNull { it.firstOrNull()?.uppercase() }.take(2).joinToString("")
         .ifBlank { "ST" }
-      val generatedId = "student_" + cleanEmail.replace("@", "_").replace(".", "_")
+      val generatedId = "student_" + cleanEmail.lowercase().replace(Regex("[^a-z0-9]"), "_")
       UserProfile(
         id = generatedId,
         name = namePart,
         email = cleanEmail,
-        role = "University Student",
-        university = "Academic Scholar University",
+        role = "Student",
+        university = "Independent Scholar",
         studentId = "STU-${(1000..9999).random()}",
         avatarInitials = initials,
         isLoggedIn = true,
-        authProvider = "Academic Email & Password",
+        authProvider = "Email & Password",
         rememberMe = rememberMe,
         lastLoginTime = System.currentTimeMillis()
       )
@@ -613,7 +781,7 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
     _currentScreen.value = Screen.Dashboard
     viewModelScope.launch {
       repository.seedSampleUniversityData(userToActivate.id)
-      _snackbarMessage.emit("Signed in successfully as ${userToActivate.name}")
+      _snackbarMessage.emit("Signed in as ${userToActivate.name}. Profile saved.")
     }
     return true
   }
@@ -632,7 +800,7 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
     }
     val cleanEmail = email.trim()
     if (cleanEmail.isBlank() || !android.util.Patterns.EMAIL_ADDRESS.matcher(cleanEmail).matches()) {
-      viewModelScope.launch { _snackbarMessage.emit("Please enter a valid university email address.") }
+      viewModelScope.launch { _snackbarMessage.emit("Please enter a valid email address.") }
       return false
     }
     if (pass.trim().length < 6) {
@@ -641,17 +809,17 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
     }
     val initials = name.trim().split(" ").mapNotNull { it.firstOrNull()?.uppercase() }.take(2).joinToString("")
       .ifBlank { "ST" }
-    val generatedId = "student_" + cleanEmail.replace("@", "_").replace(".", "_")
+    val generatedId = "student_" + cleanEmail.lowercase().replace(Regex("[^a-z0-9]"), "_")
     val newUser = UserProfile(
       id = generatedId,
       name = name.trim(),
       email = cleanEmail,
-      role = "University Student",
-      university = university.ifBlank { "University Academic Scholar" },
-      studentId = studentId.ifBlank { "ID-${(1000..9999).random()}" },
+      role = "Student",
+      university = university.trim().ifBlank { "Independent Scholar" },
+      studentId = studentId.trim().ifBlank { "ID-${(1000..9999).random()}" },
       avatarInitials = initials,
       isLoggedIn = true,
-      authProvider = "Academic Email & Password",
+      authProvider = "Email & Password",
       rememberMe = rememberMe,
       lastLoginTime = System.currentTimeMillis()
     )
@@ -661,7 +829,7 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
     _currentScreen.value = Screen.Dashboard
     viewModelScope.launch {
       repository.seedSampleUniversityData(newUser.id)
-      _snackbarMessage.emit("Welcome to StudyPilot, ${newUser.name}!")
+      _snackbarMessage.emit("Welcome, ${newUser.name}! Account info saved.")
     }
     return true
   }
@@ -677,24 +845,33 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
       com.google.firebase.auth.FirebaseAuth.getInstance().signInWithCredential(credential)
         .addOnSuccessListener { authResult ->
           val fbUser = authResult.user
-          val studentName = displayName ?: fbUser?.displayName ?: "Amitesh Yadav"
-          val studentEmail = email ?: fbUser?.email ?: "amitesh69.yadav@gmail.com"
+          val studentEmail = email?.takeIf { it.isNotBlank() } ?: fbUser?.email?.takeIf { it.isNotBlank() } ?: ""
+          val rawName = displayName?.takeIf { it.isNotBlank() } ?: fbUser?.displayName?.takeIf { it.isNotBlank() }
+          val studentName = rawName ?: studentEmail.substringBefore("@").ifBlank { "Google User" }
+          val userId = fbUser?.uid ?: if (studentEmail.isNotBlank()) {
+            "google_" + studentEmail.lowercase().replace(Regex("[^a-z0-9]"), "_")
+          } else {
+            onComplete(false, "Google account information could not be retrieved.")
+            return@addOnSuccessListener
+          }
           val initials = studentName.trim().split(" ")
             .mapNotNull { it.firstOrNull()?.uppercase() }
             .take(2)
             .joinToString("")
-            .ifBlank { "AY" }
-          val userId = fbUser?.uid ?: ("google_" + studentEmail.replace("@", "_").replace(".", "_"))
+            .ifBlank { "GU" }
+          val existing = _savedAccounts.value.find {
+            it.id == userId || (studentEmail.isNotBlank() && it.email.equals(studentEmail, ignoreCase = true))
+          }
           val user = UserProfile(
             id = userId,
             name = studentName,
             email = studentEmail,
-            role = "University Scholar",
-            university = _currentUser.value.university.ifBlank { "Imperial College London" },
-            studentId = _currentUser.value.studentId.ifBlank { "CS-2024-8841" },
+            role = existing?.role ?: "Student",
+            university = existing?.university?.ifBlank { "Google Account" } ?: "Google Account",
+            studentId = existing?.studentId?.ifBlank { "G-${userId.take(6).uppercase()}" } ?: "G-${userId.take(6).uppercase()}",
             avatarInitials = initials,
             isLoggedIn = true,
-            authProvider = "Google Authentication (Firebase)",
+            authProvider = "Google Sign-In",
             rememberMe = true,
             lastLoginTime = System.currentTimeMillis()
           )
@@ -704,7 +881,7 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
           _currentScreen.value = Screen.Dashboard
           viewModelScope.launch {
             repository.seedSampleUniversityData(user.id)
-            _snackbarMessage.emit("Welcome, ${user.name}!")
+            _snackbarMessage.emit("Signed in as ${user.name}. Profile saved.")
           }
           onComplete(true, null)
         }
@@ -720,19 +897,32 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
 
   fun loginWithGoogle() {
     val fbUser = try { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser } catch (_: Exception) { null }
-    val studentEmail = fbUser?.email ?: "amitesh69.yadav@gmail.com"
-    val studentName = fbUser?.displayName ?: "Amitesh Yadav"
-    val userId = fbUser?.uid ?: "student_amitesh"
+    if (fbUser == null) {
+      viewModelScope.launch {
+        _snackbarMessage.emit("Google Sign-In failed. Please sign in with email or continue in Guest Mode.")
+      }
+      return
+    }
+    val studentEmail = fbUser.email ?: ""
+    val studentName = fbUser.displayName?.takeIf { it.isNotBlank() }
+      ?: studentEmail.substringBefore("@").ifBlank { "Google User" }
+    val userId = fbUser.uid
+    val initials = studentName.trim().split(" ")
+      .mapNotNull { it.firstOrNull()?.uppercase() }
+      .take(2)
+      .joinToString("")
+      .ifBlank { "GU" }
+    val existing = _savedAccounts.value.find { it.id == userId }
     val user = UserProfile(
       id = userId,
       name = studentName,
       email = studentEmail,
-      role = "Computer Science Scholar",
-      university = "Imperial College London",
-      studentId = "CS-2024-8841",
-      avatarInitials = "AY",
+      role = existing?.role ?: "Student",
+      university = existing?.university?.ifBlank { "Google Account" } ?: "Google Account",
+      studentId = existing?.studentId?.ifBlank { "G-${userId.take(6).uppercase()}" } ?: "G-${userId.take(6).uppercase()}",
+      avatarInitials = initials,
       isLoggedIn = true,
-      authProvider = "Google Authentication (Firebase)",
+      authProvider = "Google Sign-In",
       rememberMe = true,
       lastLoginTime = System.currentTimeMillis()
     )
@@ -742,31 +932,19 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
     _currentScreen.value = Screen.Dashboard
     viewModelScope.launch {
       repository.seedSampleUniversityData(user.id)
-      _snackbarMessage.emit("Signed in with Google: ${user.email}")
+      _snackbarMessage.emit("Signed in with Google: ${user.email.ifBlank { user.name }}")
     }
   }
 
   fun loginAsGuest() {
-    val guestUser = UserProfile(
-      id = "guest_demo",
-      name = "Guest Scholar",
-      email = "guest.scholar@studypilot.edu",
-      role = "Visiting Scholar (Demo Mode)",
-      university = "Academic Research University",
-      studentId = "DEMO-GUEST",
-      avatarInitials = "GS",
-      isLoggedIn = true,
-      authProvider = "Guest / Demo Mode",
-      rememberMe = false,
-      lastLoginTime = System.currentTimeMillis()
-    )
-    saveUser(guestUser, isLoggedIn = true)
+    val guestUser = createGuestProfile()
+    saveUser(guestUser, isLoggedIn = false)
     _currentUser.value = guestUser
-    _isAuthenticated.value = true
+    _isAuthenticated.value = false
     _currentScreen.value = Screen.Dashboard
     viewModelScope.launch {
       repository.seedSampleUniversityData(guestUser.id)
-      _snackbarMessage.emit("Exploring in Guest Demo Mode")
+      _snackbarMessage.emit("Browsing in Guest Mode")
     }
   }
 
@@ -774,37 +952,50 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
     try {
       com.google.firebase.auth.FirebaseAuth.getInstance().signOut()
     } catch (_: Exception) {}
-    val loggedOutUser = _currentUser.value.copy(isLoggedIn = false)
-    saveUser(loggedOutUser, isLoggedIn = false)
-    _currentUser.value = loggedOutUser
+    val previousId = _currentUser.value.id
+    if (previousId != GUEST_USER_ID) {
+      val updatedAccounts = _savedAccounts.value.map {
+        if (it.id == previousId) it.copy(isLoggedIn = false) else it
+      }
+      _savedAccounts.value = updatedAccounts
+      saveRegisteredAccounts(updatedAccounts)
+    }
+    val guestUser = createGuestProfile()
+    saveUser(guestUser, isLoggedIn = false)
+    _currentUser.value = guestUser
     _isAuthenticated.value = false
-    _currentScreen.value = Screen.Login
+    _currentScreen.value = Screen.Dashboard
     viewModelScope.launch {
-      _snackbarMessage.emit("Signed out successfully.")
+      repository.seedSampleUniversityData(guestUser.id)
+      _snackbarMessage.emit("Signed out. Switched to Guest Mode.")
     }
   }
 
   fun updateProfile(name: String, email: String, university: String, role: String) {
+    if (_currentUser.value.id == GUEST_USER_ID || !_isAuthenticated.value) {
+      viewModelScope.launch {
+        _snackbarMessage.emit("Sign in to save your profile.")
+      }
+      return
+    }
     val initials = name.trim().split(" ").mapNotNull { it.firstOrNull()?.uppercase() }.take(2).joinToString("")
       .ifBlank { _currentUser.value.avatarInitials }
     val updated = _currentUser.value.copy(
-      name = name.ifBlank { _currentUser.value.name },
-      email = email.ifBlank { _currentUser.value.email },
-      university = university.ifBlank { _currentUser.value.university },
-      role = role.ifBlank { _currentUser.value.role },
+      name = name.trim().ifBlank { _currentUser.value.name },
+      email = email.trim().ifBlank { _currentUser.value.email },
+      university = university.trim().ifBlank { _currentUser.value.university },
+      role = role.trim().ifBlank { _currentUser.value.role },
       avatarInitials = initials
     )
-    saveUser(updated, isLoggedIn = _isAuthenticated.value)
+    saveUser(updated, isLoggedIn = true)
     _currentUser.value = updated
     viewModelScope.launch {
-      _snackbarMessage.emit("Academic profile updated.")
+      _snackbarMessage.emit("Profile updated and saved.")
     }
   }
 
-  // Navigation
-  private val _currentScreen = MutableStateFlow<Screen>(
-    if (authPrefs.getBoolean("is_logged_in", true)) Screen.Dashboard else Screen.Login
-  )
+  // Navigation — always opens cleanly on Dashboard (Guest Mode or stored active account)
+  private val _currentScreen = MutableStateFlow<Screen>(Screen.Dashboard)
   val currentScreen: StateFlow<Screen> = _currentScreen.asStateFlow()
 
   fun navigateTo(screen: Screen) {
@@ -853,7 +1044,7 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
   val useGoogleSearch: StateFlow<Boolean> = _useGoogleSearch.asStateFlow()
 
   private val _systemInstruction = MutableStateFlow(
-    "You are StudyPilot AI Tutor, an elite academic advisor, professor, and university researcher. Provide clear, structured explanations, rigorous proofs when asked, clean code examples, and concise summaries. When Google Search grounding is enabled, cite accurate and up-to-date sources."
+    "You are StudyPilot AI Tutor. CRITICAL ANTI-HALLUCINATION & DIRECTNESS RULES: Directly answer ONLY what the user just asked first—never fabricate facts, never substitute another topic/algorithm if you are unsure, and never add filler intros. When the user asks a follow-up or clicks an action button ('Another Example', 'Example in Code', 'Another Example in Code', 'Summarize', 'Explain Example'): answer ONLY what was clicked! For 'Example in Code' and 'Another Example in Code', output ONLY the code implementation and a brief 3-bullet walkthrough. For 'Summarize', output ONLY a concise bulleted summary and key takeaways. For 'Another Example', output ONLY the new alternative scenario and its walkthrough. For 'Explain Example', output ONLY the step-by-step breakdown of the example. At the very end of your response, output related subtopics in this exact single-line tag: [RELATED_TOPICS: Subtopic 1, Subtopic 2, Subtopic 3, Subtopic 4, Subtopic 5]."
   )
   val systemInstruction: StateFlow<String> = _systemInstruction.asStateFlow()
 
@@ -878,13 +1069,20 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
   fun selectTutorSubject(subject: Subject?) {
     _selectedTutorSubject.value = subject
     val newInstruction = if (subject != null) {
-      "You are StudyPilot AI Tutor, an expert professor and researcher specializing in ${subject.name} (${subject.code}). Provide deep, structured explanations, rigorous proofs, formulas, clean code examples, and practice tips tailored strictly to ${subject.name}. When Google Search grounding is enabled, cite accurate and up-to-date sources."
+      "You are StudyPilot AI Tutor specializing in ${subject.name} (${subject.code}). CRITICAL ANTI-HALLUCINATION & DIRECTNESS RULES: Directly answer ONLY what the user just asked first—never fabricate facts or substitute another topic. When the user clicks or asks for an action ('Another Example', 'Example in Code', 'Another Example in Code', 'Summarize', 'Explain Example'): answer ONLY what was clicked! At the very end of your response, output related subtopics in this exact tag: [RELATED_TOPICS: Subtopic 1, Subtopic 2, Subtopic 3, Subtopic 4, Subtopic 5]."
     } else {
-      "You are StudyPilot AI Tutor, an elite academic advisor, professor, and university researcher. Provide clear, structured explanations, rigorous proofs when asked, clean code examples, and concise summaries. When Google Search grounding is enabled, cite accurate and up-to-date sources."
+      "You are StudyPilot AI Tutor. CRITICAL ANTI-HALLUCINATION & DIRECTNESS RULES: Directly answer ONLY what the user just asked first—never fabricate facts, never substitute another topic/algorithm if you are unsure, and never add filler intros. When the user asks a follow-up or clicks an action button ('Another Example', 'Example in Code', 'Another Example in Code', 'Summarize', 'Explain Example'): answer ONLY what was clicked! For 'Example in Code' and 'Another Example in Code', output ONLY the code implementation and a brief 3-bullet walkthrough. For 'Summarize', output ONLY a concise bulleted summary and key takeaways. For 'Another Example', output ONLY the new alternative scenario and its walkthrough. For 'Explain Example', output ONLY the step-by-step breakdown of the example. At the very end of your response, output related subtopics in this exact single-line tag: [RELATED_TOPICS: Subtopic 1, Subtopic 2, Subtopic 3, Subtopic 4, Subtopic 5]."
     }
     _systemInstruction.value = newInstruction
 
     if (_activeSessionId.value == null && _chatMessages.value.size <= 1) {
+      val initialLinkTopics = com.example.data.ai.ChatHistoryAssistant.getMiniTopicsForLinkedScope(
+        queryOrText = "",
+        groundingUrls = emptyList(),
+        importedChats = importedChats.value,
+        extractedConcepts = extractedConcepts.value,
+        selectedSubject = subject
+      )
       _chatMessages.value = listOf(
         ChatMessage(
           role = "model",
@@ -893,7 +1091,8 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
           } else {
             "Hello! I am your StudyPilot AI Tutor. Ask me any conceptual question, request step-by-step math or algorithm proofs, debug code, or toggle Google Search for live citations."
           },
-          modelName = _selectedModel.value.modelId
+          modelName = _selectedModel.value.modelId,
+          relatedTopics = initialLinkTopics
         )
       )
     }
@@ -912,6 +1111,13 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
   fun startNewTutorChat(subject: Subject? = _selectedTutorSubject.value) {
     _activeSessionId.value = null
     selectTutorSubject(subject)
+    val initialLinkTopics = com.example.data.ai.ChatHistoryAssistant.getMiniTopicsForLinkedScope(
+      queryOrText = "",
+      groundingUrls = emptyList(),
+      importedChats = importedChats.value,
+      extractedConcepts = extractedConcepts.value,
+      selectedSubject = subject
+    )
     _chatMessages.value = listOf(
       ChatMessage(
         role = "model",
@@ -920,7 +1126,8 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
         } else {
           "New general study session started. What lecture topic or theorem would you like to explore?"
         },
-        modelName = _selectedModel.value.modelId
+        modelName = _selectedModel.value.modelId,
+        relatedTopics = initialLinkTopics
       )
     )
   }
@@ -934,33 +1141,49 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
 
       val dbMessages = repository.getMessagesForSessionSync(session.id)
       if (dbMessages.isNotEmpty()) {
-        _chatMessages.value = dbMessages.map { entity ->
-          val sources = try {
-            if (entity.groundingSourcesJson.isNotBlank()) {
-              val arr = JSONArray(entity.groundingSourcesJson)
-              (0 until arr.length()).map { idx ->
-                val obj = arr.getJSONObject(idx)
-                com.example.data.model.GroundingSource(
-                  title = obj.optString("title", "Source"),
-                  url = obj.optString("url", "")
-                )
-              }
-            } else emptyList()
-          } catch (e: Exception) {
-            emptyList()
-          }
+        val chatsSnapshot = importedChats.value
+        val conceptsSnapshot = extractedConcepts.value
+        val mapped = withContext(Dispatchers.Default) {
+          dbMessages.map { entity ->
+            val sources = try {
+              if (entity.groundingSourcesJson.isNotBlank()) {
+                val arr = JSONArray(entity.groundingSourcesJson)
+                (0 until arr.length()).map { idx ->
+                  val obj = arr.getJSONObject(idx)
+                  com.example.data.model.GroundingSource(
+                    title = obj.optString("title", "Source"),
+                    url = obj.optString("url", "")
+                  )
+                }
+              } else emptyList()
+            } catch (_: Exception) {
+              emptyList()
+            }
 
-          ChatMessage(
-            id = entity.id.toString(),
-            role = entity.role,
-            text = entity.text,
-            timestamp = entity.timestamp,
-            modelName = entity.modelName,
-            searchGroundingUsed = entity.searchGroundingUsed,
-            groundingSources = sources,
-            isError = entity.isError
-          )
+            val linkTopics = if (entity.role == "model") {
+              com.example.data.ai.ChatHistoryAssistant.getMiniTopicsForLinkedScope(
+                queryOrText = entity.text,
+                groundingUrls = sources.map { it.url },
+                importedChats = chatsSnapshot,
+                extractedConcepts = conceptsSnapshot,
+                selectedSubject = matchedSubject
+              )
+            } else emptyList()
+
+            ChatMessage(
+              id = entity.id.toString(),
+              role = entity.role,
+              text = entity.text,
+              timestamp = entity.timestamp,
+              modelName = entity.modelName,
+              searchGroundingUsed = entity.searchGroundingUsed,
+              groundingSources = sources,
+              isError = entity.isError,
+              relatedTopics = linkTopics
+            )
+          }
         }
+        _chatMessages.value = mapped
       }
     }
   }
@@ -1003,8 +1226,8 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
 
     viewModelScope.launch {
       _isChatLoading.value = true
+      var sessionId = _activeSessionId.value
       try {
-        var sessionId = _activeSessionId.value
         val activeSub = _selectedTutorSubject.value
         if (sessionId == null) {
           val title = trimmed.take(45).let { if (trimmed.length > 45) "$it..." else it }
@@ -1028,21 +1251,58 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
           searchGroundingUsed = _useGoogleSearch.value
         )
 
-        val response = repository.chatWithTutor(
+        // 1. Prioritize link-containing imported chats on a background CPU dispatcher
+        val chatsSnapshot = importedChats.value
+        val conceptsSnapshot = extractedConcepts.value
+        val linkedChatResponse = withContext(Dispatchers.Default) {
+          com.example.data.ai.ChatHistoryAssistant.answerFromLinkedChats(
+            query = trimmed,
+            history = currentHistory,
+            importedChats = chatsSnapshot,
+            extractedConcepts = conceptsSnapshot,
+            selectedSubject = activeSub
+          )
+        }
+
+        // 2. Fall back to Gemini AI or Local AI when no linked chat contains the answer
+        val subjectHint = activeSub?.let { "${it.name} (${it.code})" }
+        val response = linkedChatResponse ?: repository.chatWithTutor(
           history = currentHistory,
           model = _selectedModel.value,
           useGoogleSearch = _useGoogleSearch.value,
-          systemInstruction = _systemInstruction.value
+          systemInstruction = _systemInstruction.value,
+          subjectContext = subjectHint
         )
+
+        val (cleanText, finalTopics) = withContext(Dispatchers.Default) {
+          val (cleaned, extractedTopics) = com.example.data.ai.AcademicPedagogySynthesizer.extractAndCleanRelatedTopics(
+            rawContent = response.text,
+            fallbackQuery = trimmed
+          )
+          val linkScopedTopics = com.example.data.ai.ChatHistoryAssistant.getMiniTopicsForLinkedScope(
+            queryOrText = "$trimmed $cleaned",
+            groundingUrls = response.groundingSources.map { it.url },
+            importedChats = chatsSnapshot,
+            extractedConcepts = conceptsSnapshot,
+            selectedSubject = activeSub
+          )
+          val resolvedTopics = if (linkedChatResponse != null) {
+            linkedChatResponse.relatedTopics.ifEmpty { linkScopedTopics }
+          } else {
+            linkScopedTopics.ifEmpty { response.relatedTopics.ifEmpty { extractedTopics } }
+          }
+          Pair(cleaned, resolvedTopics)
+        }
 
         val modelMsg = ChatMessage(
           role = "model",
-          text = response.text,
+          text = cleanText,
           modelName = response.modelName,
           searchGroundingUsed = _useGoogleSearch.value,
           groundingSources = response.groundingSources,
           searchQueries = response.searchQueries,
-          isError = response.isError
+          isError = response.isError,
+          relatedTopics = finalTopics
         )
         _chatMessages.value = _chatMessages.value + modelMsg
 
@@ -1060,20 +1320,62 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
         repository.saveTutorMessage(
           sessionId = sessionId,
           role = "model",
-          text = response.text,
+          text = cleanText,
           modelName = response.modelName,
           searchGroundingUsed = _useGoogleSearch.value,
           groundingSourcesJson = sourcesJson,
           isError = response.isError
         )
       } catch (e: Exception) {
-        val errorMsg = ChatMessage(
-          role = "model",
-          text = "I encountered an error processing your request: ${e.message}",
-          modelName = _selectedModel.value.modelId,
-          isError = true
+        // High-order safety net: If anything failed in network or repository, run LocalAiEngine
+        val fallbackResponse = LocalAiEngine.answerQuestion(
+          userQuery = trimmed,
+          history = currentHistory,
+          model = _selectedModel.value,
+          useGoogleSearch = _useGoogleSearch.value
         )
-        _chatMessages.value = _chatMessages.value + errorMsg
+        val (cleanFallbackText, fallbackTopics) = com.example.data.ai.AcademicPedagogySynthesizer.extractAndCleanRelatedTopics(
+          rawContent = fallbackResponse.text,
+          fallbackQuery = trimmed
+        )
+        val activeSubFallback = _selectedTutorSubject.value
+        val linkFallbackTopics = com.example.data.ai.ChatHistoryAssistant.getMiniTopicsForLinkedScope(
+          queryOrText = "$trimmed $cleanFallbackText",
+          groundingUrls = fallbackResponse.groundingSources.map { it.url },
+          importedChats = importedChats.value,
+          extractedConcepts = extractedConcepts.value,
+          selectedSubject = activeSubFallback
+        )
+        val finalFallbackTopics = linkFallbackTopics.ifEmpty {
+          fallbackResponse.relatedTopics.ifEmpty { fallbackTopics }
+        }
+
+        val fallbackMsg = ChatMessage(
+          role = "model",
+          text = cleanFallbackText,
+          modelName = fallbackResponse.modelName,
+          searchGroundingUsed = _useGoogleSearch.value,
+          groundingSources = fallbackResponse.groundingSources,
+          searchQueries = fallbackResponse.searchQueries,
+          isError = false,
+          relatedTopics = finalFallbackTopics
+        )
+        _chatMessages.value = _chatMessages.value + fallbackMsg
+
+        try {
+          val targetSid = sessionId ?: _activeSessionId.value
+          if (targetSid != null) {
+            repository.saveTutorMessage(
+              sessionId = targetSid,
+              role = "model",
+              text = cleanFallbackText,
+              modelName = fallbackResponse.modelName,
+              searchGroundingUsed = _useGoogleSearch.value,
+              groundingSourcesJson = "",
+              isError = false
+            )
+          }
+        } catch (_: Exception) {}
       } finally {
         _isChatLoading.value = false
       }
@@ -1099,8 +1401,21 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
   fun addSession(session: TimetableSession) {
     viewModelScope.launch {
       val sessionWithUser = if (session.userId.isBlank()) session.copy(userId = _currentUser.value.id) else session
-      repository.addSession(sessionWithUser)
-      _snackbarMessage.emit("Class '${session.topic}' scheduled")
+      val insertedId = repository.addSession(sessionWithUser)
+      val savedSession = if (insertedId > 0L && sessionWithUser.id == 0L) {
+        sessionWithUser.copy(id = insertedId)
+      } else {
+        sessionWithUser
+      }
+      if (savedSession.isAlarmEnabled) {
+        alarmAndCalendarService.scheduleSessionAlarm(savedSession)
+      }
+      val msg = if (savedSession.endTime.isBlank() && savedSession.isAlarmEnabled) {
+        "⏰ Alarm set for '${savedSession.topic}' at ${formatTo12Hour(savedSession.startTime)}"
+      } else {
+        "Scheduled '${savedSession.topic}' (${formatTimeRange(savedSession.startTime, savedSession.endTime)})"
+      }
+      _snackbarMessage.emit(msg)
     }
   }
 
@@ -1123,7 +1438,12 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
     viewModelScope.launch {
       val sessionWithUser = if (session.userId.isBlank()) session.copy(userId = _currentUser.value.id) else session
       repository.updateSession(sessionWithUser)
-      _snackbarMessage.emit("Updated '${session.topic}' (${session.startTime} - ${session.endTime})")
+      if (sessionWithUser.isAlarmEnabled) {
+        alarmAndCalendarService.scheduleSessionAlarm(sessionWithUser)
+      } else {
+        alarmAndCalendarService.cancelSessionAlarm(sessionWithUser)
+      }
+      _snackbarMessage.emit("Updated '${sessionWithUser.topic}' (${formatTimeRange(sessionWithUser.startTime, sessionWithUser.endTime)})")
     }
   }
 
@@ -1133,7 +1453,7 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
       repository.updateSession(updated)
       if (updated.isAlarmEnabled) {
         alarmAndCalendarService.scheduleSessionAlarm(updated)
-        _snackbarMessage.emit("⏰ Alarm enabled for '${session.topic}' (${session.startTime})")
+        _snackbarMessage.emit("⏰ Alarm enabled for '${session.topic}' (${formatTo12Hour(session.startTime)})")
       } else {
         alarmAndCalendarService.cancelSessionAlarm(updated)
         _snackbarMessage.emit("Alarm turned off for '${session.topic}'")
@@ -1181,18 +1501,16 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
 
       val timeFormat = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
       val startTimeStr = timeFormat.format(targetCal.time)
-      val endCal = (targetCal.clone() as java.util.Calendar).apply { add(java.util.Calendar.MINUTE, 30) }
-      val endTimeStr = timeFormat.format(endCal.time)
 
       val newSession = TimetableSession(
         userId = _currentUser.value.id,
         subjectId = 0L,
-        subjectName = subjectName.ifBlank { "Mobile Alarm" },
+        subjectName = subjectName.ifBlank { "Alarm" },
         topic = topic.ifBlank { "Mobile Time Reminder" },
         date = dateStr,
         startTime = startTimeStr,
-        endTime = endTimeStr,
-        location = "Mobile Device",
+        endTime = "",
+        location = "",
         notes = "Set using mobile device clock (${targetCal.timeZone.id})",
         recurringDays = "",
         reminderMinutes = 0,
@@ -1209,7 +1527,7 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
       val remSecs = diffSeconds % 60
       val timeText = if (diffMins > 0) "${diffMins}m ${remSecs}s" else "${diffSeconds}s"
 
-      _snackbarMessage.emit("⏰ Mobile Alarm set for $startTimeStr (in $timeText) based on mobile time!")
+      _snackbarMessage.emit("⏰ Mobile Alarm set for ${formatTo12Hour(startTimeStr)} (in $timeText) based on mobile time!")
     }
   }
 
@@ -1248,8 +1566,12 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
     alarmAndCalendarService.stopAlarmSound()
     _ringingAlarmSession.value = null
     viewModelScope.launch {
-      _snackbarMessage.emit("Alarm dismissed")
+      _snackbarMessage.emit("Alarm turned off")
     }
+  }
+
+  fun turnOffAlarm() {
+    dismissAlarm()
   }
 
   fun snoozeAlarm(session: TimetableSession, minutes: Int = 5) {
@@ -1268,7 +1590,8 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
     viewModelScope.launch {
       val updated = session.copy(googleCalendarEventId = "gcal_${session.id}_${System.currentTimeMillis()}")
       repository.updateSession(updated)
-      _snackbarMessage.emit("Synced '${session.topic}' to Google Calendar ($calendarAccountEmail)")
+      val calendarTarget = _currentUser.value.email.ifBlank { "device calendar" }
+      _snackbarMessage.emit("Synced '${session.topic}' to Google Calendar ($calendarTarget)")
     }
   }
 
@@ -1282,7 +1605,8 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
         todayList.forEach { s ->
           repository.updateSession(s.copy(googleCalendarEventId = "gcal_${s.id}_${System.currentTimeMillis()}"))
         }
-        _snackbarMessage.emit("Synced ${todayList.size} session(s) to Google Calendar ($calendarAccountEmail)")
+        val calendarTarget = _currentUser.value.email.ifBlank { "device calendar" }
+        _snackbarMessage.emit("Synced ${todayList.size} session(s) to Google Calendar ($calendarTarget)")
       }
     }
   }
@@ -1290,7 +1614,7 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
   fun createDayScheduleBatch(newSessions: List<TimetableSession>) {
     viewModelScope.launch {
       val uid = _currentUser.value.id
-      newSessions.forEach { repository.addSession(it.copy(userId = uid)) }
+      repository.addSessions(newSessions.map { it.copy(userId = uid) })
       _snackbarMessage.emit("Created ${newSessions.size} schedule session(s)!")
     }
   }
@@ -1298,10 +1622,11 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
   fun replaceDayScheduleWithSessions(targetDate: String, newSessions: List<TimetableSession>) {
     viewModelScope.launch {
       val uid = _currentUser.value.id
-      repository.clearSessionsForDate(targetDate, userId = uid)
-      newSessions.forEach { session ->
-        repository.addSession(session.copy(id = 0L, date = targetDate, userId = uid))
-      }
+      repository.replaceSessionsForDate(
+        date = targetDate,
+        sessions = newSessions.map { it.copy(id = 0L, date = targetDate, userId = uid) },
+        userId = uid
+      )
       _snackbarMessage.emit("Applied ${newSessions.size} session(s) to $targetDate!")
     }
   }
@@ -1368,10 +1693,7 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
         )
       )
 
-      routines.forEach { session ->
-        val id = repository.addSession(session)
-        alarmAndCalendarService.scheduleSessionAlarm(session.copy(id = id))
-      }
+      repository.addSessions(routines)
       _snackbarMessage.emit("🍱 Added Food & Sleep routine slots (with alarms) to $targetDate!")
     }
   }
@@ -1385,20 +1707,19 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
         return@launch
       }
 
-      if (overwriteExisting) {
-        repository.clearSessionsForDate(targetDate, userId = uid)
-      }
-
-      sourceSessions.forEach { s ->
-        repository.addSession(
-          s.copy(
-            id = 0L,
-            userId = uid,
-            date = targetDate,
-            status = "SCHEDULED",
-            googleCalendarEventId = null
-          )
+      val copied = sourceSessions.map { s ->
+        s.copy(
+          id = 0L,
+          userId = uid,
+          date = targetDate,
+          status = "SCHEDULED",
+          googleCalendarEventId = null
         )
+      }
+      if (overwriteExisting) {
+        repository.replaceSessionsForDate(targetDate, copied, userId = uid)
+      } else {
+        repository.addSessions(copied)
       }
       _snackbarMessage.emit("Copied ${sourceSessions.size} session(s) from $sourceDate to $targetDate!")
     }
@@ -1456,13 +1777,13 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
           parsedSessions.add(
             TimetableSession(
               userId = uid,
-              subjectId = obj.optLong("subjectId", 1L),
+              subjectId = obj.optLong("subjectId", 0L),
               subjectName = obj.optString("subjectName", "General"),
               topic = obj.optString("topic", "Study Block"),
               date = targetDate,
               startTime = obj.optString("startTime", "09:00"),
-              endTime = obj.optString("endTime", "10:30"),
-              location = obj.optString("location", "Campus Hall"),
+              endTime = obj.optString("endTime", ""),
+              location = obj.optString("location", ""),
               notes = obj.optString("notes", ""),
               status = "SCHEDULED",
               isAlarmEnabled = obj.optBoolean("isAlarmEnabled", true)
@@ -1475,10 +1796,10 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
       }
 
       if (overwriteExisting) {
-        repository.clearSessionsForDate(targetDate, userId = uid)
+        repository.replaceSessionsForDate(targetDate, parsedSessions, userId = uid)
+      } else {
+        repository.addSessions(parsedSessions)
       }
-
-      parsedSessions.forEach { repository.addSession(it) }
       _snackbarMessage.emit("Applied format '${format.name}' (${parsedSessions.size} sessions) to $targetDate!")
     }
   }
@@ -1576,7 +1897,7 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
 
   fun deleteTopic(id: Long) {
     viewModelScope.launch {
-      repository.deleteTopic(id)
+      repository.deleteTopic(id, userId = _currentUser.value.id)
       _snackbarMessage.emit("Study topic deleted")
     }
   }
@@ -1606,7 +1927,7 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
 
   fun deleteTask(id: Long) {
     viewModelScope.launch {
-      repository.deleteTask(id)
+      repository.deleteTask(id, userId = _currentUser.value.id)
       _snackbarMessage.emit("Task deleted")
     }
   }
@@ -1700,11 +2021,13 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
     viewModelScope.launch {
       _activeQuizState.value = current.copy(isEvaluating = true)
       try {
-        val evalMap = mutableMapOf<Long, EvaluationResult>()
-        for (q in current.questions) {
-          val ans = current.userAnswers[q.id] ?: ""
-          val eval = repository.evaluateUserAnswer(q, ans)
-          evalMap[q.id] = eval
+        val evalMap = coroutineScope {
+          current.questions.map { q ->
+            async(Dispatchers.IO) {
+              val ans = current.userAnswers[q.id] ?: ""
+              q.id to repository.evaluateUserAnswer(q, ans)
+            }
+          }.awaitAll().toMap()
         }
 
         val attempt = repository.recordQuizResults(
@@ -1769,8 +2092,375 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
   // Pre-seed helper for demo
   fun seedSampleData() {
     viewModelScope.launch {
-      repository.seedSampleUniversityData()
+      repository.seedSampleUniversityData(_currentUser.value.id, force = true)
       _snackbarMessage.emit("Sample university data loaded")
+    }
+  }
+
+  fun deleteAllSampleData() {
+    viewModelScope.launch {
+      val userId = _currentUser.value.id
+      for (s in sessions.value) {
+        alarmAndCalendarService.cancelSessionAlarm(s)
+      }
+      dismissAlarm()
+      repository.deleteAllSampleData(userId)
+      _snackbarMessage.emit("All sample data cleared permanently.")
+    }
+  }
+
+  // =========================================================================
+  // AI CHAT HISTORY IMPORT & INTELLIGENT LEARNING MEMORY METHODS
+  // =========================================================================
+
+  fun setQuestionSource(source: String) {
+    _quizConfig.value = _quizConfig.value.copy(questionSource = source)
+  }
+
+  fun fetchAndAnalyzeChatFromLink(
+    chatUrl: String,
+    customTitle: String = "",
+    subject: Subject? = null,
+    tags: String = ""
+  ) {
+    val cleanUrl = chatUrl.trim()
+    if (cleanUrl.isBlank() || !ChatLinkFetcher.isUrl(cleanUrl)) {
+      viewModelScope.launch {
+        _snackbarMessage.emit("Please paste a valid shared chat link (https://...).")
+      }
+      return
+    }
+
+    viewModelScope.launch {
+      _isImportProcessing.value = true
+      _importProcessingProgress.value = 0.05f
+      _importProcessingStatusText.value = "Connecting to shared chat link..."
+      _previewSubject.value = subject
+      _previewSubjectSuggestion.value = null
+      _previewTags.value = tags
+      _previewSourceUrl.value = ChatLinkFetcher.normalizeUrl(cleanUrl)
+
+      try {
+        val fetched = ChatLinkFetcher.fetchChatFromUrl(
+          rawUrl = cleanUrl,
+          onProgress = { p, status ->
+            _importProcessingProgress.value = p * 0.45f
+            _importProcessingStatusText.value = status
+          }
+        )
+
+        if (!fetched.isSuccess || fetched.conversationText.isBlank()) {
+          _isImportProcessing.value = false
+          _importProcessingStatusText.value = ""
+          _snackbarMessage.emit(fetched.errorMessage ?: "Could not retrieve conversation from link. Please ensure link is public.")
+          return@launch
+        }
+
+        val effectiveTitle = customTitle.ifBlank { fetched.title }
+        _previewTitle.value = effectiveTitle
+        _previewRawText.value = fetched.conversationText
+        _previewPlatform.value = fetched.platform
+        _previewSourceUrl.value = fetched.url
+
+        // Auto-group Subject when user chose Auto-Group (subject == null)
+        val suggestion = if (subject == null) {
+          ChatKnowledgeExtractor.detectBestSubject(
+            title = effectiveTitle,
+            rawText = fetched.conversationText,
+            sourceUrl = fetched.url,
+            discoveredTopics = emptyList(),
+            existingSubjects = subjects.value
+          )
+        } else {
+          ChatKnowledgeExtractor.SubjectSuggestion(
+            matchedSubject = subject,
+            suggestedName = subject.name,
+            suggestedCode = subject.code,
+            suggestedColorHex = subject.colorHex
+          )
+        }
+        _previewSubjectSuggestion.value = suggestion
+        if (subject == null && suggestion.matchedSubject != null) {
+          _previewSubject.value = suggestion.matchedSubject
+        }
+
+        _importProcessingStatusText.value = "Extracting academic knowledge (${suggestion.suggestedName})..."
+
+        val result = ChatKnowledgeExtractor.processAndExtract(
+          title = effectiveTitle,
+          subjectName = suggestion.suggestedName,
+          rawText = fetched.conversationText,
+          tags = tags,
+          existingConcepts = extractedConcepts.value,
+          aiDispatcher = { prompt ->
+            repository.geminiService.executeAiPrompt(prompt, "You extract university academic curriculum concepts.", 0.2)
+          },
+          onProgress = { p, status ->
+            _importProcessingProgress.value = 0.45f + (p * 0.55f)
+            _importProcessingStatusText.value = status
+          }
+        )
+
+        // Re-refine auto-detected subject with discovered topics if auto-grouping
+        if (subject == null) {
+          val refined = ChatKnowledgeExtractor.detectBestSubject(
+            title = effectiveTitle,
+            rawText = fetched.conversationText,
+            sourceUrl = fetched.url,
+            discoveredTopics = result.discoveredTopics,
+            existingSubjects = subjects.value
+          )
+          _previewSubjectSuggestion.value = refined
+          _previewSubject.value = refined.matchedSubject
+        }
+
+        _extractionPreview.value = result
+        _importProcessingProgress.value = 1.0f
+        _importProcessingStatusText.value = "Knowledge extracted successfully! Review before saving."
+        _snackbarMessage.emit("Retrieved ${fetched.wordCount} words from ${fetched.platform} & extracted ${result.concepts.size} concepts!")
+      } catch (e: Exception) {
+        _importProcessingStatusText.value = ""
+        _snackbarMessage.emit("Link extraction notice: ${e.localizedMessage}")
+      } finally {
+        _isImportProcessing.value = false
+      }
+    }
+  }
+
+  fun confirmSaveExtractedChat(
+    customTitle: String? = null,
+    customSubject: Subject? = null,
+    customTags: String? = null,
+    manualNewSubjectName: String? = null,
+    manualNewSubjectCode: String? = null
+  ) {
+    val preview = _extractionPreview.value ?: return
+    val sourceUrl = _previewSourceUrl.value.trim()
+    if (sourceUrl.isBlank()) {
+      viewModelScope.launch {
+        _snackbarMessage.emit("A valid chat link is required to save into Learning Memory.")
+      }
+      return
+    }
+    val user = _currentUser.value
+
+    viewModelScope.launch {
+      _isImportProcessing.value = true
+      _importProcessingStatusText.value = "Grouping into subject and saving learning memory..."
+      try {
+        val effectiveTitle = (customTitle ?: _previewTitle.value).ifBlank {
+          "AI Discussion on ${preview.discoveredTopics.firstOrNull() ?: preview.discoveredSubject}"
+        }
+        val effectiveTags = customTags ?: _previewTags.value
+        val effectivePlatform = if (_previewPlatform.value != "Auto-detect") _previewPlatform.value else preview.platform
+
+        val resolvedSubject: Subject = when {
+          !manualNewSubjectName.isNullOrBlank() -> {
+            val cleanName = manualNewSubjectName.trim()
+            val cleanCode = manualNewSubjectCode?.trim().orEmpty().ifBlank {
+              cleanName.split(Regex("\\s+")).mapNotNull { it.firstOrNull()?.uppercaseChar() }.take(3).joinToString("").ifBlank { "SUB" } + "101"
+            }
+            val newId = repository.addSubject(cleanName, cleanCode, "#8C9F85", userId = user.id)
+            Subject(id = newId, userId = user.id, name = cleanName, code = cleanCode, colorHex = "#8C9F85")
+          }
+          customSubject != null -> customSubject
+          _previewSubject.value != null -> _previewSubject.value!!
+          else -> repository.resolveOrCreateSubjectForImport(
+            userId = user.id,
+            title = effectiveTitle,
+            rawText = _previewRawText.value,
+            sourceUrl = sourceUrl,
+            discoveredTopics = preview.discoveredTopics,
+            manualSubject = null
+          )
+        }
+
+        val importedChat = ImportedChat(
+          userId = user.id,
+          title = effectiveTitle,
+          subjectId = resolvedSubject.id,
+          subjectName = resolvedSubject.name,
+          sourceUrl = sourceUrl,
+          aiPlatform = effectivePlatform,
+          rawConversation = _previewRawText.value,
+          tags = effectiveTags,
+          wordCount = preview.wordCount,
+          messageCount = preview.messageCount,
+          extractedConceptsCount = preview.concepts.size,
+          chunkCount = preview.chunkCount,
+          notes = preview.discoveredTopics.joinToString(", ")
+        )
+
+        repository.saveImportedChatWithConcepts(
+          userId = user.id,
+          chat = importedChat,
+          drafts = preview.concepts
+        )
+
+        _extractionPreview.value = null
+        _previewRawText.value = ""
+        _previewSourceUrl.value = ""
+        _previewTitle.value = ""
+        _previewTags.value = ""
+        _previewSubjectSuggestion.value = null
+        _snackbarMessage.emit("Saved under '${resolvedSubject.name}' with ${preview.concepts.size} concepts!")
+      } catch (e: Exception) {
+        _snackbarMessage.emit("Failed to save conversation: ${e.localizedMessage}")
+      } finally {
+        _isImportProcessing.value = false
+        _importProcessingStatusText.value = ""
+      }
+    }
+  }
+
+  fun moveChatToSubject(chat: ImportedChat, targetSubject: Subject) {
+    viewModelScope.launch {
+      repository.moveImportedChatToSubject(_currentUser.value.id, chat, targetSubject)
+      _snackbarMessage.emit("Moved '${chat.title}' to ${targetSubject.name}")
+    }
+  }
+
+  fun createSubjectAndMoveChat(chat: ImportedChat, newName: String, newCode: String) {
+    val cleanName = newName.trim()
+    if (cleanName.isBlank()) return
+    val cleanCode = newCode.trim().ifBlank {
+      cleanName.split(Regex("\\s+")).mapNotNull { it.firstOrNull()?.uppercaseChar() }.take(3).joinToString("").ifBlank { "SUB" } + "101"
+    }
+    viewModelScope.launch {
+      val uid = _currentUser.value.id
+      val newId = repository.addSubject(cleanName, cleanCode, "#8C9F85", userId = uid)
+      val sub = Subject(id = newId, userId = uid, name = cleanName, code = cleanCode, colorHex = "#8C9F85")
+      repository.moveImportedChatToSubject(uid, chat, sub)
+      _snackbarMessage.emit("Created '$cleanName' and grouped '${chat.title}'")
+    }
+  }
+
+  fun discardExtractionPreview() {
+    _extractionPreview.value = null
+    _previewSourceUrl.value = ""
+    _previewSubjectSuggestion.value = null
+    _importProcessingStatusText.value = ""
+    _importProcessingProgress.value = 0f
+  }
+
+  fun updateImportedChat(chat: ImportedChat) {
+    viewModelScope.launch {
+      repository.updateImportedChat(chat)
+      _snackbarMessage.emit("Conversation details updated")
+    }
+  }
+
+  fun deleteImportedChat(chatId: Long) {
+    viewModelScope.launch {
+      repository.deleteImportedChat(_currentUser.value.id, chatId)
+      _snackbarMessage.emit("Conversation & associated concepts removed")
+    }
+  }
+
+  fun reprocessImportedChat(chat: ImportedChat) {
+    viewModelScope.launch {
+      _isImportProcessing.value = true
+      _importProcessingStatusText.value = "Reprocessing '${chat.title}'..."
+      _importProcessingProgress.value = 0.2f
+      try {
+        val result = ChatKnowledgeExtractor.processAndExtract(
+          title = chat.title,
+          subjectName = chat.subjectName,
+          rawText = chat.rawConversation,
+          tags = chat.tags,
+          existingConcepts = extractedConcepts.value,
+          aiDispatcher = { prompt ->
+            repository.geminiService.executeAiPrompt(prompt, "You extract university academic curriculum concepts.", 0.2)
+          },
+          onProgress = { p, status ->
+            _importProcessingProgress.value = p
+            _importProcessingStatusText.value = status
+          }
+        )
+
+        repository.deleteImportedChat(_currentUser.value.id, chat.id)
+        val updatedChat = chat.copy(
+          id = 0L,
+          wordCount = result.wordCount,
+          messageCount = result.messageCount,
+          extractedConceptsCount = result.concepts.size,
+          chunkCount = result.chunkCount,
+          notes = result.discoveredTopics.joinToString(", ")
+        )
+        repository.saveImportedChatWithConcepts(
+          userId = _currentUser.value.id,
+          chat = updatedChat,
+          drafts = result.concepts
+        )
+        _snackbarMessage.emit("Reprocessed '${chat.title}': ${result.concepts.size} concepts updated!")
+      } catch (e: Exception) {
+        _snackbarMessage.emit("Reprocessing notice: ${e.localizedMessage}")
+      } finally {
+        _isImportProcessing.value = false
+        _importProcessingStatusText.value = ""
+      }
+    }
+  }
+
+  fun updateExtractedConcept(concept: ExtractedConcept) {
+    viewModelScope.launch {
+      repository.updateExtractedConcept(concept)
+      _snackbarMessage.emit("Concept updated")
+    }
+  }
+
+  fun deleteExtractedConcept(conceptId: Long) {
+    viewModelScope.launch {
+      repository.deleteExtractedConcept(conceptId)
+      _snackbarMessage.emit("Concept deleted")
+    }
+  }
+
+  fun startQuizForConcept(concept: ExtractedConcept) {
+    viewModelScope.launch {
+      _isAiLoading.value = true
+      try {
+        val questions = repository.geminiService.generateQuestionsForConcept(
+          concept = concept,
+          desiredCount = 5,
+          difficulty = _quizConfig.value.difficulty
+        )
+
+        if (questions.isEmpty()) {
+          _snackbarMessage.emit("Could not assemble questions for this concept right now.")
+          return@launch
+        }
+
+        val matchingTopic = StudyTopic(
+          id = 0L,
+          userId = _currentUser.value.id,
+          subjectId = concept.subjectId ?: 0L,
+          subjectName = concept.subjectName,
+          title = concept.conceptName,
+          dateStudied = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date()),
+          sourceType = "IMPORTED_CHAT",
+          descriptionNotes = "${concept.topic} - ${concept.subtopic}: ${concept.definition}\n${concept.technicalDetails}"
+        )
+
+        _activeQuizState.value = ActiveQuizState(
+          isActive = true,
+          title = "Concept Drill: ${concept.conceptName}",
+          questions = questions,
+          currentIndex = 0,
+          userAnswers = emptyMap(),
+          flaggedQuestionIds = emptySet(),
+          evaluations = emptyMap(),
+          isSubmitted = false,
+          testedTopics = listOf(matchingTopic),
+          queuedUntestedTopics = emptyList(),
+          isAllCovered = true,
+          completedAttempt = null,
+          isEvaluating = false
+        )
+        _currentScreen.value = Screen.ActiveQuiz
+      } finally {
+        _isAiLoading.value = false
+      }
     }
   }
 }

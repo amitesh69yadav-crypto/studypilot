@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import com.example.ui.components.formatTimeRange
+import com.example.ui.components.formatTo12Hour
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -11,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -23,6 +26,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material.icons.automirrored.filled.Assignment
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
@@ -90,18 +94,23 @@ fun DashboardScreen(
   val attempts by viewModel.quizAttempts.collectAsState()
   val scheduleStatus by viewModel.scheduleStatus.collectAsState()
   val currentUser by viewModel.currentUser.collectAsState()
+  val studyStreak by viewModel.studyStreak.collectAsState()
+  val importedChats by viewModel.importedChats.collectAsState()
+  val extractedConcepts by viewModel.extractedConcepts.collectAsState()
   val context = LocalContext.current
 
   var showQuickAlarmDialog by remember { mutableStateOf(false) }
-  val activeAlarmsCount = sessions.count { it.isAlarmEnabled }
+  val activeAlarmsCount = remember(sessions) { sessions.count { it.isAlarmEnabled } }
 
-  val averageScore = if (attempts.isNotEmpty()) {
-    attempts.map { it.scorePercentage }.average().toInt()
-  } else 0
+  val averageScore = remember(attempts) {
+    if (attempts.isNotEmpty()) {
+      attempts.map { it.scorePercentage }.average().toInt()
+    } else 0
+  }
 
-  val masteredCount = topics.count { it.masteryLevel == "MASTERED" }
-  val strugglingCount = topics.count { it.masteryLevel == "STRUGGLING" }
-  val pendingTasks = tasks.filter { !it.isCompleted }
+  val masteredCount = remember(topics) { topics.count { it.masteryLevel == "MASTERED" } }
+  val strugglingCount = remember(topics) { topics.count { it.masteryLevel == "STRUGGLING" } }
+  val pendingTasks = remember(tasks) { tasks.filter { !it.isCompleted } }
 
   LazyColumn(
     modifier = Modifier.fillMaxSize(),
@@ -117,20 +126,29 @@ fun DashboardScreen(
         verticalAlignment = Alignment.CenterVertically
       ) {
         Column(modifier = Modifier.weight(1f)) {
-          val firstName = currentUser.name.trim().split(" ").firstOrNull() ?: "Scholar"
+          val isGuestMode = !currentUser.isLoggedIn || currentUser.id == com.example.ui.viewmodel.StudyPilotViewModel.GUEST_USER_ID
+          val firstName = currentUser.name.trim().split(" ").firstOrNull().orEmpty().ifBlank { "Guest" }
           Text(
-            text = "Welcome back, $firstName",
+            text = if (isGuestMode) "Welcome, Guest" else "Welcome back, $firstName",
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
             color = MaterialTheme.colorScheme.onBackground,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
           )
           Text(
-            text = "${currentUser.university} • Command Center",
+            text = if (isGuestMode) "Guest Mode • Tap here to Sign In" else "${currentUser.university} • Command Center",
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = if (isGuestMode) PaletteDeepSage else MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = if (isGuestMode) FontWeight.SemiBold else FontWeight.Normal,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
+            modifier = if (isGuestMode) {
+              Modifier
+                .clickable { onNavigate(Screen.Login) }
+                .padding(vertical = 2.dp)
+            } else {
+              Modifier
+            }
           )
         }
 
@@ -153,7 +171,7 @@ fun DashboardScreen(
             )
             Spacer(modifier = Modifier.width(4.dp))
             Text(
-              text = "5-Day Streak",
+              text = "$studyStreak-Day Streak",
               style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
               color = PaletteDarkText
             )
@@ -283,24 +301,38 @@ fun DashboardScreen(
                 contentColor = MaterialTheme.colorScheme.onPrimary
               ),
               shape = RoundedCornerShape(12.dp),
+              contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
               modifier = Modifier
                 .weight(1f)
-                .height(44.dp)
+                .heightIn(min = 48.dp)
             ) {
               Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
               Spacer(modifier = Modifier.width(6.dp))
-              Text("Start Quiz", fontWeight = FontWeight.SemiBold)
+              Text(
+                "Start Quiz",
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
+              )
             }
 
             if (strugglingCount > 0) {
               OutlinedButton(
                 onClick = { viewModel.startWeekendQuiz(forceWeakOnly = true) },
                 shape = RoundedCornerShape(12.dp),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                 modifier = Modifier
                   .weight(1f)
-                  .height(44.dp)
+                  .heightIn(min = 48.dp)
               ) {
-                Text("Revise Weak ($strugglingCount)", fontWeight = FontWeight.SemiBold)
+                Text(
+                  "Revise Weak ($strugglingCount)",
+                  fontWeight = FontWeight.SemiBold,
+                  maxLines = 1,
+                  softWrap = false,
+                  overflow = TextOverflow.Ellipsis
+                )
               }
             }
           }
@@ -324,26 +356,44 @@ fun DashboardScreen(
             onClick = onQuickAddSession,
             shape = RoundedCornerShape(12.dp),
             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
             modifier = Modifier
               .weight(1f)
-              .height(46.dp)
+              .heightIn(min = 48.dp)
           ) {
             Icon(Icons.Default.Add, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(6.dp))
-            Text("Add Schedule", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+              "Add Schedule",
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              fontSize = 12.sp,
+              fontWeight = FontWeight.SemiBold,
+              maxLines = 1,
+              softWrap = false,
+              overflow = TextOverflow.Ellipsis
+            )
           }
 
           Button(
             onClick = onQuickAddTopic,
             shape = RoundedCornerShape(12.dp),
             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
             modifier = Modifier
               .weight(1f)
-              .height(46.dp)
+              .heightIn(min = 48.dp)
           ) {
             Icon(Icons.Default.Book, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(6.dp))
-            Text("Record Topic", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+              "Record Topic",
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              fontSize = 12.sp,
+              fontWeight = FontWeight.SemiBold,
+              maxLines = 1,
+              softWrap = false,
+              overflow = TextOverflow.Ellipsis
+            )
           }
         }
 
@@ -355,27 +405,67 @@ fun DashboardScreen(
             onClick = { onNavigate(Screen.WeekendQuizzes) },
             shape = RoundedCornerShape(12.dp),
             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
             modifier = Modifier
               .weight(1f)
-              .height(46.dp)
+              .heightIn(min = 48.dp)
           ) {
             Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(6.dp))
-            Text("Quiz Hub", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+              "Quiz Hub",
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              fontSize = 12.sp,
+              fontWeight = FontWeight.SemiBold,
+              maxLines = 1,
+              softWrap = false,
+              overflow = TextOverflow.Ellipsis
+            )
           }
 
           Button(
             onClick = { onNavigate(Screen.AiTutor) },
             shape = RoundedCornerShape(12.dp),
             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
             modifier = Modifier
               .weight(1f)
-              .height(46.dp)
+              .heightIn(min = 48.dp)
           ) {
             Icon(Icons.Default.Psychology, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(6.dp))
-            Text("AI Study Tutor", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+              "AI Study Tutor",
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              fontSize = 12.sp,
+              fontWeight = FontWeight.SemiBold,
+              maxLines = 1,
+              softWrap = false,
+              overflow = TextOverflow.Ellipsis
+            )
           }
+        }
+
+        // Quick Import AI Chat action
+        Button(
+          onClick = { onNavigate(Screen.AiChatImport) },
+          shape = RoundedCornerShape(12.dp),
+          colors = ButtonDefaults.buttonColors(containerColor = PaletteDeepSage),
+          contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+          modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+        ) {
+          Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = null, tint = PaletteCreamIvory, modifier = Modifier.size(18.dp))
+          Spacer(modifier = Modifier.width(8.dp))
+          Text(
+            "Import AI Chats & Intelligent Memory",
+            color = PaletteCreamIvory,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+          )
         }
       }
     }
@@ -404,12 +494,91 @@ fun DashboardScreen(
           )
           StatCard(
             title = "Avg Quiz Score",
-            value = if (attempts.isNotEmpty()) "$averageScore%" else "—",
+            value = if (attempts.isNotEmpty()) "$averageScore%" else "0%",
             subtitle = "${attempts.size} quizzes taken",
             icon = Icons.AutoMirrored.Filled.TrendingUp,
             iconTint = PaletteDeepSage,
             modifier = Modifier.weight(1f)
           )
+        }
+      }
+    }
+
+    // Personal Learning Memory Card
+    item {
+      Column(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 16.dp, vertical = 6.dp)
+      ) {
+        Card(
+          modifier = Modifier
+            .fillMaxWidth(),
+          shape = RoundedCornerShape(16.dp),
+          colors = CardDefaults.cardColors(containerColor = PaletteMintFoam),
+          elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        ) {
+          Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Row(
+                modifier = Modifier
+                  .weight(1f)
+                  .padding(end = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+              ) {
+                Surface(
+                  color = PaletteDeepSage,
+                  shape = CircleShape,
+                  modifier = Modifier.size(32.dp)
+                ) {
+                  Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                      Icons.Default.Psychology,
+                      contentDescription = null,
+                      tint = PaletteCreamIvory,
+                      modifier = Modifier.size(18.dp)
+                    )
+                  }
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                  Text(
+                    text = "Personal Learning Memory",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = PaletteDarkText,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                  )
+                  Text(
+                    text = "${extractedConcepts.size} concepts • ${importedChats.size} AI chats indexed",
+                    fontSize = 11.sp,
+                    color = PaletteDeepSage,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                  )
+                }
+              }
+
+              OutlinedButton(
+                onClick = { onNavigate(Screen.AiChatImport) },
+                shape = RoundedCornerShape(10.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = PaletteDarkText),
+                border = ButtonDefaults.outlinedButtonBorder.copy(
+                  brush = androidx.compose.ui.graphics.SolidColor(PaletteMediumSage)
+                ),
+                modifier = Modifier.heightIn(min = 44.dp)
+              ) {
+                Text("Open", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+              }
+            }
+          }
         }
       }
     }
@@ -578,7 +747,7 @@ private fun SessionItemRow(
           color = MaterialTheme.colorScheme.onSurface
         )
         Text(
-          text = "${session.subjectName} • ${session.startTime} - ${session.endTime}",
+          text = "${session.subjectName.ifBlank { "Alarm" }} • ${formatTimeRange(session.startTime, session.endTime)}",
           style = MaterialTheme.typography.bodySmall,
           color = MaterialTheme.colorScheme.onSurfaceVariant
         )

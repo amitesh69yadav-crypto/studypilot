@@ -47,7 +47,7 @@ data class StudyTopic(
   val uploadedFileName: String? = null,
   val masteryLevel: String = "UNTESTED", // UNTESTED, STRUGGLING, FAMILIAR, MASTERED
   val repetitionIntervalDays: Int = 1,
-  val nextRevisionDate: String, // "YYYY-MM-DD"
+  val nextRevisionDate: String = "", // "YYYY-MM-DD"
   val timesTested: Int = 0,
   val timesCorrect: Int = 0,
   val lastTestedDate: String? = null,
@@ -66,7 +66,9 @@ data class QuizQuestion(
   val optionsJson: String = "", // Comma/pipe separated or JSON list
   val correctAnswer: String,
   val explanation: String,
-  val codeStarter: String? = null
+  val codeStarter: String? = null,
+  val sourceConversationId: Long? = null,
+  val sourceConversationTitle: String? = null
 )
 
 @Entity(tableName = "quiz_attempts")
@@ -101,7 +103,57 @@ data class QuizConfig(
   val questionCount: Int = 10,
   val difficulty: String = "MIXED", // EASY, MEDIUM, HARD, MIXED
   val questionTypes: Set<String> = setOf("MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "CODING"),
-  val prioritizeWeakTopics: Boolean = true
+  val prioritizeWeakTopics: Boolean = true,
+  val questionSource: String = "ALL" // ALL, MANUAL, IMPORTED_CHAT, UPLOAD
+)
+
+@Entity(tableName = "imported_chats")
+data class ImportedChat(
+  @PrimaryKey(autoGenerate = true) val id: Long = 0,
+  val userId: String = "",
+  val title: String,
+  val subjectId: Long? = null,
+  val subjectName: String = "General",
+  val sourceUrl: String = "",
+  val rawConversation: String,
+  val tags: String = "", // comma-separated tags
+  val aiPlatform: String = "ChatGPT", // ChatGPT, Gemini, Claude, DeepSeek, Other
+  val importedAt: Long = System.currentTimeMillis(),
+  val lastProcessedAt: Long? = null,
+  val status: String = "PROCESSED", // PENDING, PROCESSING, PROCESSED, ERROR
+  val extractedConceptsCount: Int = 0,
+  val chunkCount: Int = 1,
+  val wordCount: Int = 0,
+  val messageCount: Int = 0,
+  val notes: String = ""
+)
+
+@Entity(tableName = "extracted_concepts")
+data class ExtractedConcept(
+  @PrimaryKey(autoGenerate = true) val id: Long = 0,
+  val userId: String = "",
+  val sourceChatId: Long,
+  val sourceChatTitle: String,
+  val subjectId: Long? = null,
+  val subjectName: String = "General",
+  val topic: String, // Main topic e.g. "Binary Search Trees"
+  val subtopic: String = "", // Subtopic e.g. "AVL Balancing"
+  val conceptName: String, // Concept e.g. "LR Rotation"
+  val definition: String, // Core academic definition
+  val technicalDetails: String = "", // Methodology, technical mechanism
+  val formulaOrCode: String = "", // Formulas, algorithms, or code example
+  val problemsSolved: String = "", // Questions asked and problems solved
+  val keyFacts: String = "", // Facts and relationships
+  val misconceptionsAndCorrections: String = "", // Common student traps & corrections
+  val importanceScore: Int = 3, // 1 (Introductory) to 5 (Advanced Exam Core)
+  val masteryLevel: String = "UNTESTED", // UNTESTED, STRUGGLING, FAMILIAR, MASTERED
+  val timesTested: Int = 0,
+  val timesCorrect: Int = 0,
+  val lastTestedDate: String? = null,
+  val nextRevisionDate: String = "",
+  val extractedAt: Long = System.currentTimeMillis(),
+  val relatedConceptsJson: String = "[]", // List of related concept names serialized
+  val tags: String = ""
 )
 
 @Entity(tableName = "tutor_sessions")
@@ -112,7 +164,7 @@ data class TutorSession(
   val subjectName: String = "General",
   val title: String,
   val previewSnippet: String,
-  val modelUsed: String = "gemini-2.5-flash",
+  val modelUsed: String = "gemini-3.5-flash",
   val searchGroundingUsed: Boolean = false,
   val messageCount: Int = 0,
   val createdAt: Long = System.currentTimeMillis(),
@@ -144,15 +196,15 @@ data class ScheduleFormat(
 )
 
 data class UserProfile(
-  val id: String = "user_default",
-  val name: String = "Amitesh Yadav",
-  val email: String = "amitesh69.yadav@gmail.com",
-  val role: String = "Computer Science Scholar",
-  val university: String = "Imperial College London",
-  val studentId: String = "CS-2024-8841",
-  val avatarInitials: String = "AY",
-  val isLoggedIn: Boolean = true,
-  val authProvider: String = "Email & Password",
-  val rememberMe: Boolean = true,
+  val id: String = "guest_user",
+  val name: String = "Guest",
+  val email: String = "",
+  val role: String = "Guest Mode",
+  val university: String = "Local Session",
+  val studentId: String = "GUEST",
+  val avatarInitials: String = "G",
+  val isLoggedIn: Boolean = false,
+  val authProvider: String = "Guest Mode",
+  val rememberMe: Boolean = false,
   val lastLoginTime: Long = System.currentTimeMillis()
 )

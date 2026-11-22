@@ -13,6 +13,9 @@ import com.example.data.model.TimetableSession
 import com.example.data.model.TutorMessageEntity
 import com.example.data.model.TutorSession
 
+import com.example.data.model.ImportedChat
+import com.example.data.model.ExtractedConcept
+
 @Database(
   entities = [
     Subject::class,
@@ -23,9 +26,11 @@ import com.example.data.model.TutorSession
     StudyTask::class,
     TutorSession::class,
     TutorMessageEntity::class,
-    com.example.data.model.ScheduleFormat::class
+    com.example.data.model.ScheduleFormat::class,
+    ImportedChat::class,
+    ExtractedConcept::class
   ],
-  version = 6,
+  version = 8,
   exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -42,6 +47,7 @@ abstract class AppDatabase : RoomDatabase() {
           AppDatabase::class.java,
           "studypilot_db"
         )
+          .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
           .fallbackToDestructiveMigration(dropAllTables = true)
           .build()
         INSTANCE = instance

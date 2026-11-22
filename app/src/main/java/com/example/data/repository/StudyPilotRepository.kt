@@ -1,6 +1,9 @@
 package com.example.data.repository
 
+import com.example.data.ai.ChatKnowledgeExtractor
 import com.example.data.local.StudyPilotDao
+import com.example.data.model.ExtractedConcept
+import com.example.data.model.ImportedChat
 import com.example.data.model.QuizAttempt
 import com.example.data.model.QuizConfig
 import com.example.data.model.QuizQuestion
@@ -12,6 +15,9 @@ import com.example.data.model.TutorMessageEntity
 import com.example.data.model.TutorSession
 import com.example.data.remote.EvaluationResult
 import com.example.data.remote.GeminiStudyService
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import java.text.SimpleDateFormat
@@ -25,14 +31,32 @@ import java.util.Locale
     return try {
       com.google.firebase.firestore.FirebaseFirestore.getInstance(FIRESTORE_DB_ID)
     } catch (_: Exception) {
-      getFirestoreInstance()
+      com.google.firebase.firestore.FirebaseFirestore.getInstance()
     }
   }
 
 class StudyPilotRepository(
   private val dao: StudyPilotDao,
-  val geminiService: GeminiStudyService = GeminiStudyService()
+  val geminiService: GeminiStudyService = GeminiStudyService(),
+  context: android.content.Context? = null
 ) {
+
+  private val prefs: android.content.SharedPreferences? =
+    context?.applicationContext?.getSharedPreferences("studypilot_seeding_prefs", android.content.Context.MODE_PRIVATE)
+
+  fun markSampleDataDeleted(userId: String) {
+    val targetUserId = userId.ifBlank { "guest_user" }
+    prefs?.edit()
+      ?.putBoolean("sample_data_deleted_$targetUserId", true)
+      ?.putBoolean("has_seeded_sample_data_$targetUserId", true)
+      ?.apply()
+  }
+
+  suspend fun deleteAllSampleData(userId: String) {
+    val targetUserId = userId.ifBlank { "guest_user" }
+    markSampleDataDeleted(targetUserId)
+    deleteUserData(targetUserId)
+  }
 
   val allSubjects: Flow<List<Subject>> = dao.getAllSubjects()
   val allSessions: Flow<List<TimetableSession>> = dao.getAllSessions()
@@ -57,7 +81,7 @@ class StudyPilotRepository(
 
   private suspend fun <T> com.google.android.gms.tasks.Task<T>.awaitTask(): T =
     kotlinx.coroutines.suspendCancellableCoroutine { cont ->
-      addOnSuccessListener { cont.resume(it) { /* onCancellation */ } }
+      addOnSuccessListener { cont.resumeWith(Result.success(it)) }
       addOnFailureListener { cont.resumeWith(Result.failure(it)) }
       addOnCanceledListener { cont.cancel() }
     }
@@ -69,6 +93,24 @@ class StudyPilotRepository(
     } catch (_: Exception) {
       // Offline fallback
     }
+  }
+
+  fun saveUserProfile(user: com.example.data.model.UserProfile) {
+    if (user.id.isBlank() || user.id == "guest_user") return
+    syncToFirestore(
+      "users/${user.id}",
+      mapOf(
+        "id" to user.id,
+        "name" to user.name,
+        "email" to user.email,
+        "role" to user.role,
+        "university" to user.university,
+        "studentId" to user.studentId,
+        "avatarInitials" to user.avatarInitials,
+        "authProvider" to user.authProvider,
+        "lastLoginTime" to user.lastLoginTime
+      )
+    )
   }
 
   private fun deleteFromFirestore(path: String) {
@@ -107,74 +149,81 @@ class StudyPilotRepository(
   }
 
   suspend fun pullUserDataFromFirestore(userId: String) {
-    if (userId.isBlank()) return
+    val targetUserId = userId.ifBlank { "guest_user" }
+    if (targetUserId == "guest_user") return
+    if (prefs?.getBoolean("sample_data_deleted_$targetUserId", false) == true) {
+      return
+    }
     try {
       val firestore = getFirestoreInstance()
-      // Pull remote subjects
-      val subjectsSnap = firestore.collection("users/$userId/subjects").get().awaitTask()
-      if (!subjectsSnap.isEmpty) {
-        val currentLocal = dao.getSubjectsForUser(userId).first()
-        val currentCodes = currentLocal.map { it.code }.toSet()
-        for (doc in subjectsSnap.documents) {
-          val name = doc.getString("name") ?: ""
-          val code = doc.getString("code") ?: ""
-          val color = doc.getString("colorHex") ?: "#4F6D7A"
-          if (name.isNotBlank() && !currentCodes.contains(code)) {
-            dao.insertSubject(Subject(userId = userId, name = name, code = code, colorHex = color))
-          }
-        }
-      }
+      coroutineScope {
+        val subjectsDeferred = async { firestore.collection("users/$userId/subjects").get().awaitTask() }
+        val sessionsDeferred = async { firestore.collection("users/$userId/sessions").get().awaitTask() }
+        val tasksDeferred = async { firestore.collection("users/$userId/tasks").get().awaitTask() }
+        val localSubjectsDeferred = async { dao.getSubjectsForUser(userId).first() }
+        val localSessionsDeferred = async { dao.getSessionsListForUser(userId) }
+        val localTasksDeferred = async { dao.getTasksForUser(userId).first() }
 
-      // Pull remote sessions
-      val sessionsSnap = firestore.collection("users/$userId/sessions").get().awaitTask()
-      if (!sessionsSnap.isEmpty) {
-        val currentLocal = dao.getSessionsListForUser(userId)
-        val currentKeys = currentLocal.map { "${it.date}_${it.startTime}_${it.subjectName}" }.toSet()
-        for (doc in sessionsSnap.documents) {
-          val date = doc.getString("date") ?: ""
-          val startTime = doc.getString("startTime") ?: ""
-          val subjectName = doc.getString("subjectName") ?: ""
-          val key = "${date}_${startTime}_${subjectName}"
-          if (date.isNotBlank() && !currentKeys.contains(key)) {
-            dao.insertSession(
+        val subjectsSnap = subjectsDeferred.await()
+        if (!subjectsSnap.isEmpty) {
+          val currentCodes = localSubjectsDeferred.await().mapTo(HashSet()) { it.code }
+          val newSubjects = subjectsSnap.documents.mapNotNull { doc ->
+            val name = doc.getString("name") ?: ""
+            val code = doc.getString("code") ?: ""
+            val color = doc.getString("colorHex") ?: "#4F6D7A"
+            if (name.isNotBlank() && !currentCodes.contains(code)) {
+              Subject(userId = userId, name = name, code = code, colorHex = color)
+            } else null
+          }
+          if (newSubjects.isNotEmpty()) dao.insertSubjects(newSubjects)
+        }
+
+        val sessionsSnap = sessionsDeferred.await()
+        if (!sessionsSnap.isEmpty) {
+          val currentKeys = localSessionsDeferred.await().mapTo(HashSet()) { "${it.date}_${it.startTime}_${it.subjectName}" }
+          val newSessions = sessionsSnap.documents.mapNotNull { doc ->
+            val date = doc.getString("date") ?: ""
+            val startTime = doc.getString("startTime") ?: ""
+            val subjectName = doc.getString("subjectName") ?: ""
+            val key = "${date}_${startTime}_${subjectName}"
+            if (date.isNotBlank() && !currentKeys.contains(key)) {
               TimetableSession(
                 userId = userId,
-                subjectId = doc.getString("subjectId")?.toLongOrNull() ?: 1L,
+                subjectId = doc.getString("subjectId")?.toLongOrNull() ?: 0L,
                 subjectName = subjectName,
                 topic = doc.getString("topic") ?: "",
                 date = date,
                 startTime = startTime,
-                endTime = doc.getString("endTime") ?: "10:00",
-                location = doc.getString("location") ?: "Campus",
+                endTime = doc.getString("endTime") ?: "",
+                location = doc.getString("location") ?: "",
                 notes = doc.getString("notes") ?: "",
                 recurringDays = doc.getString("recurringDays") ?: "",
                 isAlarmEnabled = doc.getBoolean("isAlarmEnabled") ?: true
               )
-            )
+            } else null
           }
+          if (newSessions.isNotEmpty()) dao.insertSessions(newSessions)
         }
-      }
 
-      // Pull remote tasks
-      val tasksSnap = firestore.collection("users/$userId/tasks").get().awaitTask()
-      if (!tasksSnap.isEmpty) {
-        val currentLocal = dao.getTasksForUser(userId).first()
-        val currentTitles = currentLocal.map { it.title }.toSet()
-        for (doc in tasksSnap.documents) {
-          val title = doc.getString("title") ?: ""
-          if (title.isNotBlank() && !currentTitles.contains(title)) {
-            dao.insertTask(
+        val tasksSnap = tasksDeferred.await()
+        if (!tasksSnap.isEmpty) {
+          val currentTitles = localTasksDeferred.await().mapTo(HashSet()) { it.title }
+          val todayStr = getTodayDateString()
+          val newTasks = tasksSnap.documents.mapNotNull { doc ->
+            val title = doc.getString("title") ?: ""
+            if (title.isNotBlank() && !currentTitles.contains(title)) {
               StudyTask(
                 userId = userId,
                 subjectName = doc.getString("subjectName") ?: "General Studies",
                 title = title,
-                dueDate = doc.getString("dueDate") ?: getTodayDateString(),
+                dueDate = doc.getString("dueDate") ?: todayStr,
                 type = doc.getString("type") ?: doc.getString("taskType") ?: "ASSIGNMENT",
                 isCompleted = doc.getBoolean("isCompleted") ?: false,
                 priority = doc.getString("priority") ?: "MEDIUM"
               )
-            )
+            } else null
           }
+          if (newTasks.isNotEmpty()) dao.insertTasks(newTasks)
         }
       }
     } catch (_: Exception) {
@@ -202,6 +251,7 @@ class StudyPilotRepository(
     dao.deleteSubject(subject)
     if (subject.userId.isNotBlank()) {
       deleteFromFirestore("users/${subject.userId}/subjects/${subject.id}")
+      markSampleDataDeleted(subject.userId)
     }
   }
 
@@ -217,6 +267,7 @@ class StudyPilotRepository(
         "date" to session.date,
         "startTime" to session.startTime,
         "endTime" to session.endTime,
+        "location" to session.location,
         "status" to session.status,
         "alarmEnabled" to session.isAlarmEnabled
       ))
@@ -236,6 +287,7 @@ class StudyPilotRepository(
         "date" to session.date,
         "startTime" to session.startTime,
         "endTime" to session.endTime,
+        "location" to session.location,
         "status" to session.status,
         "alarmEnabled" to session.isAlarmEnabled
       ))
@@ -246,7 +298,13 @@ class StudyPilotRepository(
     dao.deleteSessionById(id)
     if (userId.isNotBlank()) {
       deleteFromFirestore("users/$userId/sessions/$id")
+      markSampleDataDeleted(userId)
     }
+  }
+
+  suspend fun addSessions(sessions: List<TimetableSession>) {
+    if (sessions.isEmpty()) return
+    dao.insertSessions(sessions)
   }
 
   suspend fun clearSessionsForDate(date: String, userId: String = "") {
@@ -254,6 +312,14 @@ class StudyPilotRepository(
       dao.deleteSessionsForDateAndUser(userId, date)
     } else {
       dao.deleteSessionsForDate(date)
+    }
+  }
+
+  suspend fun replaceSessionsForDate(date: String, sessions: List<TimetableSession>, userId: String = "") {
+    if (userId.isNotBlank()) {
+      dao.replaceSessionsForDateAndUser(userId, date, sessions)
+    } else {
+      dao.replaceSessionsForDate(date, sessions)
     }
   }
 
@@ -302,6 +368,7 @@ class StudyPilotRepository(
     dao.deleteTopicById(id)
     if (userId.isNotBlank()) {
       deleteFromFirestore("users/$userId/topics/$id")
+      markSampleDataDeleted(userId)
     }
   }
 
@@ -340,6 +407,7 @@ class StudyPilotRepository(
     dao.deleteTaskById(id)
     if (userId.isNotBlank()) {
       deleteFromFirestore("users/$userId/tasks/$id")
+      markSampleDataDeleted(userId)
     }
   }
 
@@ -352,9 +420,10 @@ class StudyPilotRepository(
     history: List<com.example.data.model.ChatMessage>,
     model: com.example.data.model.TutorModel,
     useGoogleSearch: Boolean,
-    systemInstruction: String
+    systemInstruction: String,
+    subjectContext: String? = null
   ): com.example.data.remote.ChatResponse {
-    return geminiService.chatWithGemini(history, model, useGoogleSearch, systemInstruction)
+    return geminiService.chatWithGemini(history, model, useGoogleSearch, systemInstruction, subjectContext)
   }
 
   // --- AI Tutor History & Persistence ---
@@ -446,13 +515,197 @@ class StudyPilotRepository(
   }
 
   suspend fun deleteTutorSession(sessionId: Long) {
-    dao.deleteMessagesForSession(sessionId)
-    dao.deleteTutorSessionById(sessionId)
+    dao.deleteTutorSessionAtomic(sessionId)
   }
 
   suspend fun clearAllTutorHistory() {
-    dao.clearAllTutorMessages()
-    dao.clearAllTutorSessions()
+    dao.clearAllTutorHistoryAtomic()
+  }
+
+  // --- AI Chat History Import & Intelligent Learning Memory ---
+  fun getImportedChatsForUser(userId: String): Flow<List<ImportedChat>> {
+    return dao.getImportedChatsForUser(userId)
+  }
+
+  fun getExtractedConceptsForUser(userId: String): Flow<List<ExtractedConcept>> {
+    return dao.getExtractedConceptsForUser(userId)
+  }
+
+  fun getConceptsForChat(userId: String, chatId: Long): Flow<List<ExtractedConcept>> {
+    return dao.getConceptsForChat(userId, chatId)
+  }
+
+  suspend fun saveImportedChatWithConcepts(
+    userId: String,
+    chat: ImportedChat,
+    drafts: List<ChatKnowledgeExtractor.ExtractedConceptDraft>
+  ): Long {
+    val chatId = dao.insertImportedChat(chat.copy(userId = userId, extractedConceptsCount = drafts.size))
+
+    val conceptsToInsert = drafts.map { draft ->
+      ExtractedConcept(
+        userId = userId,
+        sourceChatId = chatId,
+        sourceChatTitle = chat.title,
+        subjectId = chat.subjectId,
+        subjectName = chat.subjectName,
+        topic = draft.topic,
+        subtopic = draft.subtopic,
+        conceptName = draft.conceptName,
+        definition = draft.definition,
+        technicalDetails = draft.technicalDetails,
+        formulaOrCode = draft.formulaOrCode,
+        problemsSolved = draft.problemsSolved,
+        keyFacts = draft.keyFacts,
+        misconceptionsAndCorrections = draft.misconceptionsAndCorrections,
+        importanceScore = draft.importanceScore,
+        tags = draft.tags.ifBlank { chat.tags },
+        relatedConceptsJson = org.json.JSONArray(draft.relatedConcepts).toString()
+      )
+    }
+
+    if (conceptsToInsert.isNotEmpty()) {
+      dao.insertExtractedConcepts(conceptsToInsert)
+
+      // Synchronize with StudyTopics in batch so they integrate into Topic browser and Quiz system
+      val today = getTodayDateString()
+      val userTopicsByLowerTitle = dao.getTopicsForUser(userId).first()
+        .associateBy { it.title.lowercase(Locale.ROOT) }
+      val topicsToUpdate = mutableListOf<StudyTopic>()
+      val topicsToInsert = mutableListOf<StudyTopic>()
+      val aiSummaryTag = "Extracted from ${chat.title} (${chat.aiPlatform})"
+
+      for (c in conceptsToInsert) {
+        val existingTopic = userTopicsByLowerTitle[c.conceptName.lowercase(Locale.ROOT)]
+        val notes = buildString {
+          append(c.definition)
+          if (c.technicalDetails.isNotBlank()) append("\n\n• Technical: ${c.technicalDetails}")
+          if (c.formulaOrCode.isNotBlank()) append("\n\n```\n${c.formulaOrCode}\n```")
+          if (c.misconceptionsAndCorrections.isNotBlank()) append("\n\n⚠️ Exam Trap: ${c.misconceptionsAndCorrections}")
+        }
+        if (existingTopic != null) {
+          topicsToUpdate.add(
+            existingTopic.copy(
+              descriptionNotes = notes,
+              aiSummary = aiSummaryTag
+            )
+          )
+        } else {
+          topicsToInsert.add(
+            StudyTopic(
+              userId = userId,
+              subjectId = c.subjectId ?: 0L,
+              subjectName = c.subjectName,
+              title = c.conceptName,
+              dateStudied = today,
+              descriptionNotes = notes,
+              sourceType = "IMPORTED_CHAT",
+              uploadedFileName = chat.title,
+              nextRevisionDate = today,
+              aiSummary = aiSummaryTag
+            )
+          )
+        }
+      }
+      if (topicsToUpdate.isNotEmpty()) dao.updateTopics(topicsToUpdate)
+      if (topicsToInsert.isNotEmpty()) dao.insertTopics(topicsToInsert)
+    }
+
+    return chatId
+  }
+
+  suspend fun resolveOrCreateSubjectForImport(
+    userId: String,
+    title: String,
+    rawText: String,
+    sourceUrl: String,
+    discoveredTopics: List<String>,
+    manualSubject: Subject? = null
+  ): Subject {
+    if (manualSubject != null) return manualSubject
+
+    val existingSubjects = dao.getSubjectsForUser(userId).first()
+    val suggestion = ChatKnowledgeExtractor.detectBestSubject(
+      title = title,
+      rawText = rawText,
+      sourceUrl = sourceUrl,
+      discoveredTopics = discoveredTopics,
+      existingSubjects = existingSubjects
+    )
+    if (suggestion.matchedSubject != null) {
+      return suggestion.matchedSubject
+    }
+
+    val existingByName = existingSubjects.firstOrNull {
+      it.name.equals(suggestion.suggestedName, ignoreCase = true)
+    }
+    if (existingByName != null) {
+      return existingByName
+    }
+
+    val newSubId = addSubject(
+      name = suggestion.suggestedName,
+      code = suggestion.suggestedCode,
+      colorHex = suggestion.suggestedColorHex,
+      userId = userId
+    )
+    return Subject(
+      id = newSubId,
+      userId = userId,
+      name = suggestion.suggestedName,
+      code = suggestion.suggestedCode,
+      colorHex = suggestion.suggestedColorHex
+    )
+  }
+
+  suspend fun moveImportedChatToSubject(
+    userId: String,
+    chat: ImportedChat,
+    targetSubject: Subject
+  ) {
+    dao.updateImportedChat(
+      chat.copy(
+        subjectId = targetSubject.id,
+        subjectName = targetSubject.name
+      )
+    )
+    dao.updateConceptsSubjectForChat(
+      chatId = chat.id,
+      subjectId = targetSubject.id,
+      subjectName = targetSubject.name
+    )
+    val topicsToUpdate = dao.getTopicsForUser(userId).first()
+      .filter { it.sourceType == "IMPORTED_CHAT" && it.uploadedFileName == chat.title }
+      .map { it.copy(subjectId = targetSubject.id, subjectName = targetSubject.name) }
+    if (topicsToUpdate.isNotEmpty()) {
+      dao.updateTopics(topicsToUpdate)
+    }
+  }
+
+  suspend fun updateImportedChat(chat: ImportedChat) {
+    dao.updateImportedChat(chat)
+  }
+
+  suspend fun deleteImportedChat(userId: String, chatId: Long) {
+    val chat = dao.getImportedChatById(chatId)
+    val chatTitle = chat?.title ?: ""
+    dao.deleteImportedChatAtomic(chatId)
+    if (chatTitle.isNotBlank()) {
+      val topics = dao.getTopicsForUser(userId).first()
+      for (t in topics) {
+        if (t.sourceType == "IMPORTED_CHAT" && t.uploadedFileName == chatTitle) {
+          dao.deleteTopicById(t.id)
+        }
+      }
+    }
+  }
+
+  suspend fun updateExtractedConcept(concept: ExtractedConcept) {
+    dao.updateExtractedConcept(concept)
+  }
+
+  suspend fun deleteExtractedConcept(conceptId: Long) {
+    dao.deleteExtractedConceptById(conceptId)
   }
 
   // --- Quiz Generation & Assembly ---
@@ -478,10 +731,18 @@ class StudyPilotRepository(
       return GeneratedQuiz(emptyList(), emptyList(), emptyList(), isAllCovered = true)
     }
 
-    val eligibleTopics = if (filterSubjectId != null) {
+    var eligibleTopics = if (filterSubjectId != null) {
       allTopicsList.filter { it.subjectId == filterSubjectId }
     } else {
       allTopicsList
+    }
+
+    // Filter by questionSource: ALL, MANUAL, IMPORTED_CHAT, UPLOAD
+    eligibleTopics = when (config.questionSource) {
+      "MANUAL" -> eligibleTopics.filter { it.sourceType == "MANUAL" || it.sourceType == "PASTED" }
+      "IMPORTED_CHAT" -> eligibleTopics.filter { it.sourceType == "IMPORTED_CHAT" }
+      "UPLOAD" -> eligibleTopics.filter { it.sourceType == "UPLOAD" }
+      else -> eligibleTopics
     }
 
     if (eligibleTopics.isEmpty()) {
@@ -510,45 +771,113 @@ class StudyPilotRepository(
       sortedTopics
     }
 
-    // Determine how many topics we can cover based on questionCount
     val maxQuestions = config.questionCount.coerceAtLeast(1)
     val questionsPerTopic = if (targetTopicList.size >= maxQuestions) 1 else (maxQuestions / targetTopicList.size).coerceAtLeast(1)
 
-    val selectedTopics = mutableListOf<StudyTopic>()
-    val assembledQuestions = mutableListOf<QuizQuestion>()
+    val targetIds = targetTopicList.map { it.id }
+    val cachedByTopicId = if (targetIds.isNotEmpty()) {
+      dao.getQuestionsForTopicIds(targetIds).groupBy { it.topicId }
+    } else emptyMap()
 
-    for (topic in targetTopicList) {
-      if (assembledQuestions.size >= maxQuestions) break
+    val importedTitles = targetTopicList
+      .filter { it.sourceType == "IMPORTED_CHAT" }
+      .map { it.title }
+      .distinct()
+    val conceptsByTopicTitle = if (importedTitles.isNotEmpty()) {
+      dao.getConceptsByTopics(userId, importedTitles).associateBy { it.topic }
+    } else emptyMap()
 
-      // 1. Fetch cached questions from Room DB first (MINIMIZING AI CREDITS)
-      val cached = dao.getQuestionsForTopicIds(listOf(topic.id))
+    // Plan slots greedily up front so missing topics can be generated in parallel
+    data class TopicPlan(
+      val topic: StudyTopic,
+      val cachedUsable: List<QuizQuestion>,
+      val stillNeeded: Int
+    )
+
+    val plans = mutableListOf<TopicPlan>()
+    var plannedCount = 0
+    var firstUnplannedIndex = 0
+    for ((index, topic) in targetTopicList.withIndex()) {
+      if (plannedCount >= maxQuestions) {
+        firstUnplannedIndex = index
+        break
+      }
+      val cached = cachedByTopicId[topic.id].orEmpty()
       val usableCached = cached.filter { q ->
         (config.difficulty == "MIXED" || q.difficulty.equals(config.difficulty, ignoreCase = true)) &&
           (config.questionTypes.isEmpty() || config.questionTypes.contains(q.questionType))
       }
+      val needed = (maxQuestions - plannedCount).coerceAtMost(questionsPerTopic)
+      val takeCached = usableCached.take(needed)
+      val stillNeeded = needed - takeCached.size
+      plans.add(TopicPlan(topic, takeCached, stillNeeded))
+      plannedCount += takeCached.size + stillNeeded
+      firstUnplannedIndex = index + 1
+    }
 
-      val needed = (maxQuestions - assembledQuestions.size).coerceAtMost(questionsPerTopic)
-      val chosenForTopic = mutableListOf<QuizQuestion>()
-
-      if (usableCached.size >= needed) {
-        chosenForTopic.addAll(usableCached.take(needed))
-      } else {
-        chosenForTopic.addAll(usableCached)
-        val stillNeeded = needed - chosenForTopic.size
-        if (stillNeeded > 0) {
-          // Generate new questions and save in DB for future reuse
-          val generated = geminiService.generateQuestionsForTopic(topic, stillNeeded, config.difficulty)
-          if (generated.isNotEmpty()) {
-            dao.insertQuestions(generated)
-            chosenForTopic.addAll(generated.take(stillNeeded))
+    val allNewlyGenerated = mutableListOf<QuizQuestion>()
+    val generatedByTopicId: Map<Long, List<QuizQuestion>> = coroutineScope {
+      plans.filter { it.stillNeeded > 0 }.map { plan ->
+        async {
+          val matchingConcept = if (plan.topic.sourceType == "IMPORTED_CHAT") {
+            conceptsByTopicTitle[plan.topic.title]
+          } else null
+          val generated = if (matchingConcept != null) {
+            geminiService.generateQuestionsForConcept(matchingConcept, plan.stillNeeded, config.difficulty)
+          } else {
+            geminiService.generateQuestionsForTopic(plan.topic, plan.stillNeeded, config.difficulty)
           }
+          plan.topic.id to generated
+        }
+      }.awaitAll().toMap()
+    }
+
+    val selectedTopics = mutableListOf<StudyTopic>()
+    val assembledQuestions = mutableListOf<QuizQuestion>()
+
+    for (plan in plans) {
+      val gen = generatedByTopicId[plan.topic.id].orEmpty()
+      if (gen.isNotEmpty()) allNewlyGenerated.addAll(gen)
+      val chosen = plan.cachedUsable + gen.take(plan.stillNeeded)
+      if (chosen.isNotEmpty()) {
+        selectedTopics.add(plan.topic)
+        assembledQuestions.addAll(chosen)
+      }
+    }
+
+    // Backfill if any planned topic returned fewer questions than requested
+    var idx = firstUnplannedIndex
+    while (assembledQuestions.size < maxQuestions && idx < targetTopicList.size) {
+      val topic = targetTopicList[idx++]
+      val usableCached = cachedByTopicId[topic.id].orEmpty().filter { q ->
+        (config.difficulty == "MIXED" || q.difficulty.equals(config.difficulty, ignoreCase = true)) &&
+          (config.questionTypes.isEmpty() || config.questionTypes.contains(q.questionType))
+      }
+      val needed = (maxQuestions - assembledQuestions.size).coerceAtMost(questionsPerTopic)
+      val chosenForTopic = usableCached.take(needed).toMutableList()
+      val stillNeeded = needed - chosenForTopic.size
+      if (stillNeeded > 0) {
+        val matchingConcept = if (topic.sourceType == "IMPORTED_CHAT") {
+          conceptsByTopicTitle[topic.title]
+        } else null
+        val generated = if (matchingConcept != null) {
+          geminiService.generateQuestionsForConcept(matchingConcept, stillNeeded, config.difficulty)
+        } else {
+          geminiService.generateQuestionsForTopic(topic, stillNeeded, config.difficulty)
+        }
+        if (generated.isNotEmpty()) {
+          allNewlyGenerated.addAll(generated)
+          chosenForTopic.addAll(generated.take(stillNeeded))
         }
       }
-
       if (chosenForTopic.isNotEmpty()) {
         selectedTopics.add(topic)
         assembledQuestions.addAll(chosenForTopic)
       }
+    }
+
+    if (allNewlyGenerated.isNotEmpty()) {
+      dao.insertQuestions(allNewlyGenerated)
     }
 
     val selectedIds = selectedTopics.map { it.id }.toSet()
@@ -594,8 +923,20 @@ class StudyPilotRepository(
       topicResults.getOrPut(q.topicId) { mutableListOf() }.add(isCorrect)
     }
 
+    val topicIds = topicResults.keys.toList()
+    val topicsById = if (topicIds.isNotEmpty()) {
+      dao.getTopicsByIds(topicIds).associateBy { it.id }
+    } else emptyMap()
+    val topicTitles = topicsById.values.map { it.title }.distinct()
+    val conceptsByTopicTitle = if (topicTitles.isNotEmpty()) {
+      dao.getConceptsByTopics(userId, topicTitles).associateBy { it.topic }
+    } else emptyMap()
+
+    val updatedTopics = mutableListOf<StudyTopic>()
+    val updatedConcepts = mutableListOf<ExtractedConcept>()
+
     for ((topicId, results) in topicResults) {
-      val topic = dao.getTopicById(topicId) ?: continue
+      val topic = topicsById[topicId] ?: continue
       val allCorrect = results.all { it }
       val totalTested = topic.timesTested + results.size
       val totalCorrect = topic.timesCorrect + results.count { it }
@@ -623,7 +964,7 @@ class StudyPilotRepository(
       cal.add(Calendar.DAY_OF_YEAR, newInterval)
       val nextRevDate = dateFormat.format(cal.time)
 
-      dao.updateTopic(
+      updatedTopics.add(
         topic.copy(
           timesTested = totalTested,
           timesCorrect = totalCorrect,
@@ -633,7 +974,23 @@ class StudyPilotRepository(
           lastTestedDate = today
         )
       )
+
+      val matchingConcept = conceptsByTopicTitle[topic.title]
+      if (matchingConcept != null) {
+        updatedConcepts.add(
+          matchingConcept.copy(
+            timesTested = matchingConcept.timesTested + results.size,
+            timesCorrect = matchingConcept.timesCorrect + results.count { it },
+            masteryLevel = newMastery,
+            lastTestedDate = today,
+            nextRevisionDate = nextRevDate
+          )
+        )
+      }
     }
+
+    if (updatedTopics.isNotEmpty()) dao.updateTopics(updatedTopics)
+    if (updatedConcepts.isNotEmpty()) dao.updateExtractedConcepts(updatedConcepts)
 
     val attempt = QuizAttempt(
       userId = userId,
@@ -660,16 +1017,44 @@ class StudyPilotRepository(
   }
 
   // --- Seed Initial University Data ---
-  suspend fun seedSampleUniversityData(userId: String = "") {
-    val targetUserId = userId.ifBlank { "student_amitesh" }
-    // First try pulling from cloud Firestore for cross-device consistency
+  suspend fun seedSampleUniversityData(userId: String = "", force: Boolean = false) {
+    val targetUserId = userId.ifBlank { "guest_user" }
+    val seededKey = "has_seeded_sample_data_$targetUserId"
+    val deletedKey = "sample_data_deleted_$targetUserId"
+
+    if (!force) {
+      if (prefs?.getBoolean(deletedKey, false) == true) {
+        // User explicitly deleted sample data. NEVER re-seed automatically!
+        return
+      }
+      if (prefs?.getBoolean(seededKey, false) == true) {
+        // Already seeded for this user. Do NOT auto-re-seed.
+        return
+      }
+      val currentLocal = dao.getSubjectsForUser(targetUserId).first()
+      if (currentLocal.isNotEmpty()) {
+        prefs?.edit()?.putBoolean(seededKey, true)?.apply()
+        return
+      }
+    }
+
+    // Try pulling from cloud Firestore for cross-device consistency
     pullUserDataFromFirestore(targetUserId)
 
     val existing = dao.getSubjectsForUser(targetUserId).first()
-    if (existing.isNotEmpty()) return
+    if (!force && existing.isNotEmpty()) {
+      prefs?.edit()?.putBoolean(seededKey, true)?.apply()
+      return
+    }
 
-    val isMed = targetUserId.contains("sarah") || targetUserId.contains("med")
-    val isEng = targetUserId.contains("marcus") || targetUserId.contains("eng")
+    // Mark as seeded
+    prefs?.edit()
+      ?.putBoolean(seededKey, true)
+      ?.putBoolean(deletedKey, false)
+      ?.apply()
+
+    val isMed = targetUserId.contains("med", ignoreCase = true)
+    val isEng = targetUserId.contains("eng", ignoreCase = true)
 
     val csSub = when {
       isMed -> Subject(userId = targetUserId, name = "Human Physiology & Anatomy", code = "MED101", colorHex = "#D86343")

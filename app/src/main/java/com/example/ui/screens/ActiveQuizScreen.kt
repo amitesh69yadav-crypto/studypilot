@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -30,6 +31,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -63,6 +65,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.QuizQuestion
@@ -212,17 +215,42 @@ fun ActiveQuizScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
               ) {
-                Surface(
-                  shape = RoundedCornerShape(8.dp),
-                  color = MaterialTheme.colorScheme.primaryContainer
-                ) {
-                  Text(
-                    text = "${currentQuestion.subjectName} • ${currentQuestion.topicTitle}",
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                  )
+                Column(modifier = Modifier.weight(1f)) {
+                  Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer
+                  ) {
+                    Text(
+                      text = "${currentQuestion.subjectName} • ${currentQuestion.topicTitle}",
+                      style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                      color = MaterialTheme.colorScheme.onPrimaryContainer,
+                      modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                  }
+
+                  if (!currentQuestion.sourceConversationTitle.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                      verticalAlignment = Alignment.CenterVertically,
+                      horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                      Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Chat,
+                        contentDescription = null,
+                        modifier = Modifier.size(12.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                      )
+                      Text(
+                        text = "From AI Chat: ${currentQuestion.sourceConversationTitle}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Medium
+                      )
+                    }
+                  }
                 }
+
+                Spacer(modifier = Modifier.width(8.dp))
 
                 Surface(
                   shape = RoundedCornerShape(8.dp),
@@ -521,20 +549,26 @@ fun QuizResultsView(
               OutlinedButton(
                 onClick = onRetryMistakes,
                 shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.weight(1f)
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                modifier = Modifier
+                  .weight(1f)
+                  .heightIn(min = 48.dp)
               ) {
                 Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("Retry Mistakes")
+                Text("Retry Mistakes", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
               }
             }
 
             Button(
               onClick = onDone,
               shape = RoundedCornerShape(12.dp),
-              modifier = Modifier.weight(1f)
+              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+              modifier = Modifier
+                .weight(1f)
+                .heightIn(min = 48.dp)
             ) {
-              Text("Back to Hub")
+              Text("Back to Hub", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
             }
           }
         }
@@ -567,7 +601,12 @@ fun QuizResultsView(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
           ) {
-            Text("Q${index + 1}: ${q.topicTitle}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+            Text(
+              "Q${index + 1}: ${q.topicTitle}",
+              fontWeight = FontWeight.Bold,
+              style = MaterialTheme.typography.titleSmall,
+              modifier = Modifier.weight(1f).padding(end = 8.dp)
+            )
             Surface(
               shape = RoundedCornerShape(8.dp),
               color = if (isCorrect) EmeraldSuccess.copy(alpha = 0.15f) else RoseError.copy(alpha = 0.15f)
@@ -577,6 +616,26 @@ fun QuizResultsView(
                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                 color = if (isCorrect) EmeraldSuccess else RoseError,
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+              )
+            }
+          }
+
+          if (!q.sourceConversationTitle.isNullOrBlank()) {
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(4.dp),
+              modifier = Modifier.padding(top = 2.dp)
+            ) {
+              Icon(
+                imageVector = Icons.AutoMirrored.Filled.Chat,
+                contentDescription = null,
+                modifier = Modifier.size(11.dp),
+                tint = MaterialTheme.colorScheme.primary
+              )
+              Text(
+                text = "From: ${q.sourceConversationTitle}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary
               )
             }
           }

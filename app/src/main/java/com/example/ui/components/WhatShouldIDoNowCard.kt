@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -55,6 +56,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.TimetableSession
@@ -141,7 +143,11 @@ fun WhatShouldIDoNowCard(
           }
 
           Spacer(modifier = Modifier.width(10.dp))
-          Column {
+          Column(
+            modifier = Modifier
+              .weight(1f)
+              .padding(end = 8.dp)
+          ) {
             Text(
               text = "WHAT SHOULD I DO NOW?",
               style = MaterialTheme.typography.labelSmall.copy(
@@ -152,7 +158,10 @@ fun WhatShouldIDoNowCard(
             )
             Text(
               text = when (status.state) {
-                ScheduleState.ACTIVE_NOW -> "In Session Right Now • ${status.minutesRemaining}m left"
+                ScheduleState.ACTIVE_NOW -> {
+                  val isAlarmOnly = status.activeSession?.endTime.isNullOrBlank()
+                  if (isAlarmOnly) "Alarm Scheduled Right Now" else "In Session Right Now • ${status.minutesRemaining}m left"
+                }
                 ScheduleState.UPCOMING_NEXT -> "Starts in ${status.minutesUntilNext} min"
                 ScheduleState.FREE_TIME -> "Free Study Window"
                 ScheduleState.DAY_COMPLETE -> "Day Schedule Completed"
@@ -200,7 +209,7 @@ fun WhatShouldIDoNowCard(
               color = PaletteDeepSage
             ) {
               Text(
-                text = active.subjectName,
+                text = active.subjectName.ifBlank { "Alarm" },
                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                 color = PaletteCreamIvory,
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -213,42 +222,45 @@ fun WhatShouldIDoNowCard(
               color = PaletteDarkText
             )
             Spacer(modifier = Modifier.height(4.dp))
+            val activeLocationSuffix = if (active.location.isNotBlank()) " • ${active.location}" else ""
             Text(
-              text = "${active.startTime} - ${active.endTime} • ${active.location.ifBlank { "Campus Hall" }}",
+              text = "${formatTimeRange(active.startTime, active.endTime)}$activeLocationSuffix",
               style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
               color = PaletteDarkText
             )
 
-            Spacer(modifier = Modifier.height(10.dp))
-            // Progress Bar
-            Column {
-              Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-              ) {
-                Text(
-                  text = "Elapsed Time",
-                  fontSize = 11.sp,
-                  fontWeight = FontWeight.Medium,
-                  color = PaletteDarkText
-                )
-                Text(
-                  text = "${(status.progressFraction * 100).toInt()}%",
-                  fontSize = 11.sp,
-                  fontWeight = FontWeight.Bold,
-                  color = PaletteDarkText
+            if (active.endTime.isNotBlank()) {
+              Spacer(modifier = Modifier.height(10.dp))
+              // Progress Bar
+              Column {
+                Row(
+                  modifier = Modifier.fillMaxWidth(),
+                  horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                  Text(
+                    text = "Elapsed Time",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = PaletteDarkText
+                  )
+                  Text(
+                    text = "${(status.progressFraction * 100).toInt()}%",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = PaletteDarkText
+                  )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                LinearProgressIndicator(
+                  progress = { status.progressFraction },
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(3.dp)),
+                  color = PaletteDeepSage,
+                  trackColor = PalettePaleCeladon
                 )
               }
-              Spacer(modifier = Modifier.height(4.dp))
-              LinearProgressIndicator(
-                progress = { status.progressFraction },
-                modifier = Modifier
-                  .fillMaxWidth()
-                  .height(6.dp)
-                  .clip(RoundedCornerShape(3.dp)),
-                color = PaletteDeepSage,
-                trackColor = PalettePaleCeladon
-              )
             }
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -266,11 +278,11 @@ fun WhatShouldIDoNowCard(
                 shape = RoundedCornerShape(10.dp),
                 modifier = Modifier
                   .weight(1f)
-                  .height(38.dp)
+                  .heightIn(min = 44.dp)
               ) {
                 Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("Mark Done", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                Text("Mark Done", fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
               }
 
               Button(
@@ -283,11 +295,11 @@ fun WhatShouldIDoNowCard(
                 border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage),
                 modifier = Modifier
                   .weight(1f)
-                  .height(38.dp)
+                  .heightIn(min = 44.dp)
               ) {
                 Icon(Icons.Default.Psychology, contentDescription = null, tint = PaletteDarkText, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("AI Tutor", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                Text("AI Tutor", fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
               }
             }
 
@@ -304,7 +316,7 @@ fun WhatShouldIDoNowCard(
               }
 
               Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { onTestAlarm(active) }, modifier = Modifier.size(32.dp)) {
+                IconButton(onClick = { onTestAlarm(active) }, modifier = Modifier.size(44.dp)) {
                   Icon(
                     imageVector = Icons.Default.NotificationsActive,
                     contentDescription = "Test Alarm",
@@ -312,8 +324,7 @@ fun WhatShouldIDoNowCard(
                     modifier = Modifier.size(18.dp)
                   )
                 }
-                Spacer(modifier = Modifier.width(4.dp))
-                IconButton(onClick = { onSyncGoogleCalendar(active) }, modifier = Modifier.size(32.dp)) {
+                IconButton(onClick = { onSyncGoogleCalendar(active) }, modifier = Modifier.size(44.dp)) {
                   Icon(
                     imageVector = Icons.Default.Sync,
                     contentDescription = "Sync with Google Calendar",
@@ -334,7 +345,7 @@ fun WhatShouldIDoNowCard(
               color = PalettePaleCeladon
             ) {
               Text(
-                text = next.subjectName,
+                text = next.subjectName.ifBlank { "Alarm" },
                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                 color = PaletteDarkText,
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -347,8 +358,9 @@ fun WhatShouldIDoNowCard(
               color = PaletteDarkText
             )
             Spacer(modifier = Modifier.height(4.dp))
+            val nextLocationSuffix = if (next.location.isNotBlank()) " • ${next.location}" else ""
             Text(
-              text = "Starts at ${next.startTime} - ${next.endTime} • ${next.location.ifBlank { "Campus Hall" }}",
+              text = "Starts at ${formatTimeRange(next.startTime, next.endTime)}$nextLocationSuffix",
               style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
               color = PaletteDarkText
             )
@@ -380,11 +392,11 @@ fun WhatShouldIDoNowCard(
                 shape = RoundedCornerShape(10.dp),
                 modifier = Modifier
                   .weight(1f)
-                  .height(38.dp)
+                  .heightIn(min = 44.dp)
               ) {
                 Icon(Icons.Default.Psychology, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("Pre-Read with AI", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                Text("Pre-Read with AI", fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
               }
 
               OutlinedButton(
@@ -394,11 +406,11 @@ fun WhatShouldIDoNowCard(
                 border = androidx.compose.foundation.BorderStroke(1.dp, PaletteDeepSage),
                 modifier = Modifier
                   .weight(1f)
-                  .height(38.dp)
+                  .heightIn(min = 44.dp)
               ) {
                 Icon(Icons.Default.Alarm, contentDescription = null, tint = PaletteDarkText, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("Ring Alarm", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                Text("Ring Alarm", fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
               }
             }
 
@@ -463,11 +475,11 @@ fun WhatShouldIDoNowCard(
               shape = RoundedCornerShape(10.dp),
               modifier = Modifier
                 .weight(1f)
-                .height(40.dp)
+                .heightIn(min = 44.dp)
             ) {
               Icon(Icons.Default.Schedule, contentDescription = null, modifier = Modifier.size(16.dp))
               Spacer(modifier = Modifier.width(6.dp))
-              Text("Plan Schedule", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+              Text("Plan Schedule", fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
             }
 
             OutlinedButton(
@@ -491,11 +503,11 @@ fun WhatShouldIDoNowCard(
               border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage),
               modifier = Modifier
                 .weight(1f)
-                .height(40.dp)
+                .heightIn(min = 44.dp)
             ) {
               Icon(Icons.Default.Alarm, contentDescription = null, tint = PaletteDarkText, modifier = Modifier.size(16.dp))
               Spacer(modifier = Modifier.width(6.dp))
-              Text("Test Alarm", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+              Text("Test Alarm", fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
             }
           }
         }
@@ -540,7 +552,7 @@ fun ActiveAlarmAlertDialog(
             color = PaletteDarkText
           )
           Text(
-            text = "Scheduled start time reached (${session.startTime})",
+            text = "Scheduled start time reached (${formatTo12Hour(session.startTime)})",
             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
             color = PaletteDarkText
           )
@@ -557,7 +569,7 @@ fun ActiveAlarmAlertDialog(
           color = PalettePaleCeladon
         ) {
           Text(
-            text = session.subjectName,
+            text = session.subjectName.ifBlank { "Alarm" },
             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
             color = PaletteDarkText,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -568,8 +580,9 @@ fun ActiveAlarmAlertDialog(
           style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
           color = PaletteDarkText
         )
+        val dateSuffix = if (session.date.isNotBlank()) " (${session.date})" else ""
         Text(
-          text = "⏰ ${session.startTime} - ${session.endTime} (${session.date})",
+          text = "⏰ ${formatTimeRange(session.startTime, session.endTime)}$dateSuffix",
           style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
           color = PaletteDarkText
         )
@@ -590,28 +603,58 @@ fun ActiveAlarmAlertDialog(
       }
     },
     confirmButton = {
-      Button(
-        onClick = onStartSession,
-        colors = ButtonDefaults.buttonColors(
-          containerColor = PaletteDeepSage,
-          contentColor = PaletteCreamIvory
-        ),
-        shape = RoundedCornerShape(10.dp)
+      Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
       ) {
-        Text("I'm On It! (Start)", fontWeight = FontWeight.Bold)
+        // Prominent, unmissable Turn Off Alarm Button
+        Button(
+          onClick = onDismiss,
+          colors = ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.error,
+            contentColor = MaterialTheme.colorScheme.onError
+          ),
+          shape = RoundedCornerShape(12.dp),
+          modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp)
+        ) {
+          Icon(Icons.Default.AlarmOff, contentDescription = null, modifier = Modifier.size(20.dp))
+          Spacer(modifier = Modifier.width(8.dp))
+          Text("Turn Off Alarm", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+        }
+
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+          OutlinedButton(
+            onClick = onSnooze,
+            shape = RoundedCornerShape(10.dp),
+            modifier = Modifier
+              .weight(1f)
+              .heightIn(min = 48.dp)
+          ) {
+            Text("Snooze 5m", fontWeight = FontWeight.SemiBold, fontSize = 12.sp, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+          }
+
+          Button(
+            onClick = onStartSession,
+            colors = ButtonDefaults.buttonColors(
+              containerColor = PaletteDeepSage,
+              contentColor = PaletteCreamIvory
+            ),
+            shape = RoundedCornerShape(10.dp),
+            modifier = Modifier
+              .weight(1f)
+              .heightIn(min = 48.dp)
+          ) {
+            Text("Start Session", fontWeight = FontWeight.SemiBold, fontSize = 12.sp, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+          }
+        }
       }
     },
-    dismissButton = {
-      Row {
-        TextButton(onClick = onSnooze) {
-          Text("Snooze 5m", color = PaletteDarkText, fontWeight = FontWeight.Bold)
-        }
-        Spacer(modifier = Modifier.width(4.dp))
-        TextButton(onClick = onDismiss) {
-          Text("Dismiss", color = PaletteDarkText)
-        }
-      }
-    },
+    dismissButton = null,
     containerColor = PaletteCreamIvory,
     shape = RoundedCornerShape(16.dp)
   )

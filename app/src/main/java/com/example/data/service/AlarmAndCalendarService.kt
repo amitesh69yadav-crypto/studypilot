@@ -95,11 +95,26 @@ class AlarmAndCalendarService(private val context: Context) {
     val cal = Calendar.getInstance().apply { time = currentTime }
     val currentMinutes = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
 
-    // Check for currently active session
+    // Check for currently active session or start-time alarm
     for (session in todaySessions) {
       val (startH, startM) = parseTime(session.startTime)
-      val (endH, endM) = parseTime(session.endTime)
       val startTotal = startH * 60 + startM
+
+      if (session.endTime.isBlank()) {
+        if (currentMinutes == startTotal) {
+          return CurrentScheduleStatus(
+            state = ScheduleState.ACTIVE_NOW,
+            activeSession = session,
+            minutesRemaining = 0,
+            progressFraction = 1f,
+            formattedStatusText = "${session.subjectName.ifBlank { "Alarm" }}: ${session.topic}",
+            suggestionText = "Alarm scheduled for ${session.startTime}."
+          )
+        }
+        continue
+      }
+
+      val (endH, endM) = parseTime(session.endTime)
       val endTotal = endH * 60 + endM
 
       if (currentMinutes in startTotal until endTotal) {
@@ -113,7 +128,7 @@ class AlarmAndCalendarService(private val context: Context) {
           activeSession = session,
           minutesRemaining = remaining,
           progressFraction = progress,
-          formattedStatusText = "${session.subjectName}: ${session.topic}",
+          formattedStatusText = "${session.subjectName.ifBlank { "Alarm" }}: ${session.topic}",
           suggestionText = "Currently in progress ($remaining min left). Stay focused or ask AI Tutor for rapid concept explanations!"
         )
       }
@@ -135,11 +150,12 @@ class AlarmAndCalendarService(private val context: Context) {
         state = ScheduleState.UPCOMING_NEXT,
         nextSession = nextSession,
         minutesUntilNext = untilNext,
-        formattedStatusText = "Next up at ${nextSession.startTime}: ${nextSession.subjectName}",
+        formattedStatusText = "Next up at ${nextSession.startTime}: ${nextSession.subjectName.ifBlank { nextSession.topic }}",
         suggestionText = if (untilNext <= 15) {
-          "Starts in $untilNext minutes! Prepare your notes, room: ${nextSession.location.ifBlank { "Campus" }}."
+          val locationHint = if (nextSession.location.isNotBlank()) " Room: ${nextSession.location}." else ""
+          "Starts in $untilNext minutes!$locationHint"
         } else {
-          "$untilNext minutes of free time available. Great window for a quick 10-minute quiz or reviewing weak topics."
+          "$untilNext minutes until scheduled time."
         }
       )
     }
@@ -396,12 +412,19 @@ class AlarmAndCalendarService(private val context: Context) {
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
       )
 
+      val timeSummary = if (session.endTime.isNotBlank()) {
+        "Scheduled: ${session.startTime} - ${session.endTime}"
+      } else {
+        "Alarm Time: ${session.startTime}"
+      }
+      val locationLine = if (session.location.isNotBlank()) "\nLocation: ${session.location}" else ""
+      val notesLine = if (session.notes.isNotBlank()) "\n${session.notes}" else ""
       val notification = NotificationCompat.Builder(context, channelId)
         .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-        .setContentTitle("⏰ Event Starting Now: ${session.subjectName}")
+        .setContentTitle("⏰ Event Starting Now: ${session.subjectName.ifBlank { session.topic }}")
         .setContentText("${session.topic} (Started at ${session.startTime})")
         .setStyle(NotificationCompat.BigTextStyle().bigText(
-          "Event Starting Now: ${session.topic}\nScheduled: ${session.startTime} - ${session.endTime}\nLocation: ${session.location.ifBlank { "Campus" }}\n${session.notes}"
+          "Event Starting Now: ${session.topic}\n$timeSummary$locationLine$notesLine"
         ))
         .setPriority(NotificationCompat.PRIORITY_MAX)
         .setCategory(NotificationCompat.CATEGORY_ALARM)
@@ -427,7 +450,6 @@ class AlarmAndCalendarService(private val context: Context) {
    */
   fun createGoogleCalendarInsertIntent(session: TimetableSession): Intent {
     val (startH, startM) = parseTime(session.startTime)
-    val (endH, endM) = parseTime(session.endTime)
 
     val dateParts = session.date.split("-")
     val year = dateParts.getOrNull(0)?.toIntOrNull() ?: Calendar.getInstance().get(Calendar.YEAR)
@@ -438,14 +460,20 @@ class AlarmAndCalendarService(private val context: Context) {
       set(year, month, day, startH, startM, 0)
     }
     val endCal = Calendar.getInstance().apply {
-      set(year, month, day, endH, endM, 0)
+      if (session.endTime.isNotBlank()) {
+        val (endH, endM) = parseTime(session.endTime)
+        set(year, month, day, endH, endM, 0)
+      } else {
+        timeInMillis = startCal.timeInMillis
+        add(Calendar.MINUTE, 30)
+      }
     }
 
     return Intent(Intent.ACTION_INSERT).apply {
       data = CalendarContract.Events.CONTENT_URI
       putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, startCal.timeInMillis)
       putExtra(CalendarContract.EXTRA_EVENT_END_TIME, endCal.timeInMillis)
-      putExtra(CalendarContract.Events.TITLE, "${session.subjectName}: ${session.topic}")
+      putExtra(CalendarContract.Events.TITLE, if (session.subjectName.isNotBlank()) "${session.subjectName}: ${session.topic}" else session.topic)
       putExtra(CalendarContract.Events.DESCRIPTION, "StudyPilot Session\nNotes: ${session.notes}")
       putExtra(CalendarContract.Events.EVENT_LOCATION, session.location)
       putExtra(CalendarContract.Events.AVAILABILITY, CalendarContract.Events.AVAILABILITY_BUSY)
@@ -460,7 +488,6 @@ class AlarmAndCalendarService(private val context: Context) {
   fun getGoogleCalendarWebUrl(session: TimetableSession): String {
     return try {
       val (startH, startM) = parseTime(session.startTime)
-      val (endH, endM) = parseTime(session.endTime)
 
       val dateParts = session.date.split("-")
       val year = dateParts.getOrNull(0)?.toIntOrNull() ?: Calendar.getInstance().get(Calendar.YEAR)
@@ -475,13 +502,20 @@ class AlarmAndCalendarService(private val context: Context) {
         set(year, month, day, startH, startM, 0)
       }
       val endCal = Calendar.getInstance().apply {
-        set(year, month, day, endH, endM, 0)
+        if (session.endTime.isNotBlank()) {
+          val (endH, endM) = parseTime(session.endTime)
+          set(year, month, day, endH, endM, 0)
+        } else {
+          timeInMillis = startCal.timeInMillis
+          add(Calendar.MINUTE, 30)
+        }
       }
 
       val startStr = utcFormat.format(startCal.time)
       val endStr = utcFormat.format(endCal.time)
 
-      val title = URLEncoder.encode("${session.subjectName}: ${session.topic}", "UTF-8")
+      val rawTitle = if (session.subjectName.isNotBlank()) "${session.subjectName}: ${session.topic}" else session.topic
+      val title = URLEncoder.encode(rawTitle, "UTF-8")
       val details = URLEncoder.encode("StudyPilot AI Session\nNotes: ${session.notes}", "UTF-8")
       val location = URLEncoder.encode(session.location, "UTF-8")
 
@@ -497,7 +531,6 @@ class AlarmAndCalendarService(private val context: Context) {
   fun insertIntoCalendarProvider(session: TimetableSession): Long? {
     return try {
       val (startH, startM) = parseTime(session.startTime)
-      val (endH, endM) = parseTime(session.endTime)
 
       val dateParts = session.date.split("-")
       val year = dateParts.getOrNull(0)?.toIntOrNull() ?: Calendar.getInstance().get(Calendar.YEAR)
@@ -508,13 +541,19 @@ class AlarmAndCalendarService(private val context: Context) {
         set(year, month, day, startH, startM, 0)
       }
       val endCal = Calendar.getInstance().apply {
-        set(year, month, day, endH, endM, 0)
+        if (session.endTime.isNotBlank()) {
+          val (endH, endM) = parseTime(session.endTime)
+          set(year, month, day, endH, endM, 0)
+        } else {
+          timeInMillis = startCal.timeInMillis
+          add(Calendar.MINUTE, 30)
+        }
       }
 
       val values = ContentValues().apply {
         put(CalendarContract.Events.DTSTART, startCal.timeInMillis)
         put(CalendarContract.Events.DTEND, endCal.timeInMillis)
-        put(CalendarContract.Events.TITLE, "${session.subjectName}: ${session.topic}")
+        put(CalendarContract.Events.TITLE, if (session.subjectName.isNotBlank()) "${session.subjectName}: ${session.topic}" else session.topic)
         put(CalendarContract.Events.DESCRIPTION, "StudyPilot AI Timetable Session\n${session.notes}")
         put(CalendarContract.Events.CALENDAR_ID, 1)
         put(CalendarContract.Events.EVENT_TIMEZONE, TimeZone.getDefault().id)

@@ -9,20 +9,20 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.HourglassEmpty
@@ -52,11 +52,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.components.MasteryBadge
@@ -67,6 +71,9 @@ import com.example.ui.theme.CyanAccent
 import com.example.ui.theme.EmeraldSuccess
 import com.example.ui.theme.RoseError
 import com.example.ui.viewmodel.StudyPilotViewModel
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 
 @Composable
 fun ProgressScreen(
@@ -76,21 +83,88 @@ fun ProgressScreen(
   val topics by viewModel.topics.collectAsState()
   val attempts by viewModel.quizAttempts.collectAsState()
   val subjects by viewModel.subjects.collectAsState()
+  val sessions by viewModel.sessions.collectAsState()
+  val studyStreak by viewModel.studyStreak.collectAsState()
 
   var showExportDialog by remember { mutableStateOf(false) }
 
-  val masteredCount = topics.count { it.masteryLevel == "MASTERED" }
-  val familiarCount = topics.count { it.masteryLevel == "FAMILIAR" }
-  val strugglingTopics = topics.filter { it.masteryLevel == "STRUGGLING" }
-  val untestedTopics = topics.filter { it.timesTested == 0 }
+  val masteredCount = remember(topics) { topics.count { it.masteryLevel == "MASTERED" } }
+  val familiarCount = remember(topics) { topics.count { it.masteryLevel == "FAMILIAR" } }
+  val strugglingTopics = remember(topics) { topics.filter { it.masteryLevel == "STRUGGLING" } }
+  val untestedTopics = remember(topics) { topics.filter { it.timesTested == 0 } }
 
-  val averageScore = if (attempts.isNotEmpty()) {
-    attempts.map { it.scorePercentage }.average().toInt()
-  } else 0
+  val averageScore = remember(attempts) {
+    if (attempts.isNotEmpty()) {
+      attempts.map { it.scorePercentage }.average().toInt()
+    } else 0
+  }
+
+  val overallMasteryPercent = remember(masteredCount, topics) {
+    if (topics.isNotEmpty()) {
+      (masteredCount * 100 / topics.size)
+    } else 0
+  }
+
+  // 7 Days of the week in standard Monday-Sunday order
+  val daysOfWeek = remember { listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun") }
+
+  // Real weekly hours calculated strictly from real timetable sessions (0 if no data)
+  val weeklyDayHours = remember(sessions) {
+    val dayTotals = mutableMapOf<String, Float>()
+    daysOfWeek.forEach { dayTotals[it] = 0f }
+
+    val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+    val todayCal = Calendar.getInstance()
+    // Current day offset from Monday (0 for Mon, 6 for Sun)
+    val dayOfWeekOffset = (todayCal.get(Calendar.DAY_OF_WEEK) + 5) % 7
+    val mondayCal = Calendar.getInstance().apply {
+      add(Calendar.DAY_OF_YEAR, -dayOfWeekOffset)
+    }
+
+    val currentWeekDates = mutableMapOf<String, String>()
+    daysOfWeek.forEachIndexed { idx, dayKey ->
+      val dCal = mondayCal.clone() as Calendar
+      dCal.add(Calendar.DAY_OF_YEAR, idx)
+      currentWeekDates[dayKey] = sdf.format(dCal.time)
+    }
+
+    sessions.forEach { s ->
+      if (s.startTime.isBlank() || s.endTime.isBlank()) return@forEach
+      try {
+        val (sh, sm) = s.startTime.split(":").map { it.toInt() }
+        val (eh, em) = s.endTime.split(":").map { it.toInt() }
+        val durationHours = ((eh * 60 + em) - (sh * 60 + sm)).coerceAtLeast(0) / 60.0f
+
+        daysOfWeek.forEach { dayKey ->
+          val targetDate = currentWeekDates[dayKey]
+          val matchesDate = s.date.isNotBlank() && s.date == targetDate
+          val matchesRecurring = s.recurringDays.split(",").map { it.trim() }.any { it.equals(dayKey, ignoreCase = true) }
+
+          if (matchesDate || matchesRecurring) {
+            dayTotals[dayKey] = (dayTotals[dayKey] ?: 0f) + durationHours
+          }
+        }
+      } catch (_: Exception) {}
+    }
+
+    daysOfWeek.map { day ->
+      val total = dayTotals[day] ?: 0f
+      val rounded = Math.round(total * 10) / 10f
+      Pair(day, rounded)
+    }
+  }
+
+  val totalWeeklyHours = remember(weeklyDayHours) {
+    weeklyDayHours.sumOf { it.second.toDouble() }
+  }
+
+  val maxDayHours = remember(weeklyDayHours) {
+    (weeklyDayHours.maxOfOrNull { it.second } ?: 0f).coerceAtLeast(4f)
+  }
 
   LazyColumn(
     modifier = Modifier.fillMaxSize(),
-    contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 32.dp)
+    contentPadding = PaddingValues(bottom = 32.dp)
   ) {
     // 1. Export Action Banner
     item {
@@ -101,32 +175,41 @@ fun ProgressScreen(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
       ) {
-        Column {
+        Column(
+          modifier = Modifier
+            .weight(1f)
+            .padding(end = 12.dp)
+        ) {
           Text(
             text = "Learning Metrics",
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-            color = MaterialTheme.colorScheme.onBackground
+            color = MaterialTheme.colorScheme.onBackground,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
           )
           Text(
             text = "Spaced repetition & performance analytics",
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
           )
         }
 
         OutlinedButton(
           onClick = { showExportDialog = true },
           shape = RoundedCornerShape(10.dp),
-          modifier = Modifier.height(38.dp)
+          modifier = Modifier.heightIn(min = 44.dp),
+          contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
         ) {
           Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
-          Spacer(modifier = Modifier.width(4.dp))
-          Text("Export Report", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+          Spacer(modifier = Modifier.width(6.dp))
+          Text("Export", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
         }
       }
     }
 
-    // 2. Metrics 4-Grid (Even heights & widths)
+    // 2. Metrics 4-Grid (Even heights & centered)
     item {
       Column(
         modifier = Modifier
@@ -149,7 +232,7 @@ fun ProgressScreen(
           StatCard(
             title = "Quizzes Completed",
             value = attempts.size.toString(),
-            subtitle = "Avg $averageScore%",
+            subtitle = if (attempts.isEmpty()) "0% Average" else "Avg $averageScore%",
             icon = Icons.Default.Quiz,
             iconTint = EmeraldSuccess,
             modifier = Modifier.weight(1f)
@@ -162,8 +245,8 @@ fun ProgressScreen(
         ) {
           StatCard(
             title = "Study Streak",
-            value = "5 Days",
-            subtitle = "Active Consistency",
+            value = "$studyStreak Days",
+            subtitle = if (studyStreak > 0) "Active Consistency" else "0 Days Streak",
             icon = Icons.Default.LocalFireDepartment,
             iconTint = AmberAccent,
             modifier = Modifier.weight(1f)
@@ -180,7 +263,7 @@ fun ProgressScreen(
       }
     }
 
-    // 2.5 Weekly Hours Spent per Study Topic Bar Chart (Interactive Productivity Visual Dashboard)
+    // 3. Weekly Hours Logged Bar Chart (7 Days of Week, Zero-based, Real Data)
     item {
       Card(
         modifier = Modifier
@@ -196,14 +279,18 @@ fun ProgressScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
           ) {
-            Column {
+            Column(
+              modifier = Modifier
+                .weight(1f)
+                .padding(end = 8.dp)
+            ) {
               Text(
-                text = "Topic Study Hours This Week",
+                text = "Weekly Study Hours Logged",
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.onSurface
               )
               Text(
-                text = "Hours logged across syllabus topics",
+                text = "Tracked from timetable sessions and lectures",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
               )
@@ -215,7 +302,7 @@ fun ProgressScreen(
               border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
             ) {
               Text(
-                text = "Weekly Track",
+                text = "Mon - Sun",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -224,38 +311,7 @@ fun ProgressScreen(
             }
           }
 
-          Spacer(modifier = Modifier.height(16.dp))
-
-          // Compute hours per topic from study topics or sample distributions
-          val topicHourBars = remember(topics) {
-            val list = if (topics.isNotEmpty()) {
-              topics.take(6).mapIndexed { idx, t ->
-                // Derive study hours (1.5h to 6.5h) based on review count / difficulty
-                val baseHours = when (idx) {
-                  0 -> 6.5f
-                  1 -> 4.8f
-                  2 -> 3.5f
-                  3 -> 2.5f
-                  4 -> 1.8f
-                  else -> 1.2f
-                }
-                Triple(t.title.take(10), baseHours, t.subjectId)
-              }
-            } else {
-              listOf(
-                Triple("Graph Alg", 6.5f, 1L),
-                Triple("DP Memo", 5.0f, 1L),
-                Triple("Deadlocks", 3.8f, 2L),
-                Triple("Paging", 2.5f, 2L),
-                Triple("TCP Flow", 3.0f, 3L),
-                Triple("Rel Algebra", 2.0f, 4L)
-              )
-            }
-            list
-          }
-
-          val maxHours = (topicHourBars.maxOfOrNull { it.second } ?: 6.5f).coerceAtLeast(1f)
-          val totalWeeklyHours = topicHourBars.sumOf { it.second.toDouble() }
+          Spacer(modifier = Modifier.height(14.dp))
 
           // Total Weekly Summary Pill
           Row(
@@ -263,7 +319,7 @@ fun ProgressScreen(
               .fillMaxWidth()
               .clip(RoundedCornerShape(8.dp))
               .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-              .padding(horizontal = 10.dp, vertical = 6.dp),
+              .padding(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
           ) {
@@ -274,20 +330,20 @@ fun ProgressScreen(
               color = MaterialTheme.colorScheme.onSurface
             )
             Text(
-              text = String.format(java.util.Locale.getDefault(), "%.1f Hours logged", totalWeeklyHours),
+              text = String.format(Locale.getDefault(), "%.1f Hours logged", totalWeeklyHours),
               fontSize = 12.sp,
               fontWeight = FontWeight.ExtraBold,
               color = MaterialTheme.colorScheme.primary
             )
           }
 
-          Spacer(modifier = Modifier.height(14.dp))
+          Spacer(modifier = Modifier.height(16.dp))
 
-          // Modern Material Bar Chart with Canvas
+          // 7-Day Bar Chart Canvas
           Box(
             modifier = Modifier
               .fillMaxWidth()
-              .height(150.dp)
+              .height(140.dp)
           ) {
             val barPrimary = MaterialTheme.colorScheme.primary
             val barSecondary = MaterialTheme.colorScheme.secondary
@@ -295,27 +351,32 @@ fun ProgressScreen(
 
             Canvas(modifier = Modifier.fillMaxSize()) {
               val w = size.width
-              val h = size.height - 20.dp.toPx() // leave room for baseline
-              val barCount = topicHourBars.size
+              val h = size.height - 12.dp.toPx()
+              val barCount = weeklyDayHours.size
               val slotWidth = w / barCount
-              val barWidth = (slotWidth * 0.55f).coerceAtMost(36.dp.toPx())
+              val barWidth = (slotWidth * 0.52f).coerceAtMost(32.dp.toPx())
 
-              // Grid baseline & 50% line
+              // Grid lines: 100%, 50%, baseline
               drawLine(gridColor, Offset(0f, 0f), Offset(w, 0f), strokeWidth = 1f)
               drawLine(gridColor, Offset(0f, h / 2), Offset(w, h / 2), strokeWidth = 1f)
               drawLine(gridColor, Offset(0f, h), Offset(w, h), strokeWidth = 1.5f)
 
-              topicHourBars.forEachIndexed { i, (_, hrs, _) ->
-                val barHeight = (hrs / maxHours) * h
+              weeklyDayHours.forEachIndexed { i, (_, hrs) ->
+                val barHeight = if (hrs > 0f) (hrs / maxDayHours) * h else 3.dp.toPx()
                 val left = (i * slotWidth) + (slotWidth - barWidth) / 2
                 val top = h - barHeight
 
-                // Bar rounded top rectangle
+                val color = if (hrs > 0f) {
+                  if (i % 2 == 0) barPrimary else barSecondary
+                } else {
+                  gridColor
+                }
+
                 drawRoundRect(
-                  color = if (i % 2 == 0) barPrimary else barSecondary,
+                  color = color,
                   topLeft = Offset(left, top),
-                  size = androidx.compose.ui.geometry.Size(barWidth, barHeight),
-                  cornerRadius = androidx.compose.ui.geometry.CornerRadius(6.dp.toPx(), 6.dp.toPx())
+                  size = Size(barWidth, barHeight),
+                  cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx(), 4.dp.toPx())
                 )
               }
             }
@@ -323,29 +384,29 @@ fun ProgressScreen(
 
           Spacer(modifier = Modifier.height(6.dp))
 
-          // Labels and Values under each bar
+          // Day Names and Hours under each bar (Mon - Sun)
           Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
           ) {
-            topicHourBars.forEach { (name, hrs, _) ->
+            weeklyDayHours.forEach { (day, hrs) ->
               Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.weight(1f)
               ) {
                 Text(
                   text = "${hrs}h",
-                  fontSize = 11.sp,
+                  fontSize = 10.sp,
                   fontWeight = FontWeight.Bold,
-                  color = MaterialTheme.colorScheme.primary
+                  color = if (hrs > 0f) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                  textAlign = TextAlign.Center
                 )
                 Text(
-                  text = name,
-                  fontSize = 10.sp,
+                  text = day,
+                  fontSize = 11.sp,
                   fontWeight = FontWeight.Medium,
                   color = MaterialTheme.colorScheme.onSurfaceVariant,
-                  maxLines = 1,
-                  overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                  textAlign = TextAlign.Center
                 )
               }
             }
@@ -354,7 +415,7 @@ fun ProgressScreen(
       }
     }
 
-    // 3. Quiz Score Improvement Chart (Canvas-based)
+    // 4. Quiz Score Improvement Trajectory Chart (Zero if no data, Real Data)
     item {
       Card(
         modifier = Modifier
@@ -370,17 +431,42 @@ fun ProgressScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
           ) {
-            Text("Score Improvement Trajectory", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-            Text("Target: 85%+", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+            Column(
+              modifier = Modifier
+                .weight(1f)
+                .padding(end = 8.dp)
+            ) {
+              Text(
+                text = "Score Improvement Trajectory",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface
+              )
+              Text(
+                text = "Average score: $averageScore% (${attempts.size} quizzes completed)",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+              )
+            }
+
+            Surface(
+              shape = RoundedCornerShape(8.dp),
+              color = MaterialTheme.colorScheme.primaryContainer,
+              border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
+            ) {
+              Text(
+                text = "Target: 85%+",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+              )
+            }
           }
 
           Spacer(modifier = Modifier.height(16.dp))
 
-          // Draw Line chart
-          val scores = if (attempts.isNotEmpty()) {
-            attempts.takeLast(7).map { it.scorePercentage }
-          } else {
-            listOf(60, 68, 75, 70, 82, 88, 92)
+          val scores = remember(attempts) {
+            attempts.takeLast(6).map { it.scorePercentage }
           }
 
           Box(
@@ -390,17 +476,53 @@ fun ProgressScreen(
           ) {
             val primaryColor = MaterialTheme.colorScheme.primary
             val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+            val targetColor = AmberAccent.copy(alpha = 0.6f)
 
             Canvas(modifier = Modifier.fillMaxSize()) {
               val w = size.width
               val h = size.height
 
-              // Grid lines
+              // Grid lines: 100%, 50%, baseline (0%)
               drawLine(gridColor, Offset(0f, 0f), Offset(w, 0f), strokeWidth = 1f)
               drawLine(gridColor, Offset(0f, h / 2), Offset(w, h / 2), strokeWidth = 1f)
-              drawLine(gridColor, Offset(0f, h), Offset(w, h), strokeWidth = 1f)
+              drawLine(gridColor, Offset(0f, h), Offset(w, h), strokeWidth = 1.5f)
 
-              if (scores.size >= 2) {
+              // 85% target line (dashed)
+              val targetY = h - (0.85f * h)
+              val dashPathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
+              drawLine(
+                color = targetColor,
+                start = Offset(0f, targetY),
+                end = Offset(w, targetY),
+                strokeWidth = 1.5f,
+                pathEffect = dashPathEffect
+              )
+
+              if (scores.isEmpty()) {
+                // If there is no data, set to zero cleanly along baseline
+                val slotCount = 5
+                val stepX = w / (slotCount - 1)
+                val baselineY = h - 3.dp.toPx()
+
+                // Baseline line
+                drawLine(
+                  color = primaryColor.copy(alpha = 0.35f),
+                  start = Offset(0f, baselineY),
+                  end = Offset(w, baselineY),
+                  strokeWidth = 2.dp.toPx()
+                )
+
+                for (idx in 0 until slotCount) {
+                  val p = Offset(idx * stepX, baselineY)
+                  drawCircle(color = primaryColor.copy(alpha = 0.4f), radius = 4.dp.toPx(), center = p)
+                  drawCircle(color = Color.White, radius = 2.dp.toPx(), center = p)
+                }
+              } else if (scores.size == 1) {
+                val singleScore = scores.first()
+                val p = Offset(w / 2f, h - (singleScore / 100f * h))
+                drawCircle(color = primaryColor, radius = 6.dp.toPx(), center = p)
+                drawCircle(color = Color.White, radius = 3.dp.toPx(), center = p)
+              } else {
                 val stepX = w / (scores.size - 1)
                 val points = scores.mapIndexed { idx, score ->
                   val x = idx * stepX
@@ -415,7 +537,7 @@ fun ProgressScreen(
                   }
                 }
 
-                drawPath(path, color = primaryColor, style = Stroke(width = 3.5.dp.toPx()))
+                drawPath(path, color = primaryColor, style = Stroke(width = 3.dp.toPx()))
 
                 for (p in points) {
                   drawCircle(color = primaryColor, radius = 5.dp.toPx(), center = p)
@@ -426,23 +548,42 @@ fun ProgressScreen(
           }
 
           Spacer(modifier = Modifier.height(10.dp))
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-          ) {
-            scores.forEach { score ->
-              Text(
-                text = "$score%",
-                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-              )
+
+          // Labels under trajectory
+          if (scores.isEmpty()) {
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+              listOf("Q1: 0%", "Q2: 0%", "Q3: 0%", "Q4: 0%", "Q5: 0%").forEach { label ->
+                Text(
+                  text = label,
+                  style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                  color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                  textAlign = TextAlign.Center
+                )
+              }
+            }
+          } else {
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+              scores.forEachIndexed { idx, score ->
+                Text(
+                  text = "Q${idx + 1}: $score%",
+                  style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                  textAlign = TextAlign.Center
+                )
+              }
             }
           }
         }
       }
     }
 
-    // 4. Topic Mastery Breakdown Progress
+    // 5. Topic Mastery Breakdown Progress
     item {
       Card(
         modifier = Modifier
@@ -452,30 +593,114 @@ fun ProgressScreen(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
       ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-          Text("Topic-wise Mastery Breakdown", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+        Column(modifier = Modifier.padding(18.dp)) {
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Text(
+              text = "Topic-wise Mastery Breakdown",
+              style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+              color = MaterialTheme.colorScheme.onSurface,
+              modifier = Modifier
+                .weight(1f)
+                .padding(end = 8.dp)
+            )
+            Text(
+              text = "$overallMasteryPercent% Mastered",
+              style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+              color = EmeraldSuccess
+            )
+          }
+
           Spacer(modifier = Modifier.height(14.dp))
 
-          MasteryProgressRow(label = "Mastered (Interval >= 14d)", count = masteredCount, total = topics.size, color = EmeraldSuccess)
+          MasteryProgressRow(
+            label = "Mastered (Interval >= 14d)",
+            count = masteredCount,
+            total = topics.size,
+            color = EmeraldSuccess
+          )
           Spacer(modifier = Modifier.height(10.dp))
-          MasteryProgressRow(label = "Familiar (Interval 3-7d)", count = familiarCount, total = topics.size, color = CyanAccent)
+          MasteryProgressRow(
+            label = "Familiar (Interval 3-7d)",
+            count = familiarCount,
+            total = topics.size,
+            color = CyanAccent
+          )
           Spacer(modifier = Modifier.height(10.dp))
-          MasteryProgressRow(label = "Needs Review (Interval 1d)", count = strugglingTopics.size, total = topics.size, color = RoseError)
+          MasteryProgressRow(
+            label = "Needs Review (Interval 1d)",
+            count = strugglingTopics.size,
+            total = topics.size,
+            color = RoseError
+          )
           Spacer(modifier = Modifier.height(10.dp))
-          MasteryProgressRow(label = "Untested Concepts", count = untestedTopics.size, total = topics.size, color = AmberAccent)
+          MasteryProgressRow(
+            label = "Untested Concepts",
+            count = untestedTopics.size,
+            total = topics.size,
+            color = AmberAccent
+          )
         }
       }
     }
 
-    // 5. Weak Topics Requiring Urgent Revision
-    if (strugglingTopics.isNotEmpty()) {
-      item {
-        Column(
-          modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp)
-        ) {
-          SectionHeader(title = "Priority Revision: Weak Topics")
+    // 6. Weak Topics Requiring Urgent Revision
+    item {
+      Column(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(vertical = 4.dp)
+      ) {
+        SectionHeader(title = "Priority Revision: Weak Topics (${strugglingTopics.size})")
+
+        if (strugglingTopics.isEmpty()) {
+          Card(
+            modifier = Modifier
+              .fillMaxWidth()
+              .padding(horizontal = 16.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+          ) {
+            Row(
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Box(
+                modifier = Modifier
+                  .size(36.dp)
+                  .clip(CircleShape)
+                  .background(EmeraldSuccess.copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center
+              ) {
+                Icon(
+                  imageVector = Icons.Default.CheckCircle,
+                  contentDescription = null,
+                  tint = EmeraldSuccess,
+                  modifier = Modifier.size(20.dp)
+                )
+              }
+              Spacer(modifier = Modifier.width(12.dp))
+              Column(modifier = Modifier.weight(1f)) {
+                Text(
+                  text = "No weak topics requiring revision (0)",
+                  style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                  color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                  text = "Complete weekend revision quizzes to flag struggling concepts",
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+              }
+            }
+          }
+        } else {
           Column(
             modifier = Modifier.padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -509,8 +734,15 @@ fun ProgressScreen(
                   }
                   Spacer(modifier = Modifier.width(12.dp))
                   Column(modifier = Modifier.weight(1f)) {
-                    Text(topic.title, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold))
-                    Text("${topic.subjectName} • ${topic.timesCorrect}/${topic.timesTested} correct", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                      topic.title,
+                      style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
+                    )
+                    Text(
+                      "${topic.subjectName} • ${topic.timesCorrect}/${topic.timesTested} correct",
+                      style = MaterialTheme.typography.bodySmall,
+                      color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                   }
                   Spacer(modifier = Modifier.width(8.dp))
                   MasteryBadge(level = topic.masteryLevel)
@@ -522,15 +754,60 @@ fun ProgressScreen(
       }
     }
 
-    // 6. Topics Not Yet Tested
-    if (untestedTopics.isNotEmpty()) {
-      item {
-        Column(
-          modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp)
-        ) {
-          SectionHeader(title = "Topics Not Yet Tested (${untestedTopics.size})")
+    // 7. Topics Not Yet Tested
+    item {
+      Column(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(vertical = 4.dp)
+      ) {
+        SectionHeader(title = "Topics Not Yet Tested (${untestedTopics.size})")
+
+        if (untestedTopics.isEmpty()) {
+          Card(
+            modifier = Modifier
+              .fillMaxWidth()
+              .padding(horizontal = 16.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+          ) {
+            Row(
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Box(
+                modifier = Modifier
+                  .size(36.dp)
+                  .clip(CircleShape)
+                  .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center
+              ) {
+                Icon(
+                  imageVector = Icons.Default.CheckCircle,
+                  contentDescription = null,
+                  tint = MaterialTheme.colorScheme.primary,
+                  modifier = Modifier.size(20.dp)
+                )
+              }
+              Spacer(modifier = Modifier.width(12.dp))
+              Column(modifier = Modifier.weight(1f)) {
+                Text(
+                  text = "All recorded syllabus topics tested (0 queued)",
+                  style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                  color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                  text = "Record new lecture notes in My Topics to prepare them for quizzes",
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+              }
+            }
+          }
+        } else {
           Column(
             modifier = Modifier.padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -564,8 +841,15 @@ fun ProgressScreen(
                   }
                   Spacer(modifier = Modifier.width(12.dp))
                   Column(modifier = Modifier.weight(1f)) {
-                    Text(topic.title, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
-                    Text(topic.subjectName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                      topic.title,
+                      style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
+                    )
+                    Text(
+                      topic.subjectName,
+                      style = MaterialTheme.typography.bodySmall,
+                      color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                   }
                   Spacer(modifier = Modifier.width(8.dp))
                   MasteryBadge(level = "UNTESTED")
@@ -580,16 +864,19 @@ fun ProgressScreen(
 
   // Export Progress Report Dialog
   if (showExportDialog) {
-    val reportText = buildString {
-      append("=== StudyPilot AI - Academic Progress Report ===\n")
-      append("Total Topics Recorded: ${topics.size}\n")
-      append("Mastered Topics: $masteredCount\n")
-      append("Needs Review: ${strugglingTopics.size}\n")
-      append("Untested Topics: ${untestedTopics.size}\n")
-      append("Quizzes Completed: ${attempts.size}\n")
-      append("Average Quiz Score: $averageScore%\n")
-      append("Current Study Streak: 5 Days\n")
-      append("===============================================")
+    val reportText = remember(topics.size, masteredCount, strugglingTopics.size, untestedTopics.size, attempts.size, averageScore, studyStreak, totalWeeklyHours) {
+      buildString {
+        append("=== StudyPilot AI - Academic Progress Report ===\n")
+        append("Total Topics Recorded: ${topics.size}\n")
+        append("Mastered Topics: $masteredCount\n")
+        append("Needs Review: ${strugglingTopics.size}\n")
+        append("Untested Topics: ${untestedTopics.size}\n")
+        append("Quizzes Completed: ${attempts.size}\n")
+        append("Average Quiz Score: $averageScore%\n")
+        append("Current Study Streak: $studyStreak Days\n")
+        append("Weekly Hours Logged: ${String.format(Locale.getDefault(), "%.1f", totalWeeklyHours)} Hours\n")
+        append("===============================================")
+      }
     }
 
     AlertDialog(
@@ -597,7 +884,10 @@ fun ProgressScreen(
       title = { Text("Export Academic Report", fontWeight = FontWeight.Bold) },
       text = {
         Column {
-          Text("Copy your verified academic learning report to the clipboard or share with tutors:", style = MaterialTheme.typography.bodyMedium)
+          Text(
+            "Copy your verified academic learning report to the clipboard or share with tutors:",
+            style = MaterialTheme.typography.bodyMedium
+          )
           Spacer(modifier = Modifier.height(10.dp))
           Surface(
             shape = RoundedCornerShape(8.dp),
@@ -642,8 +932,18 @@ private fun MasteryProgressRow(
       modifier = Modifier.fillMaxWidth(),
       horizontalArrangement = Arrangement.SpaceBetween
     ) {
-      Text(label, style = MaterialTheme.typography.bodySmall)
-      Text("$count (${(fraction * 100).toInt()}%)", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = color)
+      Text(
+        label,
+        style = MaterialTheme.typography.bodySmall,
+        modifier = Modifier
+          .weight(1f)
+          .padding(end = 8.dp)
+      )
+      Text(
+        "$count (${(fraction * 100).toInt()}%)",
+        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+        color = color
+      )
     }
     Spacer(modifier = Modifier.height(4.dp))
     LinearProgressIndicator(

@@ -20,6 +20,8 @@ android {
     versionName = "1.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    val envGemini = System.getenv("GEMINI_API_KEY") ?: ""
+    buildConfigField("String", "ENV_GEMINI_API_KEY", "\"$envGemini\"")
   }
 
   // Do not remove or modify these signingConfigs. They are necessary for building, installing,
@@ -63,7 +65,12 @@ android {
     compose = true
     buildConfig = true
   }
-  testOptions { unitTests { isIncludeAndroidResources = true } }
+  testOptions {
+    unitTests {
+      isIncludeAndroidResources = true
+      isReturnDefaultValues = true
+    }
+  }
   dependenciesInfo {
     includeInApk = false
     includeInBundle = true

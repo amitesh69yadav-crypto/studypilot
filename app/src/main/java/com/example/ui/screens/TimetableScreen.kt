@@ -3,25 +3,40 @@ package com.example.ui.screens
 import android.app.DatePickerDialog
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -40,6 +55,7 @@ import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.KeyboardDoubleArrowLeft
 import androidx.compose.material.icons.filled.KeyboardDoubleArrowRight
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
@@ -64,7 +80,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -88,14 +103,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.ScheduleFormat
 import com.example.data.model.Subject
 import com.example.data.model.TimetableSession
+import com.example.ui.components.formatTimeRange
+import com.example.ui.components.formatTo12Hour
 import com.example.ui.components.MobileClockAlarmCard
 import com.example.ui.components.QuickMobileAlarmDialog
 import com.example.ui.components.ActiveAlarmAlertDialog
@@ -131,6 +151,8 @@ fun TimetableScreen(
   val displayFormat = remember { SimpleDateFormat("EEEE, MMMM d, yyyy", Locale.getDefault()) }
   val monthYearFormat = remember { SimpleDateFormat("MMMM yyyy", Locale.getDefault()) }
   val dayNameFormat = remember { SimpleDateFormat("EEEE", Locale.getDefault()) }
+  val pillDayNameFormat = remember { SimpleDateFormat("EEE", Locale.getDefault()) }
+  val pillDayNumFormat = remember { SimpleDateFormat("d", Locale.getDefault()) }
 
   val realToday = remember { dateFormat.format(Date()) }
   // Selected day to manage (defaults to today)
@@ -147,7 +169,9 @@ fun TimetableScreen(
   var showCreateNewFormatDialog by remember { mutableStateOf(false) }
   var formatToInspect by remember { mutableStateOf<ScheduleFormat?>(null) }
   var showQuickAlarmDialog by remember { mutableStateOf(false) }
-  val activeAlarmsCount = sessions.count { it.isAlarmEnabled }
+  var showHeaderCards by remember { mutableStateOf(true) }
+  val activeAlarmsCount = remember(sessions) { sessions.count { it.isAlarmEnabled } }
+  val sessionCountsByDate = remember(sessions) { sessions.groupingBy { it.date }.eachCount() }
 
   // Helpers to shift days, months, and years
   fun shiftSelectedDate(deltaDays: Int) {
@@ -184,32 +208,29 @@ fun TimetableScreen(
   }
 
   // Selected date's sessions
-  val selectedDaySessions = sessions.filter { it.date == selectedDate }.sortedBy { it.startTime }
+  val selectedDaySessions = remember(sessions, selectedDate) {
+    sessions.filter { it.date == selectedDate }.sortedBy { it.startTime }
+  }
 
   // Full agenda list
-  val agendaSessions = sessions.sortedBy { it.date + it.startTime }
+  val agendaSessions = remember(sessions) {
+    sessions.sortedBy { it.date + it.startTime }
+  }
 
   // Parsed title for current selected date
-  val selectedDateTitle = try {
-    val d = dateFormat.parse(selectedDate) ?: Date()
-    displayFormat.format(d)
-  } catch (_: Exception) {
-    selectedDate
+  val selectedDateTitle = remember(selectedDate) {
+    try {
+      val d = dateFormat.parse(selectedDate) ?: Date()
+      displayFormat.format(d)
+    } catch (_: Exception) {
+      selectedDate
+    }
   }
 
   val isSelectedDateToday = selectedDate == realToday
 
   Scaffold(
-    floatingActionButton = {
-      FloatingActionButton(
-        onClick = { showAddDialog = true },
-        containerColor = PaletteDeepSage,
-        contentColor = PaletteCreamIvory,
-        shape = CircleShape
-      ) {
-        Icon(Icons.Default.Add, contentDescription = "Add Event Slot")
-      }
-    }
+    containerColor = PaletteCreamIvory
   ) { padding ->
     Column(
       modifier = Modifier
@@ -224,26 +245,103 @@ fun TimetableScreen(
         modifier = Modifier.fillMaxWidth()
       ) {
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-          // Top title row + Quick actions
+          // Top title row + Non-overlapping primary "+ Add" action
           Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
           ) {
-            Column {
+            Column(
+              modifier = Modifier
+                .weight(1f)
+                .padding(end = 10.dp)
+            ) {
               Text(
-                text = "GOOGLE CALENDAR SCHEDULE & ALARMS",
+                text = "CALENDAR SCHEDULE & ALARMS",
                 style = MaterialTheme.typography.labelSmall.copy(
                   fontWeight = FontWeight.Bold,
                   letterSpacing = 1.sp
                 ),
-                color = PaletteDarkText
+                color = PaletteDarkText,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
               )
               Text(
                 text = if (isSelectedDateToday) "Today: $selectedDateTitle" else selectedDateTitle,
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
-                color = PaletteDarkText
+                color = PaletteDarkText,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
               )
+            }
+
+            Button(
+              onClick = { showAddDialog = true },
+              colors = ButtonDefaults.buttonColors(
+                containerColor = PaletteDeepSage,
+                contentColor = PaletteCreamIvory
+              ),
+              shape = RoundedCornerShape(10.dp),
+              contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+              modifier = Modifier
+                .heightIn(min = 42.dp)
+                .testTag("add_event_button")
+            ) {
+              Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = "Add Event Slot",
+                modifier = Modifier.size(16.dp)
+              )
+              Spacer(modifier = Modifier.width(4.dp))
+              Text(
+                text = "Add",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                softWrap = false
+              )
+            }
+          }
+
+          Spacer(modifier = Modifier.height(6.dp))
+
+          // Secondary tools row (never crowds the title or overlaps cards)
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            // Slide Hide / Unhide Toggle
+            Surface(
+              shape = RoundedCornerShape(8.dp),
+              color = PalettePaleCeladon,
+              border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage),
+              modifier = Modifier
+                .weight(1f)
+                .heightIn(min = 38.dp)
+                .clickable { showHeaderCards = !showHeaderCards }
+            ) {
+              Row(
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+              ) {
+                Icon(
+                  imageVector = if (showHeaderCards) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                  contentDescription = null,
+                  tint = PaletteDarkText,
+                  modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                  text = if (showHeaderCards) "Hide Tools" else "Show Tools",
+                  fontSize = 11.sp,
+                  fontWeight = FontWeight.Bold,
+                  color = PaletteDarkText,
+                  maxLines = 1,
+                  softWrap = false
+                )
+              }
             }
 
             // Sync with Google Calendar Quick Button
@@ -251,15 +349,26 @@ fun TimetableScreen(
               shape = RoundedCornerShape(8.dp),
               color = PaletteMintFoam,
               border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage),
-              modifier = Modifier.clickable { viewModel.syncAllTodayToGoogleCalendar() }
+              modifier = Modifier
+                .weight(1f)
+                .heightIn(min = 38.dp)
+                .clickable { viewModel.syncAllTodayToGoogleCalendar() }
             ) {
               Row(
                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
               ) {
                 Icon(Icons.Default.CalendarMonth, contentDescription = null, tint = PaletteDarkText, modifier = Modifier.size(14.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("Sync G-Cal", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = PaletteDarkText)
+                Text(
+                  text = "Sync G-Cal",
+                  fontSize = 11.sp,
+                  fontWeight = FontWeight.Bold,
+                  color = PaletteDarkText,
+                  maxLines = 1,
+                  softWrap = false
+                )
               }
             }
           }
@@ -267,7 +376,12 @@ fun TimetableScreen(
           Spacer(modifier = Modifier.height(8.dp))
 
           // 2. Comprehensive Calendar Navigation & Selector (Day, Month, Year & Future/Past)
-          Surface(
+          AnimatedVisibility(
+            visible = showHeaderCards,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
+          ) {
+            Surface(
             shape = RoundedCornerShape(12.dp),
             color = PaletteMintFoam,
             border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage),
@@ -275,12 +389,14 @@ fun TimetableScreen(
           ) {
             Column(modifier = Modifier.padding(10.dp)) {
               // Row A: Year & Month Fast-Navigation Bar (e.g. October 2026, jump months and years freely)
-              val parsedDateForHeader = try {
-                dateFormat.parse(selectedDate) ?: Date()
-              } catch (_: Exception) {
-                Date()
+              val monthYearStr = remember(selectedDate) {
+                val parsedDateForHeader = try {
+                  dateFormat.parse(selectedDate) ?: Date()
+                } catch (_: Exception) {
+                  Date()
+                }
+                monthYearFormat.format(parsedDateForHeader)
               }
-              val monthYearStr = monthYearFormat.format(parsedDateForHeader)
 
               Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -416,7 +532,12 @@ fun TimetableScreen(
                   horizontalArrangement = Arrangement.SpaceBetween,
                   verticalAlignment = Alignment.CenterVertically
                 ) {
-                  Row(verticalAlignment = Alignment.CenterVertically) {
+                  Row(
+                    modifier = Modifier
+                      .weight(1f)
+                      .padding(end = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                  ) {
                     Icon(
                       Icons.Default.CalendarMonth,
                       contentDescription = "Pick Date",
@@ -424,18 +545,22 @@ fun TimetableScreen(
                       modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                       Text(
                         text = "Active Selected Date",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = PaletteDarkText.copy(alpha = 0.8f)
+                        color = PaletteDarkText.copy(alpha = 0.8f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                       )
                       Text(
                         text = selectedDateTitle,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.ExtraBold,
-                        color = PaletteDarkText
+                        color = PaletteDarkText,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                       )
                     }
                   }
@@ -455,11 +580,13 @@ fun TimetableScreen(
                         )
                       }
                     } else {
-                      val daysDiff = try {
-                        val d1 = dateFormat.parse(realToday)?.time ?: 0L
-                        val d2 = dateFormat.parse(selectedDate)?.time ?: 0L
-                        ((d2 - d1) / (1000 * 60 * 60 * 24)).toInt()
-                      } catch (_: Exception) { 0 }
+                      val daysDiff = remember(selectedDate, realToday) {
+                        try {
+                          val d1 = dateFormat.parse(realToday)?.time ?: 0L
+                          val d2 = dateFormat.parse(selectedDate)?.time ?: 0L
+                          ((d2 - d1) / (1000 * 60 * 60 * 24)).toInt()
+                        } catch (_: Exception) { 0 }
+                      }
 
                       val diffLabel = when {
                         daysDiff == 1 -> "Tomorrow"
@@ -505,21 +632,22 @@ fun TimetableScreen(
                   )
                 }
 
-                val baseCal = Calendar.getInstance().apply {
-                  try {
-                    time = dateFormat.parse(selectedDate) ?: Date()
-                  } catch (_: Exception) {}
-                }
-
-                val dayPills = (-3..3).map { offset ->
-                  val c = Calendar.getInstance().apply {
-                    time = baseCal.time
-                    add(Calendar.DAY_OF_YEAR, offset)
+                val dayPills = remember(selectedDate) {
+                  val baseCal = Calendar.getInstance().apply {
+                    try {
+                      time = dateFormat.parse(selectedDate) ?: Date()
+                    } catch (_: Exception) {}
                   }
-                  val dStr = dateFormat.format(c.time)
-                  val dayName = SimpleDateFormat("EEE", Locale.getDefault()).format(c.time)
-                  val dayNum = SimpleDateFormat("d", Locale.getDefault()).format(c.time)
-                  Triple(dStr, dayName, dayNum)
+                  (-3..3).map { offset ->
+                    val c = Calendar.getInstance().apply {
+                      time = baseCal.time
+                      add(Calendar.DAY_OF_YEAR, offset)
+                    }
+                    val dStr = dateFormat.format(c.time)
+                    val dayName = pillDayNameFormat.format(c.time)
+                    val dayNum = pillDayNumFormat.format(c.time)
+                    Triple(dStr, dayName, dayNum)
+                  }
                 }
 
                 Row(
@@ -529,7 +657,7 @@ fun TimetableScreen(
                   dayPills.forEach { (dStr, dayName, dayNum) ->
                     val isSelected = dStr == selectedDate
                     val isTodayPill = dStr == realToday
-                    val sessionCount = sessions.count { it.date == dStr }
+                    val sessionCount = sessionCountsByDate[dStr] ?: 0
 
                     Surface(
                       shape = RoundedCornerShape(8.dp),
@@ -589,8 +717,9 @@ fun TimetableScreen(
               }
             }
           }
+        }
 
-          Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
           // 3. Clean Segmented Navigation Tabs:
           // [Day Schedule] | [Format Templates] | [Agenda (All)]
@@ -609,8 +738,10 @@ fun TimetableScreen(
                 Text(
                   "Day Schedule (${selectedDaySessions.size})",
                   fontWeight = if (selectedTab == 0) FontWeight.ExtraBold else FontWeight.Medium,
-                  fontSize = 12.sp,
-                  color = PaletteDarkText
+                  fontSize = 11.sp,
+                  color = PaletteDarkText,
+                  maxLines = 1,
+                  overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
               }
             )
@@ -621,8 +752,10 @@ fun TimetableScreen(
                 Text(
                   "Formats (${scheduleFormats.size})",
                   fontWeight = if (selectedTab == 1) FontWeight.ExtraBold else FontWeight.Medium,
-                  fontSize = 12.sp,
-                  color = PaletteDarkText
+                  fontSize = 11.sp,
+                  color = PaletteDarkText,
+                  maxLines = 1,
+                  overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
               }
             )
@@ -633,8 +766,10 @@ fun TimetableScreen(
                 Text(
                   "All Events (${sessions.size})",
                   fontWeight = if (selectedTab == 2) FontWeight.ExtraBold else FontWeight.Medium,
-                  fontSize = 12.sp,
-                  color = PaletteDarkText
+                  fontSize = 11.sp,
+                  color = PaletteDarkText,
+                  maxLines = 1,
+                  overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
               }
             )
@@ -647,178 +782,153 @@ fun TimetableScreen(
         0 -> {
           // --- TAB 0: SELECTED DAY TIMETABLE ---
           LazyColumn(
-            modifier = Modifier
-              .fillMaxSize()
-              .padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
           ) {
-            // Live "What Should I Do Now?" smart alarm card (when viewing today)
-            if (isSelectedDateToday) {
-              item {
-                WhatShouldIDoNowCard(
-                  status = scheduleStatus,
-                  onPlanScheduleClick = { showApplyFormatDialog = true },
-                  onEditSessionClick = { sessionToEdit = it },
-                  onMarkSessionDone = { session ->
-                    val next = if (session.status == "COMPLETED") "SCHEDULED" else "COMPLETED"
-                    viewModel.updateSessionStatus(session, next)
-                  },
-                  onAskAiTutor = { session ->
-                    viewModel.openTutorForSubject(session.subjectId, "Can you explain key concepts for ${session.topic}?")
-                  },
-                  onToggleAlarm = { viewModel.toggleSessionAlarm(it) },
-                  onTestAlarm = { viewModel.triggerTestAlarm(it) },
-                  onSyncGoogleCalendar = { session ->
-                    viewModel.syncSessionToGoogleCalendar(session)
-                    val intent = viewModel.alarmAndCalendarService.createGoogleCalendarInsertIntent(session)
-                    try {
-                      context.startActivity(intent)
-                    } catch (e: Exception) {
-                      val webUrl = viewModel.alarmAndCalendarService.getGoogleCalendarWebUrl(session)
-                      context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(webUrl)))
+            // Animated Header Cards (What Should I Do Now, Alarms, Quick Format Bar)
+            if (showHeaderCards) {
+              // Live "What Should I Do Now?" smart alarm card (when viewing today)
+              if (isSelectedDateToday) {
+                item {
+                  WhatShouldIDoNowCard(
+                    status = scheduleStatus,
+                    onPlanScheduleClick = { showApplyFormatDialog = true },
+                    onEditSessionClick = { sessionToEdit = it },
+                    onMarkSessionDone = { session ->
+                      val next = if (session.status == "COMPLETED") "SCHEDULED" else "COMPLETED"
+                      viewModel.updateSessionStatus(session, next)
+                    },
+                    onAskAiTutor = { session ->
+                      viewModel.openTutorForSubject(session.subjectId, "Can you explain key concepts for ${session.topic}?")
+                    },
+                    onToggleAlarm = { viewModel.toggleSessionAlarm(it) },
+                    onTestAlarm = { viewModel.triggerTestAlarm(it) },
+                    onSyncGoogleCalendar = { session ->
+                      viewModel.syncSessionToGoogleCalendar(session)
+                      val intent = viewModel.alarmAndCalendarService.createGoogleCalendarInsertIntent(session)
+                      try {
+                        context.startActivity(intent)
+                      } catch (e: Exception) {
+                        val webUrl = viewModel.alarmAndCalendarService.getGoogleCalendarWebUrl(session)
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(webUrl)))
+                      }
                     }
-                  }
-                )
-              }
-
-              item {
-                MobileClockAlarmCard(
-                  activeAlarmsCount = activeAlarmsCount,
-                  onQuickAlarmClick = { showQuickAlarmDialog = true },
-                  onTestAlarmSoundClick = {
-                    val sample = sessions.firstOrNull() ?: TimetableSession(
-                      id = 999L,
-                      subjectId = 0L,
-                      subjectName = "Alarm System Test",
-                      topic = "Mobile Ringtone & Beeps Test",
-                      date = "",
-                      startTime = "Now",
-                      endTime = "",
-                      location = "",
-                      notes = ""
-                    )
-                    viewModel.triggerTestAlarm(sample)
-                  }
-                )
-              }
-            }
-
-            // Quick Format & Day Management Action Row: Symmetrical and even
-            item {
-              Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = PaletteMintFoam,
-                border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage),
-                modifier = Modifier.fillMaxWidth()
-              ) {
-                Column(modifier = Modifier.padding(10.dp)) {
-                  Text(
-                    text = "Manage Schedule for $selectedDateTitle",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 12.sp,
-                    color = PaletteDarkText
                   )
-                  Spacer(modifier = Modifier.height(8.dp))
+                }
 
-                  Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                  ) {
-                    // Apply a saved format / template
-                    Button(
-                      onClick = { showApplyFormatDialog = true },
-                      colors = ButtonDefaults.buttonColors(
-                        containerColor = PalettePaleCeladon,
-                        contentColor = PaletteDarkText
-                      ),
-                      border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage),
-                      shape = RoundedCornerShape(8.dp),
-                      contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                      modifier = Modifier
-                        .weight(1f)
-                        .height(36.dp)
-                    ) {
-                      Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = PaletteDarkText, modifier = Modifier.size(14.dp))
-                      Spacer(modifier = Modifier.width(4.dp))
-                      Text("Apply Format", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                item {
+                  MobileClockAlarmCard(
+                    activeAlarmsCount = activeAlarmsCount,
+                    onQuickAlarmClick = { showQuickAlarmDialog = true },
+                    onTestAlarmSoundClick = {
+                      val sample = sessions.firstOrNull() ?: TimetableSession(
+                        id = 999L,
+                        subjectId = 0L,
+                        subjectName = "Alarm System Test",
+                        topic = "Mobile Ringtone & Beeps Test",
+                        date = "",
+                        startTime = "Now",
+                        endTime = "",
+                        location = "",
+                        notes = ""
+                      )
+                      viewModel.triggerTestAlarm(sample)
                     }
+                  )
+                }
+              }
 
-                    // Copy this day schedule to another day
-                    Button(
-                      onClick = { showCopyDayDialog = true },
-                      colors = ButtonDefaults.buttonColors(
-                        containerColor = PalettePaleCeladon,
-                        contentColor = PaletteDarkText
-                      ),
-                      border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage),
-                      shape = RoundedCornerShape(8.dp),
-                      contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                      modifier = Modifier
-                        .weight(1f)
-                        .height(36.dp)
-                    ) {
-                      Icon(Icons.Default.ContentCopy, contentDescription = null, tint = PaletteDarkText, modifier = Modifier.size(14.dp))
-                      Spacer(modifier = Modifier.width(4.dp))
-                      Text("Copy Day", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    }
+              // Quick Format & Day Management Action Row: Symmetrical and even
+              item {
+                Surface(
+                  shape = RoundedCornerShape(12.dp),
+                  color = PaletteMintFoam,
+                  border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage),
+                  modifier = Modifier.fillMaxWidth()
+                ) {
+                  Column(modifier = Modifier.padding(10.dp)) {
+                    Text(
+                      text = "Manage Schedule for $selectedDateTitle",
+                      fontWeight = FontWeight.Bold,
+                      fontSize = 12.sp,
+                      color = PaletteDarkText
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                    // Save as new Format / Template
-                    Button(
-                      onClick = { showSaveCurrentDayAsFormatDialog = true },
-                      colors = ButtonDefaults.buttonColors(
-                        containerColor = PaletteDeepSage,
-                        contentColor = PaletteCreamIvory
-                      ),
-                      shape = RoundedCornerShape(8.dp),
-                      contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                      modifier = Modifier
-                        .weight(1f)
-                        .height(36.dp)
+                    LazyRow(
+                      horizontalArrangement = Arrangement.spacedBy(8.dp),
+                      contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 2.dp),
+                      modifier = Modifier.fillMaxWidth()
                     ) {
-                      Icon(Icons.Default.Bookmark, contentDescription = null, modifier = Modifier.size(14.dp))
-                      Spacer(modifier = Modifier.width(4.dp))
-                      Text("Save Format", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    }
-                  }
-
-                  Spacer(modifier = Modifier.height(6.dp))
-                  Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                  ) {
-                    Button(
-                      onClick = { viewModel.addFoodAndSleepRoutineBatch(selectedDate) },
-                      colors = ButtonDefaults.buttonColors(
-                        containerColor = PalettePaleCeladon,
-                        contentColor = PaletteDarkText
-                      ),
-                      border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage),
-                      shape = RoundedCornerShape(8.dp),
-                      contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                      modifier = Modifier
-                        .weight(1.2f)
-                        .height(36.dp)
-                    ) {
-                      Icon(Icons.Default.Restaurant, contentDescription = null, tint = PaletteDarkText, modifier = Modifier.size(14.dp))
-                      Spacer(modifier = Modifier.width(4.dp))
-                      Text("+ Food & Sleep Routines", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    }
-
-                    Button(
-                      onClick = { showAddDialog = true },
-                      colors = ButtonDefaults.buttonColors(
-                        containerColor = PaletteDeepSage,
-                        contentColor = PaletteCreamIvory
-                      ),
-                      shape = RoundedCornerShape(8.dp),
-                      contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                      modifier = Modifier
-                        .weight(1f)
-                        .height(36.dp)
-                    ) {
-                      Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
-                      Spacer(modifier = Modifier.width(4.dp))
-                      Text("+ Add Custom Slot", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                      item {
+                        Button(
+                          onClick = { showApplyFormatDialog = true },
+                          colors = ButtonDefaults.buttonColors(containerColor = PalettePaleCeladon, contentColor = PaletteDarkText),
+                          border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage),
+                          shape = RoundedCornerShape(8.dp),
+                          contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                          modifier = Modifier.heightIn(min = 44.dp)
+                        ) {
+                          Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = PaletteDarkText, modifier = Modifier.size(14.dp))
+                          Spacer(modifier = Modifier.width(4.dp))
+                          Text("Apply Format", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+                        }
+                      }
+                      item {
+                        Button(
+                          onClick = { showCopyDayDialog = true },
+                          colors = ButtonDefaults.buttonColors(containerColor = PalettePaleCeladon, contentColor = PaletteDarkText),
+                          border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage),
+                          shape = RoundedCornerShape(8.dp),
+                          contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                          modifier = Modifier.heightIn(min = 44.dp)
+                        ) {
+                          Icon(Icons.Default.ContentCopy, contentDescription = null, tint = PaletteDarkText, modifier = Modifier.size(14.dp))
+                          Spacer(modifier = Modifier.width(4.dp))
+                          Text("Copy Day", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+                        }
+                      }
+                      item {
+                        Button(
+                          onClick = { showSaveCurrentDayAsFormatDialog = true },
+                          colors = ButtonDefaults.buttonColors(containerColor = PaletteDeepSage, contentColor = PaletteCreamIvory),
+                          shape = RoundedCornerShape(8.dp),
+                          contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                          modifier = Modifier.heightIn(min = 44.dp)
+                        ) {
+                          Icon(Icons.Default.Bookmark, contentDescription = null, modifier = Modifier.size(14.dp))
+                          Spacer(modifier = Modifier.width(4.dp))
+                          Text("Save Format", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+                        }
+                      }
+                      item {
+                        Button(
+                          onClick = { viewModel.addFoodAndSleepRoutineBatch(selectedDate) },
+                          colors = ButtonDefaults.buttonColors(containerColor = PalettePaleCeladon, contentColor = PaletteDarkText),
+                          border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage),
+                          shape = RoundedCornerShape(8.dp),
+                          contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                          modifier = Modifier.heightIn(min = 44.dp)
+                        ) {
+                          Icon(Icons.Default.Restaurant, contentDescription = null, tint = PaletteDarkText, modifier = Modifier.size(14.dp))
+                          Spacer(modifier = Modifier.width(4.dp))
+                          Text("+ Food & Sleep", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+                        }
+                      }
+                      item {
+                        Button(
+                          onClick = { showAddDialog = true },
+                          colors = ButtonDefaults.buttonColors(containerColor = PaletteDeepSage, contentColor = PaletteCreamIvory),
+                          shape = RoundedCornerShape(8.dp),
+                          contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                          modifier = Modifier.heightIn(min = 44.dp)
+                        ) {
+                          Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
+                          Spacer(modifier = Modifier.width(4.dp))
+                          Text("+ Custom Slot", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+                        }
+                      }
                     }
                   }
                 }
@@ -828,29 +938,54 @@ fun TimetableScreen(
             // Session List header
             item {
               Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .padding(top = 6.dp, bottom = 4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
               ) {
-                Text(
-                  text = "Time-Slots for $selectedDateTitle",
-                  style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                  color = PaletteDarkText
-                )
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(
+                  modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 8.dp)
+                ) {
+                  Text(
+                    text = "Time-Slots",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+                    color = PaletteDarkText
+                  )
+                  Text(
+                    text = selectedDateTitle,
+                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                    color = PaletteDarkText.copy(alpha = 0.78f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                  )
+                }
+                Row(
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
                   if (selectedDaySessions.isNotEmpty()) {
                     TextButton(
                       onClick = { viewModel.clearDaySchedule(selectedDate) },
-                      contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 0.dp)
+                      contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                     ) {
-                      Text("Clear Day", fontSize = 11.sp, color = PaletteDarkText, fontWeight = FontWeight.Bold)
+                      Text("Clear Day", fontSize = 12.sp, color = PaletteDarkText, fontWeight = FontWeight.Bold)
                     }
                   }
-                  Text(
-                    text = "${selectedDaySessions.size} session(s)",
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-                    color = PaletteDarkText
-                  )
+                  Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = PalettePaleCeladon,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage)
+                  ) {
+                    Text(
+                      text = "${selectedDaySessions.size} session(s)",
+                      style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                      color = PaletteDarkText,
+                      modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                  }
                 }
               }
             }
@@ -863,23 +998,28 @@ fun TimetableScreen(
                   title = "No Schedule for $selectedDateTitle",
                   description = "Create a new schedule from scratch, copy from another day, or apply one of your pre-made formats.",
                   actionButton = {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                      horizontalArrangement = Arrangement.spacedBy(8.dp),
+                      modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                    ) {
                       Button(
                         onClick = { showApplyFormatDialog = true },
                         colors = ButtonDefaults.buttonColors(
                           containerColor = PaletteDeepSage,
                           contentColor = PaletteCreamIvory
                         ),
-                        shape = RoundedCornerShape(10.dp)
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.weight(1f).heightIn(min = 48.dp)
                       ) {
-                        Text("Apply Format / Template", fontWeight = FontWeight.Bold)
+                        Text("Apply Template", fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
                       }
                       OutlinedButton(
                         onClick = { showAddDialog = true },
                         shape = RoundedCornerShape(10.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage)
+                        border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage),
+                        modifier = Modifier.weight(1f).heightIn(min = 48.dp)
                       ) {
-                        Text("Add Single Slot", color = PaletteDarkText, fontWeight = FontWeight.Bold)
+                        Text("Add Slot", color = PaletteDarkText, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
                       }
                     }
                   }
@@ -916,9 +1056,8 @@ fun TimetableScreen(
         1 -> {
           // --- TAB 1: SCHEDULE FORMATS / TEMPLATES ---
           LazyColumn(
-            modifier = Modifier
-              .fillMaxSize()
-              .padding(horizontal = 16.dp, vertical = 10.dp),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
           ) {
             item {
@@ -961,14 +1100,16 @@ fun TimetableScreen(
                     ),
                     shape = RoundedCornerShape(10.dp),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp, vertical = 8.dp),
-                    modifier = Modifier.height(38.dp)
+                    modifier = Modifier.heightIn(min = 44.dp)
                   ) {
                     Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                       text = "New Format",
                       fontSize = 12.sp,
-                      fontWeight = FontWeight.Bold
+                      fontWeight = FontWeight.Bold,
+                      maxLines = 1,
+                      softWrap = false
                     )
                   }
                 }
@@ -1014,9 +1155,8 @@ fun TimetableScreen(
         2 -> {
           // --- TAB 2: ALL EVENTS AGENDA ---
           LazyColumn(
-            modifier = Modifier
-              .fillMaxSize()
-              .padding(horizontal = 16.dp, vertical = 10.dp),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
           ) {
             item {
@@ -1028,7 +1168,10 @@ fun TimetableScreen(
                 Text(
                   text = "Full Academic Agenda",
                   style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                  color = PaletteDarkText
+                  color = PaletteDarkText,
+                  modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 8.dp)
                 )
                 Text(
                   text = "${agendaSessions.size} total events",
@@ -1196,24 +1339,19 @@ fun ScheduleFormatCard(
   onApplyToSelectedDate: (Boolean) -> Unit,
   onDeleteFormat: () -> Unit
 ) {
-  var sessionCount by remember { mutableIntStateOf(0) }
-  var sessionsList by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
-
-  remember(format.formatSessionsJson) {
+  val (sessionCount, sessionsList) = remember<Pair<Int, List<Pair<String, String>>>>(format.formatSessionsJson) {
     try {
       val arr = org.json.JSONArray(format.formatSessionsJson)
-      sessionCount = arr.length()
-      val list = mutableListOf<Pair<String, String>>()
+      val list = ArrayList<Pair<String, String>>(arr.length())
       for (i in 0 until arr.length()) {
         val obj = arr.getJSONObject(i)
-        val time = "${obj.optString("startTime")} - ${obj.optString("endTime")}".trim()
+        val time = formatTimeRange(obj.optString("startTime"), obj.optString("endTime"))
         val topic = obj.optString("topic").ifBlank { obj.optString("subjectName", "Session") }
         list.add(time to topic)
       }
-      sessionsList = list
+      arr.length() to list
     } catch (_: Exception) {
-      sessionCount = 0
-      sessionsList = emptyList()
+      0 to emptyList()
     }
   }
 
@@ -1231,7 +1369,9 @@ fun ScheduleFormatCard(
         verticalAlignment = Alignment.CenterVertically
       ) {
         Row(
-          modifier = Modifier.weight(1f),
+          modifier = Modifier
+            .weight(1f)
+            .padding(end = 8.dp),
           verticalAlignment = Alignment.CenterVertically,
           horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -1250,7 +1390,7 @@ fun ScheduleFormatCard(
             }
           }
 
-          Column {
+          Column(modifier = Modifier.weight(1f)) {
             Text(
               text = format.name,
               style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
@@ -1271,14 +1411,14 @@ fun ScheduleFormatCard(
         IconButton(
           onClick = onDeleteFormat,
           modifier = Modifier
-            .size(32.dp)
+            .size(44.dp)
             .background(PalettePaleCeladon, RoundedCornerShape(8.dp))
         ) {
           Icon(
             Icons.Default.Delete,
             contentDescription = "Delete Format",
             tint = PaletteDarkText,
-            modifier = Modifier.size(16.dp)
+            modifier = Modifier.size(18.dp)
           )
         }
       }
@@ -1373,16 +1513,17 @@ fun ScheduleFormatCard(
             contentColor = PaletteCreamIvory
           ),
           shape = RoundedCornerShape(10.dp),
-          contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+          contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
           modifier = Modifier
             .weight(1f)
-            .height(40.dp)
+            .heightIn(min = 44.dp)
         ) {
           Text(
             text = "Add to $selectedDate",
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
             maxLines = 1,
+            softWrap = false,
             overflow = TextOverflow.Ellipsis
           )
         }
@@ -1392,16 +1533,17 @@ fun ScheduleFormatCard(
           shape = RoundedCornerShape(10.dp),
           colors = ButtonDefaults.outlinedButtonColors(contentColor = PaletteDarkText),
           border = androidx.compose.foundation.BorderStroke(1.2.dp, PaletteMediumSage),
-          contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+          contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
           modifier = Modifier
             .weight(1f)
-            .height(40.dp)
+            .heightIn(min = 44.dp)
         ) {
           Text(
             text = "Replace Day Schedule",
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
             maxLines = 1,
+            softWrap = false,
             overflow = TextOverflow.Ellipsis
           )
         }
@@ -1421,7 +1563,7 @@ fun CopyDayScheduleDialog(
   onConfirmCopy: (source: String, target: String, overwrite: Boolean) -> Unit
 ) {
   val context = LocalContext.current
-  val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+  val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
 
   var currentSourceDate by remember { mutableStateOf(sourceDate) }
   var targetDate by remember {
@@ -1927,6 +2069,7 @@ fun CreateNewFormatDialog(
  * Center: Clean colored strip, Subject badge, Topic, location
  * Bottom / Right: Aligned actions (Complete, Alarm, AI Tutor, Sync)
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun GoogleCalendarEventCard(
   session: TimetableSession,
@@ -1944,76 +2087,81 @@ fun GoogleCalendarEventCard(
     "SLEEP" -> "🛌 Sleep & Rest"
     "EXERCISE" -> "🏋️ Fitness & Exercise"
     "PERSONAL" -> "☕ Personal Break"
-    else -> session.subjectName
+    else -> session.subjectName.ifBlank { "Alarm" }
   }
   val categoryBarColor = when (session.sessionCategory) {
-    "FOOD" -> androidx.compose.ui.graphics.Color(0xFFD97706)
-    "SLEEP" -> androidx.compose.ui.graphics.Color(0xFF4F46E5)
-    "EXERCISE" -> androidx.compose.ui.graphics.Color(0xFFE11D48)
-    "PERSONAL" -> androidx.compose.ui.graphics.Color(0xFF0D9488)
+    "FOOD" -> androidx.compose.ui.graphics.Color(0xFFB7844B)
+    "SLEEP" -> androidx.compose.ui.graphics.Color(0xFF6B7F8E)
+    "EXERCISE" -> androidx.compose.ui.graphics.Color(0xFFA86F68)
+    "PERSONAL" -> androidx.compose.ui.graphics.Color(0xFF688E7F)
     else -> PaletteDeepSage
   }
 
   Card(
-    modifier = Modifier.fillMaxWidth(),
-    shape = RoundedCornerShape(12.dp),
+    modifier = Modifier
+      .fillMaxWidth()
+      .testTag("schedule_event_card"),
+    shape = RoundedCornerShape(14.dp),
     colors = CardDefaults.cardColors(
-      containerColor = if (isCompleted) PaletteMintFoam.copy(alpha = 0.5f) else PaletteMintFoam
+      containerColor = if (isCompleted) PalettePaleCeladon.copy(alpha = 0.6f) else PaletteMintFoam
     ),
     border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage),
     elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
   ) {
-    Row(modifier = Modifier.fillMaxWidth()) {
-      // Left indicator color bar (Google Calendar style)
-      Box(
-        modifier = Modifier
-          .width(6.dp)
-          .height(130.dp)
-          .background(categoryBarColor)
-      )
-
-      Column(
-        modifier = Modifier
-          .fillMaxWidth()
-          .padding(12.dp)
-      ) {
+    Column(
+      modifier = Modifier
+        .fillMaxWidth()
+        .drawBehind {
+          drawRect(
+            color = categoryBarColor,
+            size = Size(width = 6.dp.toPx(), height = size.height)
+          )
+        }
+        .padding(start = 18.dp, end = 14.dp, top = 12.dp, bottom = 12.dp)
+    ) {
         // Top row: Time + Subject Tag + Actions
         Row(
           modifier = Modifier.fillMaxWidth(),
           horizontalArrangement = Arrangement.SpaceBetween,
           verticalAlignment = Alignment.CenterVertically
         ) {
-          Row(verticalAlignment = Alignment.CenterVertically) {
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.weight(1f, fill = false)
+          ) {
             Text(
-              text = "${session.startTime} - ${session.endTime}",
-              style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold),
-              color = PaletteDarkText
+              text = formatTimeRange(session.startTime, session.endTime),
+              style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+              color = PaletteDarkText,
+              maxLines = 1
             )
             Spacer(modifier = Modifier.width(8.dp))
             Surface(
-              shape = RoundedCornerShape(4.dp),
+              shape = RoundedCornerShape(6.dp),
               color = PalettePaleCeladon
             ) {
               Text(
                 text = categoryTag,
                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                 color = PaletteDarkText,
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
               )
             }
           }
 
           Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onEdit, modifier = Modifier.size(28.dp)) {
-              Icon(Icons.Default.Edit, contentDescription = "Edit", tint = PaletteDarkText, modifier = Modifier.size(15.dp))
+            IconButton(onClick = onEdit, modifier = Modifier.size(44.dp)) {
+              Icon(Icons.Default.Edit, contentDescription = "Edit", tint = PaletteDarkText, modifier = Modifier.size(18.dp))
             }
-            IconButton(onClick = onDelete, modifier = Modifier.size(28.dp)) {
-              Icon(Icons.Default.Delete, contentDescription = "Delete", tint = PaletteDarkText, modifier = Modifier.size(15.dp))
+            IconButton(onClick = onDelete, modifier = Modifier.size(44.dp)) {
+              Icon(Icons.Default.Delete, contentDescription = "Delete", tint = PaletteDarkText, modifier = Modifier.size(18.dp))
             }
           }
         }
 
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(6.dp))
         // Event Topic / Title
         Text(
           text = session.topic,
@@ -2024,20 +2172,21 @@ fun GoogleCalendarEventCard(
           color = PaletteDarkText
         )
 
-        // Location & Notes
+        Spacer(modifier = Modifier.height(4.dp))
+        // Location & Date
         Row(
           modifier = Modifier.fillMaxWidth(),
           verticalAlignment = Alignment.CenterVertically
         ) {
           if (session.location.isNotBlank()) {
-            Icon(Icons.Default.LocationOn, contentDescription = null, tint = PaletteDarkText, modifier = Modifier.size(13.dp))
-            Spacer(modifier = Modifier.width(2.dp))
+            Icon(Icons.Default.LocationOn, contentDescription = null, tint = PaletteDarkText, modifier = Modifier.size(14.dp))
+            Spacer(modifier = Modifier.width(3.dp))
             Text(
               text = session.location,
               style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
               color = PaletteDarkText
             )
-            Spacer(modifier = Modifier.width(10.dp))
+            Spacer(modifier = Modifier.width(12.dp))
           }
           Text(
             text = "📅 ${session.date}",
@@ -2047,61 +2196,73 @@ fun GoogleCalendarEventCard(
         }
 
         if (session.notes.isNotBlank()) {
-          Spacer(modifier = Modifier.height(2.dp))
+          Spacer(modifier = Modifier.height(4.dp))
           Text(
             text = "Notes: ${session.notes}",
             style = MaterialTheme.typography.bodySmall,
             color = PaletteDarkText,
-            maxLines = 1
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
           )
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-        // Aligned Action Strip: Complete, Alarm toggle, AI Tutor, Calendar Sync
-        Row(
+        // Aligned Wrapping Toolbar Action Row (all controls visible, zero clipping)
+        FlowRow(
           modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.spacedBy(6.dp),
-          verticalAlignment = Alignment.CenterVertically
+          horizontalArrangement = Arrangement.spacedBy(8.dp),
+          verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
           // Status completion button
-          Button(
-            onClick = {
-              val next = if (isCompleted) "SCHEDULED" else "COMPLETED"
-              onStatusChange(next)
-            },
+          Surface(
             shape = RoundedCornerShape(8.dp),
-            colors = ButtonDefaults.buttonColors(
-              containerColor = if (isCompleted) PalettePaleCeladon else PaletteDeepSage,
-              contentColor = if (isCompleted) PaletteDarkText else PaletteCreamIvory
-            ),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+            color = if (isCompleted) PalettePaleCeladon else PaletteDeepSage,
+            border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage),
             modifier = Modifier
-              .weight(1f)
-              .height(34.dp)
+              .heightIn(min = 36.dp)
+              .clickable {
+                val next = if (isCompleted) "SCHEDULED" else "COMPLETED"
+                onStatusChange(next)
+              }
           ) {
-            Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(14.dp))
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(if (isCompleted) "Completed" else "Done", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Row(
+              modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Icon(
+                imageVector = if (isCompleted) Icons.Default.CheckCircle else Icons.Default.Check,
+                contentDescription = null,
+                tint = if (isCompleted) PaletteDarkText else PaletteCreamIvory,
+                modifier = Modifier.size(14.dp)
+              )
+              Spacer(modifier = Modifier.width(4.dp))
+              Text(
+                text = if (isCompleted) "Completed" else "Done",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (isCompleted) PaletteDarkText else PaletteCreamIvory
+              )
+            }
           }
 
           // AI Tutor Help
-          Button(
-            onClick = onAskAiTutor,
+          Surface(
             shape = RoundedCornerShape(8.dp),
-            colors = ButtonDefaults.buttonColors(
-              containerColor = PalettePaleCeladon,
-              contentColor = PaletteDarkText
-            ),
+            color = PalettePaleCeladon,
             border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
             modifier = Modifier
-              .weight(1f)
-              .height(34.dp)
+              .heightIn(min = 36.dp)
+              .clickable { onAskAiTutor() }
           ) {
-            Icon(Icons.Default.Psychology, contentDescription = null, tint = PaletteDarkText, modifier = Modifier.size(14.dp))
-            Spacer(modifier = Modifier.width(4.dp))
-            Text("AI Tutor", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Row(
+              modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Icon(Icons.Default.Psychology, contentDescription = null, tint = PaletteDarkText, modifier = Modifier.size(14.dp))
+              Spacer(modifier = Modifier.width(4.dp))
+              Text("AI Tutor", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = PaletteDarkText)
+            }
           }
 
           // Alarm Toggle Pill
@@ -2110,11 +2271,11 @@ fun GoogleCalendarEventCard(
             color = if (session.isAlarmEnabled) PalettePaleCeladon else PaletteCreamIvory,
             border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage),
             modifier = Modifier
-              .height(34.dp)
+              .heightIn(min = 36.dp)
               .clickable { onToggleAlarm() }
           ) {
             Row(
-              modifier = Modifier.padding(horizontal = 8.dp),
+              modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
               verticalAlignment = Alignment.CenterVertically
             ) {
               Icon(
@@ -2123,9 +2284,9 @@ fun GoogleCalendarEventCard(
                 tint = PaletteDarkText,
                 modifier = Modifier.size(14.dp)
               )
-              Spacer(modifier = Modifier.width(3.dp))
+              Spacer(modifier = Modifier.width(4.dp))
               Text(
-                text = if (session.isAlarmEnabled) "Alarm" else "Off",
+                text = if (session.isAlarmEnabled) "Alarm On" else "Alarm Off",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 color = PaletteDarkText
@@ -2134,24 +2295,26 @@ fun GoogleCalendarEventCard(
           }
 
           if (session.isAlarmEnabled) {
+            // Ring Test Button
             Surface(
               shape = RoundedCornerShape(8.dp),
               color = PaletteDeepSage,
+              border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage),
               modifier = Modifier
-                .height(34.dp)
+                .heightIn(min = 36.dp)
                 .clickable { onTestAlarm() }
             ) {
               Row(
-                modifier = Modifier.padding(horizontal = 8.dp),
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
               ) {
                 Icon(
                   imageVector = Icons.Default.NotificationsActive,
                   contentDescription = "Test Alarm",
                   tint = PaletteCreamIvory,
-                  modifier = Modifier.size(13.dp)
+                  modifier = Modifier.size(14.dp)
                 )
-                Spacer(modifier = Modifier.width(3.dp))
+                Spacer(modifier = Modifier.width(4.dp))
                 Text(
                   text = "Ring",
                   fontSize = 11.sp,
@@ -2162,24 +2325,28 @@ fun GoogleCalendarEventCard(
             }
           }
 
-          // Google Calendar Sync Icon Button
+          // Google Calendar Sync Button
           Surface(
             shape = RoundedCornerShape(8.dp),
             color = PalettePaleCeladon,
             border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage),
             modifier = Modifier
-              .size(34.dp)
+              .heightIn(min = 36.dp)
               .clickable { onSyncCalendar() }
           ) {
-            Box(contentAlignment = Alignment.Center) {
-              Icon(Icons.Default.CalendarMonth, contentDescription = "Sync G-Cal", tint = PaletteDarkText, modifier = Modifier.size(15.dp))
+            Row(
+              modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Icon(Icons.Default.CalendarMonth, contentDescription = "Sync G-Cal", tint = PaletteDarkText, modifier = Modifier.size(14.dp))
+              Spacer(modifier = Modifier.width(4.dp))
+              Text("Sync G-Cal", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = PaletteDarkText)
             }
           }
         }
       }
     }
   }
-}
 
 /**
  * Dialog for both Adding and Editing a Session.
@@ -2199,20 +2366,20 @@ fun SessionEditDialog(
 
   var selectedSubject by remember {
     mutableStateOf(
-      if (sessionToEdit != null) {
-        subjects.firstOrNull { it.id == sessionToEdit.subjectId } ?: subjects.firstOrNull()
+      if (sessionToEdit != null && sessionToEdit.subjectId > 0L) {
+        subjects.firstOrNull { it.id == sessionToEdit.subjectId }
       } else {
-        subjects.firstOrNull()
+        null
       }
     )
   }
   var topic by remember { mutableStateOf(sessionToEdit?.topic ?: "") }
   var date by remember { mutableStateOf(sessionToEdit?.date ?: todayDate) }
   var startTime by remember { mutableStateOf(sessionToEdit?.startTime ?: "10:00") }
-  var endTime by remember { mutableStateOf(sessionToEdit?.endTime ?: "11:30") }
-  var location by remember { mutableStateOf(sessionToEdit?.location ?: "Campus") }
+  var endTime by remember { mutableStateOf(sessionToEdit?.endTime ?: "") }
+  var location by remember { mutableStateOf(sessionToEdit?.location ?: "") }
   var notes by remember { mutableStateOf(sessionToEdit?.notes ?: "") }
-  var recurringDays by remember { mutableStateOf(sessionToEdit?.recurringDays ?: "Mon,Wed,Fri") }
+  var recurringDays by remember { mutableStateOf(sessionToEdit?.recurringDays ?: "") }
   var reminderMinutes by remember { mutableIntStateOf(sessionToEdit?.reminderMinutes ?: 0) }
   var isAlarmEnabled by remember { mutableStateOf(sessionToEdit?.isAlarmEnabled ?: true) }
 
@@ -2222,14 +2389,16 @@ fun SessionEditDialog(
     onDismissRequest = onDismiss,
     title = {
       Text(
-        text = if (sessionToEdit != null) "Edit Schedule Session" else "Schedule Class or Daily Routine",
+        text = if (sessionToEdit != null) "Edit Schedule Session" else "Schedule Class or Alarm",
         fontWeight = FontWeight.Bold,
         color = PaletteDarkText
       )
     },
     text = {
       Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+          .fillMaxWidth()
+          .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(8.dp)
       ) {
         Text(
@@ -2256,6 +2425,7 @@ fun SessionEditDialog(
               border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage),
               modifier = Modifier
                 .weight(1f)
+                .heightIn(min = 42.dp)
                 .clickable {
                   selectedCategory = cat
                   if (cat != "ACADEMIC" && topic.isBlank()) {
@@ -2267,39 +2437,51 @@ fun SessionEditDialog(
                   }
                 }
             ) {
-              Text(
-                text = label,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = if (isSelected) PaletteCreamIvory else PaletteDarkText,
-                modifier = Modifier.padding(vertical = 6.dp, horizontal = 2.dp),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-              )
+              Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp)) {
+                Text(
+                  text = label,
+                  fontSize = 11.sp,
+                  fontWeight = FontWeight.Bold,
+                  color = if (isSelected) PaletteCreamIvory else PaletteDarkText,
+                  maxLines = 1,
+                  softWrap = false,
+                  overflow = TextOverflow.Ellipsis,
+                  textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+              }
             }
           }
         }
 
-        // Subject dropdown (Only for Academic Sessions)
+        // Subject dropdown (Optional, Only for Academic / General Sessions)
         if (selectedCategory == "ACADEMIC") {
           ExposedDropdownMenuBox(
             expanded = expandedDropdown,
             onExpandedChange = { expandedDropdown = !expandedDropdown }
           ) {
             OutlinedTextField(
-              value = selectedSubject?.name ?: "Select Subject",
+              value = selectedSubject?.name ?: "No Subject (Optional)",
               onValueChange = {},
               readOnly = true,
-              label = { Text("Academic Subject", color = PaletteDarkText) },
+              label = { Text("Academic Subject (Optional)", color = PaletteDarkText) },
               trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedDropdown) },
               shape = RoundedCornerShape(10.dp),
               modifier = Modifier
                 .fillMaxWidth()
                 .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                .testTag("schedule_subject_dropdown")
             )
             ExposedDropdownMenu(
               expanded = expandedDropdown,
               onDismissRequest = { expandedDropdown = false }
             ) {
+              DropdownMenuItem(
+                text = { Text("No Subject (General / Alarm)", color = PaletteDarkText, fontWeight = FontWeight.SemiBold) },
+                onClick = {
+                  selectedSubject = null
+                  expandedDropdown = false
+                }
+              )
               subjects.forEach { sub ->
                 DropdownMenuItem(
                   text = { Text("${sub.code} - ${sub.name}", color = PaletteDarkText) },
@@ -2359,34 +2541,38 @@ fun SessionEditDialog(
           onValueChange = { topic = it },
           label = {
             Text(
-              if (selectedCategory == "ACADEMIC") "Topic or Study Task" else "Routine Title / Note",
+              if (selectedCategory == "ACADEMIC") "Topic / Reminder Title (Optional)" else "Routine Title / Note (Optional)",
               color = PaletteDarkText
             )
           },
-          placeholder = { Text("e.g. Lunch Break / Night Sleep") },
+          placeholder = { Text("e.g. Morning Alarm or Lecture Review") },
           shape = RoundedCornerShape(10.dp),
-          modifier = Modifier.fillMaxWidth()
+          modifier = Modifier
+            .fillMaxWidth()
+            .testTag("schedule_topic_input")
         )
 
         Row(
           modifier = Modifier.fillMaxWidth(),
           horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-          OutlinedTextField(
-            value = startTime,
-            onValueChange = { startTime = it },
-            label = { Text("Start Time", color = PaletteDarkText) },
-            placeholder = { Text("09:00") },
-            shape = RoundedCornerShape(10.dp),
-            modifier = Modifier.weight(1f)
+          com.example.ui.components.TimeScrollPickerField(
+            label = "Start Time",
+            timeValue = startTime,
+            onTimeChange = { startTime = it },
+            modifier = Modifier
+              .weight(1f)
+              .testTag("schedule_start_time_picker")
           )
-          OutlinedTextField(
-            value = endTime,
-            onValueChange = { endTime = it },
-            label = { Text("End Time", color = PaletteDarkText) },
-            placeholder = { Text("10:30") },
-            shape = RoundedCornerShape(10.dp),
-            modifier = Modifier.weight(1f)
+          com.example.ui.components.TimeScrollPickerField(
+            label = "End Time (Optional)",
+            timeValue = endTime,
+            onTimeChange = { endTime = it },
+            emptyText = "Alarm Only",
+            allowClear = true,
+            modifier = Modifier
+              .weight(1f)
+              .testTag("schedule_end_time_picker")
           )
         }
 
@@ -2401,9 +2587,12 @@ fun SessionEditDialog(
         OutlinedTextField(
           value = location,
           onValueChange = { location = it },
-          label = { Text("Location / Note", color = PaletteDarkText) },
+          label = { Text("Campus / Location (Optional)", color = PaletteDarkText) },
+          placeholder = { Text("Optional (e.g. Room 101, Home)") },
           shape = RoundedCornerShape(10.dp),
-          modifier = Modifier.fillMaxWidth()
+          modifier = Modifier
+            .fillMaxWidth()
+            .testTag("schedule_location_input")
         )
 
         // Alarm toggle
@@ -2432,7 +2621,11 @@ fun SessionEditDialog(
                 color = PaletteDarkText
               )
               Text(
-                text = "Mobile alarm will ring exactly at ${startTime} when event starts",
+                text = if (endTime.isBlank()) {
+                  "Rings once at ${formatTo12Hour(startTime)} as an alarm (no end time)"
+                } else {
+                  "Mobile alarm will ring exactly at ${formatTo12Hour(startTime)} when event starts"
+                },
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Medium,
                 color = PaletteDarkText
@@ -2445,8 +2638,9 @@ fun SessionEditDialog(
     confirmButton = {
       Button(
         onClick = {
+          val trimmedEnd = endTime.trim()
           val isRoutine = selectedCategory != "ACADEMIC"
-          val finalSubjectId = if (isRoutine) -1L else (selectedSubject?.id ?: 1L)
+          val finalSubjectId = if (isRoutine) -1L else (selectedSubject?.id ?: 0L)
           val finalSubjectName = if (isRoutine) {
             when (selectedCategory) {
               "FOOD" -> "Food & Meals"
@@ -2454,35 +2648,45 @@ fun SessionEditDialog(
               "EXERCISE" -> "Exercise & Fitness"
               else -> "Personal Break"
             }
-          } else (selectedSubject?.name ?: "Academic Subject")
-
-          if (topic.isNotBlank()) {
-            val session = TimetableSession(
-              id = sessionToEdit?.id ?: 0L,
-              subjectId = finalSubjectId,
-              subjectName = finalSubjectName,
-              topic = topic.trim(),
-              date = date.trim(),
-              startTime = startTime.trim(),
-              endTime = endTime.trim(),
-              location = location.trim(),
-              notes = notes.trim(),
-              recurringDays = recurringDays.trim(),
-              reminderMinutes = reminderMinutes,
-              status = sessionToEdit?.status ?: "SCHEDULED",
-              isAlarmEnabled = isAlarmEnabled,
-              googleCalendarEventId = sessionToEdit?.googleCalendarEventId,
-              sessionCategory = selectedCategory,
-              isRoutineOnly = isRoutine
-            )
-            onConfirm(session)
+          } else {
+            selectedSubject?.name?.takeIf { it.isNotBlank() }
+              ?: if (trimmedEnd.isBlank()) "Alarm" else "General"
           }
+          val finalTopic = topic.trim().ifBlank {
+            when {
+              isRoutine -> finalSubjectName
+              selectedSubject != null -> selectedSubject!!.name
+              trimmedEnd.isBlank() -> "Scheduled Alarm"
+              else -> "Scheduled Session"
+            }
+          }
+
+          val session = TimetableSession(
+            id = sessionToEdit?.id ?: 0L,
+            subjectId = finalSubjectId,
+            subjectName = finalSubjectName,
+            topic = finalTopic,
+            date = date.trim(),
+            startTime = startTime.trim().ifBlank { "09:00" },
+            endTime = trimmedEnd,
+            location = location.trim(),
+            notes = notes.trim(),
+            recurringDays = recurringDays.trim(),
+            reminderMinutes = reminderMinutes,
+            status = sessionToEdit?.status ?: "SCHEDULED",
+            isAlarmEnabled = isAlarmEnabled,
+            googleCalendarEventId = sessionToEdit?.googleCalendarEventId,
+            sessionCategory = selectedCategory,
+            isRoutineOnly = isRoutine
+          )
+          onConfirm(session)
         },
         colors = ButtonDefaults.buttonColors(
           containerColor = PaletteDeepSage,
           contentColor = PaletteCreamIvory
         ),
-        shape = RoundedCornerShape(10.dp)
+        shape = RoundedCornerShape(10.dp),
+        modifier = Modifier.testTag("save_schedule_button")
       ) {
         Text("Save Schedule", fontWeight = FontWeight.Bold)
       }

@@ -4,11 +4,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -51,6 +54,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.StudyTask
@@ -162,6 +166,7 @@ fun TasksScreen(
   }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun TaskItemCard(
   task: StudyTask,
@@ -188,7 +193,7 @@ fun TaskItemCard(
         .padding(14.dp),
       verticalAlignment = Alignment.CenterVertically
     ) {
-      IconButton(onClick = onToggle, modifier = Modifier.size(36.dp)) {
+      IconButton(onClick = onToggle, modifier = Modifier.size(48.dp)) {
         Icon(
           imageVector = if (task.isCompleted) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
           contentDescription = "Toggle completion",
@@ -197,10 +202,13 @@ fun TaskItemCard(
         )
       }
 
-      Spacer(modifier = Modifier.width(10.dp))
+      Spacer(modifier = Modifier.width(6.dp))
 
       Column(modifier = Modifier.weight(1f)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        FlowRow(
+          horizontalArrangement = Arrangement.spacedBy(6.dp),
+          verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
           Surface(
             shape = RoundedCornerShape(6.dp),
             color = if (task.type == "EXAM") RoseError.copy(alpha = 0.15f) else MaterialTheme.colorScheme.primaryContainer
@@ -209,10 +217,11 @@ fun TaskItemCard(
               text = task.type,
               style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
               color = if (task.type == "EXAM") RoseError else MaterialTheme.colorScheme.primary,
+              maxLines = 1,
+              softWrap = false,
               modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
             )
           }
-          Spacer(modifier = Modifier.width(6.dp))
           Surface(
             shape = RoundedCornerShape(6.dp),
             color = priorityColor.copy(alpha = 0.15f)
@@ -221,6 +230,8 @@ fun TaskItemCard(
               text = "${task.priority} Priority",
               style = MaterialTheme.typography.labelSmall,
               color = priorityColor,
+              maxLines = 1,
+              softWrap = false,
               modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
             )
           }
@@ -244,8 +255,8 @@ fun TaskItemCard(
         )
       }
 
-      IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
-        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
+      IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {
+        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
       }
     }
   }
@@ -312,9 +323,9 @@ fun AddTaskDialog(
               ),
               modifier = Modifier
                 .weight(1f)
-                .height(40.dp)
+                .heightIn(min = 44.dp)
             ) {
-              Text(t, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+              Text(t, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
             }
           }
         }
@@ -331,11 +342,12 @@ fun AddTaskDialog(
                 containerColor = if (priority == p) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.surfaceVariant,
                 contentColor = if (priority == p) MaterialTheme.colorScheme.onSecondary else MaterialTheme.colorScheme.onSurfaceVariant
               ),
+              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 4.dp),
               modifier = Modifier
                 .weight(1f)
-                .height(36.dp)
+                .heightIn(min = 44.dp)
             ) {
-              Text(p, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+              Text(p, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
             }
           }
         }

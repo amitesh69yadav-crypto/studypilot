@@ -127,7 +127,7 @@ class AlarmRingingService : Service() {
       ACTION_STOP_RINGING -> {
         stopSoundAndVibration()
         releaseWakeLock()
-        stopForeground(true)
+        stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
       }
     }
@@ -222,12 +222,19 @@ class AlarmRingingService : Service() {
       PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     )
 
+    val timeSummary = if (session.endTime.isNotBlank()) {
+      "Scheduled: ${session.startTime} - ${session.endTime}"
+    } else {
+      "Alarm Time: ${session.startTime}"
+    }
+    val locationLine = if (session.location.isNotBlank()) "\nLocation: ${session.location}" else ""
+
     return NotificationCompat.Builder(this, CHANNEL_ID)
       .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-      .setContentTitle("⏰ EVENT STARTING NOW: ${session.subjectName}")
+      .setContentTitle("⏰ EVENT STARTING NOW: ${session.subjectName.ifBlank { session.topic }}")
       .setContentText("${session.topic} (Started at ${session.startTime})")
       .setStyle(NotificationCompat.BigTextStyle().bigText(
-        "Event Starting Now: ${session.topic}\nScheduled: ${session.startTime} - ${session.endTime}\nLocation: ${session.location.ifBlank { "Mobile" }}"
+        "Event Starting Now: ${session.topic}\n$timeSummary$locationLine"
       ))
       .setPriority(NotificationCompat.PRIORITY_MAX)
       .setCategory(NotificationCompat.CATEGORY_ALARM)

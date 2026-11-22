@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -67,6 +69,7 @@ import com.example.ui.components.SectionHeader
 import com.example.ui.theme.CyanAccent
 import com.example.ui.theme.EmeraldSuccess
 import com.example.ui.theme.PaletteCreamIvory
+import com.example.ui.theme.PaletteDarkText
 import com.example.ui.theme.PaletteDeepSage
 import com.example.ui.theme.PaletteMediumSage
 import com.example.ui.theme.PalettePaleCeladon
@@ -81,32 +84,24 @@ fun SettingsScreen(
   val savedAccounts by viewModel.savedAccounts.collectAsState()
 
   val customGeminiKey by viewModel.customGeminiKey.collectAsState()
-  val customGroqKey by viewModel.customGroqKey.collectAsState()
-  val customOpenAIKey by viewModel.customOpenAIKey.collectAsState()
-  val customDeepSeekKey by viewModel.customDeepSeekKey.collectAsState()
-  val customClaudeKey by viewModel.customClaudeKey.collectAsState()
-  val customOpenRouterKey by viewModel.customOpenRouterKey.collectAsState()
   val aiProviderMode by viewModel.aiProviderMode.collectAsState()
   val apiTestStatus by viewModel.apiTestStatus.collectAsState()
 
-  var inputGeminiKey by remember(customGeminiKey) { mutableStateOf(customGeminiKey) }
-  var inputGroqKey by remember(customGroqKey) { mutableStateOf(customGroqKey) }
-  var inputOpenAIKey by remember(customOpenAIKey) { mutableStateOf(customOpenAIKey) }
-  var inputDeepSeekKey by remember(customDeepSeekKey) { mutableStateOf(customDeepSeekKey) }
-  var inputClaudeKey by remember(customClaudeKey) { mutableStateOf(customClaudeKey) }
-  var inputOpenRouterKey by remember(customOpenRouterKey) { mutableStateOf(customOpenRouterKey) }
+  val localOllamaUrl by viewModel.localOllamaUrl.collectAsState()
+  val localOllamaModel by viewModel.localOllamaModel.collectAsState()
+  val ollamaTestStatus by viewModel.ollamaTestStatus.collectAsState()
 
+  var inputOllamaUrl by remember(localOllamaUrl) { mutableStateOf(localOllamaUrl) }
+  var inputOllamaModel by remember(localOllamaModel) { mutableStateOf(localOllamaModel) }
+
+  var inputGeminiKey by remember(customGeminiKey) { mutableStateOf(customGeminiKey) }
   var showGeminiKeyPassword by remember { mutableStateOf(false) }
-  var showGroqKeyPassword by remember { mutableStateOf(false) }
-  var showOpenAIKeyPassword by remember { mutableStateOf(false) }
-  var showDeepSeekKeyPassword by remember { mutableStateOf(false) }
-  var showClaudeKeyPassword by remember { mutableStateOf(false) }
-  var showOpenRouterKeyPassword by remember { mutableStateOf(false) }
 
   var showAddSubjectDialog by remember { mutableStateOf(false) }
   var showEditProfileDialog by remember { mutableStateOf(false) }
   var accountToDelete by remember { mutableStateOf<com.example.data.model.UserProfile?>(null) }
   var showDeleteCurrentAccountDialog by remember { mutableStateOf(false) }
+  var showDeleteSampleDataDialog by remember { mutableStateOf(false) }
 
   var editName by remember(currentUser) { mutableStateOf(currentUser.name) }
   var editEmail by remember(currentUser) { mutableStateOf(currentUser.email) }
@@ -115,6 +110,8 @@ fun SettingsScreen(
 
   val isGeminiConfigured = BuildConfig.GEMINI_API_KEY.isNotBlank() &&
     BuildConfig.GEMINI_API_KEY != "MY_GEMINI_API_KEY"
+
+  val isGuestMode = !currentUser.isLoggedIn || currentUser.id == com.example.ui.viewmodel.StudyPilotViewModel.GUEST_USER_ID
 
   LazyColumn(
     modifier = Modifier.fillMaxSize(),
@@ -131,7 +128,7 @@ fun SettingsScreen(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
       ) {
         Column(modifier = Modifier.padding(16.dp)) {
-          // Top Row: Avatar + Student Details + Active Badge
+          // Top Row: Avatar + User Details + Status Badge
           Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -165,29 +162,38 @@ fun SettingsScreen(
                   overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                  text = currentUser.email,
+                  text = if (isGuestMode) "Local session • Not signed in" else currentUser.email.ifBlank { currentUser.authProvider },
                   style = MaterialTheme.typography.bodySmall,
                   color = MaterialTheme.colorScheme.onSurfaceVariant,
                   maxLines = 1,
                   overflow = TextOverflow.Ellipsis
                 )
-                Text(
-                  text = "${currentUser.university} • ${currentUser.studentId}",
-                  style = MaterialTheme.typography.labelSmall,
-                  color = PaletteDeepSage,
-                  fontWeight = FontWeight.SemiBold,
-                  maxLines = 1,
-                  overflow = TextOverflow.Ellipsis
-                )
+                if (!isGuestMode) {
+                  val subMeta = listOfNotNull(
+                    currentUser.university.takeIf { it.isNotBlank() },
+                    currentUser.studentId.takeIf { it.isNotBlank() }
+                  ).joinToString(" • ")
+                  if (subMeta.isNotBlank()) {
+                    Text(
+                      text = subMeta,
+                      style = MaterialTheme.typography.labelSmall,
+                      color = PaletteDeepSage,
+                      fontWeight = FontWeight.SemiBold,
+                      maxLines = 1,
+                      overflow = TextOverflow.Ellipsis
+                    )
+                  }
+                }
               }
             }
 
             Spacer(modifier = Modifier.width(8.dp))
 
+            val badgeColor = if (isGuestMode) PaletteDeepSage else EmeraldSuccess
             Surface(
               shape = RoundedCornerShape(20.dp),
-              color = EmeraldSuccess.copy(alpha = 0.12f),
-              border = androidx.compose.foundation.BorderStroke(1.dp, EmeraldSuccess.copy(alpha = 0.35f))
+              color = badgeColor.copy(alpha = 0.12f),
+              border = androidx.compose.foundation.BorderStroke(1.dp, badgeColor.copy(alpha = 0.35f))
             ) {
               Row(
                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
@@ -198,13 +204,13 @@ fun SettingsScreen(
                   modifier = Modifier
                     .size(7.dp)
                     .clip(CircleShape)
-                    .background(EmeraldSuccess)
+                    .background(badgeColor)
                 )
                 Text(
-                  text = "Active",
+                  text = if (isGuestMode) "Guest" else "Active",
                   fontSize = 11.sp,
                   fontWeight = FontWeight.Bold,
-                  color = EmeraldSuccess,
+                  color = badgeColor,
                   maxLines = 1,
                   softWrap = false
                 )
@@ -214,119 +220,178 @@ fun SettingsScreen(
 
           Spacer(modifier = Modifier.height(14.dp))
 
-          // Account Action Buttons: Evenly weighted & styled
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-          ) {
-            FilledTonalButton(
-              onClick = {
-                editName = currentUser.name
-                editEmail = currentUser.email
-                editUniversity = currentUser.university
-                editRole = currentUser.role
-                showEditProfileDialog = true
-              },
+          if (isGuestMode) {
+            Button(
+              onClick = { viewModel.navigateTo(com.example.ui.viewmodel.Screen.Login) },
               shape = RoundedCornerShape(12.dp),
-              colors = ButtonDefaults.filledTonalButtonColors(
-                containerColor = PalettePaleCeladon,
-                contentColor = PaletteDeepSage
+              colors = ButtonDefaults.buttonColors(
+                containerColor = PaletteDeepSage,
+                contentColor = PaletteCreamIvory
               ),
               modifier = Modifier
-                .weight(1f)
-                .height(42.dp)
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .testTag("settings_sign_in_button")
             ) {
-              Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
-              Spacer(modifier = Modifier.width(6.dp))
-              Text("Edit Profile", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            }
-
-            OutlinedButton(
-              onClick = { viewModel.logout() },
-              shape = RoundedCornerShape(12.dp),
-              border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-              colors = ButtonDefaults.outlinedButtonColors(
-                contentColor = MaterialTheme.colorScheme.onSurface
-              ),
-              modifier = Modifier
-                .weight(1f)
-                .height(42.dp)
-            ) {
-              Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, modifier = Modifier.size(16.dp))
-              Spacer(modifier = Modifier.width(6.dp))
-              Text("Sign Out", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            }
-          }
-
-          Spacer(modifier = Modifier.height(8.dp))
-
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-          ) {
-            FilledTonalButton(
-              onClick = { viewModel.syncCloudData() },
-              shape = RoundedCornerShape(12.dp),
-              colors = ButtonDefaults.filledTonalButtonColors(
-                containerColor = CyanAccent.copy(alpha = 0.15f),
-                contentColor = MaterialTheme.colorScheme.onSurface
-              ),
-              modifier = Modifier
-                .weight(1f)
-                .height(38.dp)
-            ) {
-              Icon(Icons.Default.Devices, contentDescription = null, modifier = Modifier.size(15.dp), tint = PaletteDeepSage)
-              Spacer(modifier = Modifier.width(6.dp))
-              Text("Cloud Sync Now", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            }
-
-            OutlinedButton(
-              onClick = { showDeleteCurrentAccountDialog = true },
-              shape = RoundedCornerShape(12.dp),
-              border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
-              colors = ButtonDefaults.outlinedButtonColors(
-                contentColor = MaterialTheme.colorScheme.error
-              ),
-              modifier = Modifier
-                .weight(1f)
-                .height(38.dp)
-            ) {
-              Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(15.dp))
-              Spacer(modifier = Modifier.width(6.dp))
-              Text("Delete Account", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            }
-          }
-
-          Spacer(modifier = Modifier.height(12.dp))
-
-          Surface(
-            shape = RoundedCornerShape(12.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-            modifier = Modifier.fillMaxWidth()
-          ) {
-            Row(
-              modifier = Modifier.padding(10.dp),
-              verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-              Icon(
-                Icons.Default.Devices,
-                contentDescription = null,
-                tint = PaletteDeepSage,
-                modifier = Modifier.size(20.dp)
+              Icon(Icons.Default.PersonAdd, contentDescription = null, modifier = Modifier.size(16.dp))
+              Spacer(modifier = Modifier.width(8.dp))
+              Text(
+                text = "Sign In / Create Account",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                softWrap = false
               )
-              Column(modifier = Modifier.weight(1f)) {
-                Text(
-                  text = "Laptop + Mobile Sync (${currentUser.authProvider})",
-                  fontWeight = FontWeight.Bold,
-                  fontSize = 12.sp,
-                  color = MaterialTheme.colorScheme.onSurface
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Surface(
+              shape = RoundedCornerShape(12.dp),
+              color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+              modifier = Modifier.fillMaxWidth()
+            ) {
+              Row(
+                modifier = Modifier.padding(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+              ) {
+                Icon(
+                  Icons.Default.Devices,
+                  contentDescription = null,
+                  tint = PaletteDeepSage,
+                  modifier = Modifier.size(20.dp)
                 )
-                Text(
-                  text = "Dual responsive mode keeps coursework and alarms in sync.",
-                  fontSize = 11.sp,
-                  color = MaterialTheme.colorScheme.onSurfaceVariant
+                Column(modifier = Modifier.weight(1f)) {
+                  Text(
+                    text = "Guest Mode (Local Storage Only)",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurface
+                  )
+                  Text(
+                    text = "Sign in or register to store your profile and sync your data.",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                  )
+                }
+              }
+            }
+          } else {
+            // Account Action Buttons for signed-in user
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+              FilledTonalButton(
+                onClick = {
+                  editName = currentUser.name
+                  editEmail = currentUser.email
+                  editUniversity = currentUser.university
+                  editRole = currentUser.role
+                  showEditProfileDialog = true
+                },
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.filledTonalButtonColors(
+                  containerColor = PalettePaleCeladon,
+                  contentColor = PaletteDeepSage
+                ),
+                modifier = Modifier
+                  .weight(1f)
+                  .heightIn(min = 44.dp)
+              ) {
+                Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Edit Profile", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+              }
+
+              OutlinedButton(
+                onClick = { viewModel.logout() },
+                shape = RoundedCornerShape(12.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                colors = ButtonDefaults.outlinedButtonColors(
+                  contentColor = MaterialTheme.colorScheme.onSurface
+                ),
+                modifier = Modifier
+                  .weight(1f)
+                  .heightIn(min = 44.dp)
+              ) {
+                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Sign Out", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+              }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+              FilledTonalButton(
+                onClick = { viewModel.syncCloudData() },
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.filledTonalButtonColors(
+                  containerColor = CyanAccent.copy(alpha = 0.15f),
+                  contentColor = MaterialTheme.colorScheme.onSurface
+                ),
+                modifier = Modifier
+                  .weight(1f)
+                  .heightIn(min = 44.dp)
+              ) {
+                Icon(Icons.Default.Devices, contentDescription = null, modifier = Modifier.size(15.dp), tint = PaletteDeepSage)
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Cloud Sync", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+              }
+
+              OutlinedButton(
+                onClick = { showDeleteCurrentAccountDialog = true },
+                shape = RoundedCornerShape(12.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
+                colors = ButtonDefaults.outlinedButtonColors(
+                  contentColor = MaterialTheme.colorScheme.error
+                ),
+                modifier = Modifier
+                  .weight(1f)
+                  .heightIn(min = 44.dp)
+              ) {
+                Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(15.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Delete Account", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+              }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Surface(
+              shape = RoundedCornerShape(12.dp),
+              color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+              modifier = Modifier.fillMaxWidth()
+            ) {
+              Row(
+                modifier = Modifier.padding(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+              ) {
+                Icon(
+                  Icons.Default.Devices,
+                  contentDescription = null,
+                  tint = PaletteDeepSage,
+                  modifier = Modifier.size(20.dp)
                 )
+                Column(modifier = Modifier.weight(1f)) {
+                  Text(
+                    text = "Synced Profile (${currentUser.authProvider})",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurface
+                  )
+                  Text(
+                    text = "Your account info, coursework, and alarms are saved.",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                  )
+                }
               }
             }
           }
@@ -334,7 +399,7 @@ fun SettingsScreen(
       }
     }
 
-    // 0.5. Student Account Switcher (Strict Per-Student Data Isolation)
+    // 0.5. Stored Accounts Switcher
     item {
       Card(
         modifier = Modifier
@@ -350,15 +415,19 @@ fun SettingsScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
           ) {
-            Column {
+            Column(
+              modifier = Modifier
+                .weight(1f)
+                .padding(end = 8.dp)
+            ) {
               Text(
-                text = "Student Profiles (${savedAccounts.size})",
+                text = "Stored Accounts (${savedAccounts.size})",
                 fontWeight = FontWeight.Bold,
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface
               )
               Text(
-                text = "Isolated profiles prevent clash between students",
+                text = "Accounts saved on this device with isolated study data",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
               )
@@ -368,7 +437,7 @@ fun SettingsScreen(
               color = MaterialTheme.colorScheme.primaryContainer
             ) {
               Text(
-                text = "Zero-Clash",
+                text = "Saved",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
@@ -379,102 +448,124 @@ fun SettingsScreen(
 
           Spacer(modifier = Modifier.height(12.dp))
 
-          Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            savedAccounts.forEach { account ->
-              val isCurrent = account.id == currentUser.id
-              Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = if (isCurrent) PalettePaleCeladon.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                border = androidx.compose.foundation.BorderStroke(
-                  1.dp,
-                  if (isCurrent) PaletteMediumSage else MaterialTheme.colorScheme.outlineVariant
-                ),
-                modifier = Modifier.fillMaxWidth()
-              ) {
-                Row(
-                  modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp),
-                  verticalAlignment = Alignment.CenterVertically,
-                  horizontalArrangement = Arrangement.SpaceBetween
+          if (savedAccounts.isEmpty()) {
+            Surface(
+              shape = RoundedCornerShape(12.dp),
+              color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+              modifier = Modifier.fillMaxWidth()
+            ) {
+              Text(
+                text = "No stored accounts yet. Sign in or create an account to store your profile here.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(12.dp)
+              )
+            }
+          } else {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+              savedAccounts.forEach { account ->
+                val isCurrent = !isGuestMode && account.id == currentUser.id
+                Surface(
+                  shape = RoundedCornerShape(12.dp),
+                  color = if (isCurrent) PalettePaleCeladon.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                  border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    if (isCurrent) PaletteMediumSage else MaterialTheme.colorScheme.outlineVariant
+                  ),
+                  modifier = Modifier.fillMaxWidth()
                 ) {
                   Row(
+                    modifier = Modifier
+                      .fillMaxWidth()
+                      .padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.weight(1f)
+                    horizontalArrangement = Arrangement.SpaceBetween
                   ) {
-                    Box(
-                      modifier = Modifier
-                        .size(38.dp)
-                        .clip(CircleShape)
-                        .background(if (isCurrent) PaletteDeepSage else MaterialTheme.colorScheme.outline),
-                      contentAlignment = Alignment.Center
+                    Row(
+                      verticalAlignment = Alignment.CenterVertically,
+                      horizontalArrangement = Arrangement.spacedBy(10.dp),
+                      modifier = Modifier.weight(1f)
                     ) {
-                      Text(
-                        text = account.avatarInitials,
-                        fontWeight = FontWeight.Bold,
-                        color = PaletteCreamIvory,
-                        fontSize = 13.sp
-                      )
-                    }
-                    Column {
-                      Row(verticalAlignment = Alignment.CenterVertically) {
+                      Box(
+                        modifier = Modifier
+                          .size(38.dp)
+                          .clip(CircleShape)
+                          .background(if (isCurrent) PaletteDeepSage else MaterialTheme.colorScheme.outline),
+                        contentAlignment = Alignment.Center
+                      ) {
                         Text(
-                          text = account.name,
+                          text = account.avatarInitials,
                           fontWeight = FontWeight.Bold,
-                          fontSize = 13.sp,
-                          color = MaterialTheme.colorScheme.onSurface
+                          color = PaletteCreamIvory,
+                          fontSize = 13.sp
                         )
-                        if (isCurrent) {
-                          Spacer(modifier = Modifier.width(6.dp))
-                          Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = EmeraldSuccess.copy(alpha = 0.15f)
-                          ) {
-                            Text(
-                              text = "Active",
-                              fontSize = 10.sp,
-                              fontWeight = FontWeight.Bold,
-                              color = EmeraldSuccess,
-                              modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
+                      }
+                      Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                          Text(
+                            text = account.name,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                          )
+                          if (isCurrent) {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Surface(
+                              shape = RoundedCornerShape(6.dp),
+                              color = EmeraldSuccess.copy(alpha = 0.15f)
+                            ) {
+                              Text(
+                                text = "Active",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = EmeraldSuccess,
+                                maxLines = 1,
+                                softWrap = false,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                              )
+                            }
                           }
                         }
+                        Text(
+                          text = account.email.ifBlank { "${account.university} • ${account.studentId}" },
+                          fontSize = 11.sp,
+                          color = MaterialTheme.colorScheme.onSurfaceVariant,
+                          maxLines = 1,
+                          overflow = TextOverflow.Ellipsis
+                        )
                       }
-                      Text(
-                        text = "${account.university} • ${account.studentId}",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                      )
                     }
-                  }
 
-                  Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                  ) {
-                    if (!isCurrent) {
-                      FilledTonalButton(
-                        onClick = { viewModel.switchAccount(account) },
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                        modifier = Modifier.height(34.dp)
-                      ) {
-                        Icon(Icons.Default.SwapHoriz, contentDescription = null, modifier = Modifier.size(14.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Switch", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                      }
-                    }
-                    IconButton(
-                      onClick = { accountToDelete = account },
-                      modifier = Modifier.size(34.dp)
+                    Row(
+                      verticalAlignment = Alignment.CenterVertically,
+                      horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                      Icon(
-                        Icons.Default.Delete,
-                        contentDescription = "Delete Profile",
-                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.75f),
-                        modifier = Modifier.size(18.dp)
-                      )
+                      if (!isCurrent) {
+                        FilledTonalButton(
+                          onClick = { viewModel.switchAccount(account) },
+                          shape = RoundedCornerShape(8.dp),
+                          contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                          modifier = Modifier.heightIn(min = 44.dp)
+                        ) {
+                          Icon(Icons.Default.SwapHoriz, contentDescription = null, modifier = Modifier.size(14.dp))
+                          Spacer(modifier = Modifier.width(4.dp))
+                          Text("Switch", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+                        }
+                      }
+                      IconButton(
+                        onClick = { accountToDelete = account },
+                        modifier = Modifier.size(48.dp)
+                      ) {
+                        Icon(
+                          Icons.Default.Delete,
+                          contentDescription = "Delete Profile",
+                          tint = MaterialTheme.colorScheme.error.copy(alpha = 0.75f),
+                          modifier = Modifier.size(18.dp)
+                        )
+                      }
                     }
                   }
                 }
@@ -485,15 +576,21 @@ fun SettingsScreen(
           Spacer(modifier = Modifier.height(10.dp))
 
           OutlinedButton(
-            onClick = { viewModel.logout() },
+            onClick = { viewModel.navigateTo(com.example.ui.viewmodel.Screen.Login) },
             shape = RoundedCornerShape(10.dp),
             modifier = Modifier
               .fillMaxWidth()
-              .height(40.dp)
+              .heightIn(min = 48.dp)
           ) {
             Icon(Icons.Default.PersonAdd, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(modifier = Modifier.width(6.dp))
-            Text("Register / Sign In Another Student", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+              text = if (savedAccounts.isEmpty()) "Sign In / Create Account" else "Sign In / Add Another Account",
+              fontSize = 12.sp,
+              fontWeight = FontWeight.SemiBold,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis
+            )
           }
         }
       }
@@ -516,7 +613,12 @@ fun SettingsScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
           ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              modifier = Modifier
+                .weight(1f)
+                .padding(end = 8.dp)
+            ) {
               Box(
                 modifier = Modifier
                   .size(40.dp)
@@ -532,9 +634,9 @@ fun SettingsScreen(
                 )
               }
               Spacer(modifier = Modifier.width(12.dp))
-              Column {
+              Column(modifier = Modifier.weight(1f)) {
                 Text(
-                  "AI Model & API Key Settings",
+                  "AI Engine Settings (Gemini & Local AI)",
                   fontWeight = FontWeight.Bold,
                   style = MaterialTheme.typography.titleMedium
                 )
@@ -552,9 +654,11 @@ fun SettingsScreen(
               color = EmeraldSuccess.copy(alpha = 0.15f)
             ) {
               Text(
-                text = "Configurable",
+                text = "Active",
                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                 color = EmeraldSuccess,
+                maxLines = 1,
+                softWrap = false,
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
               )
             }
@@ -564,23 +668,18 @@ fun SettingsScreen(
 
           // Provider Mode Selection Header
           Text(
-            text = "Preferred AI Provider",
+            text = "Preferred AI Engine",
             fontWeight = FontWeight.Bold,
             fontSize = 13.sp,
             color = MaterialTheme.colorScheme.onSurface
           )
           Spacer(modifier = Modifier.height(6.dp))
 
-          // Multi-Provider Selection Options
+          // Strictly Gemini & Local AI Only
           val modes = listOf(
-            "AUTO" to "Auto (Multi-Engine Fallback Chain)",
-            "GEMINI" to "Google Gemini 2.5 Flash",
-            "GROQ" to "Groq AI (GPT OSS 120B / Llama 3.3)",
-            "OPENAI" to "OpenAI ChatGPT (GPT-4o / GPT-4o-mini)",
-            "DEEPSEEK" to "DeepSeek AI (Chat / Coder / R1)",
-            "CLAUDE" to "Anthropic Claude (3.5 Sonnet / Haiku)",
-            "OPENROUTER" to "OpenRouter AI (Unified Multi-Model)",
-            "LOCAL" to "Local Deterministic Mode (Offline)"
+            "AUTO" to "Auto (Google Gemini → Local Academic AI)",
+            "GEMINI" to "Google Gemini AI (Primary Cloud)",
+            "LOCAL" to "Local Academic AI / Ollama (On-Device)"
           )
 
           Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -597,11 +696,16 @@ fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth()
               ) {
                 Row(
-                  modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                  modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                   verticalAlignment = Alignment.CenterVertically,
                   horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                  Row(verticalAlignment = Alignment.CenterVertically) {
+                  Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                      .weight(1f)
+                      .padding(end = 8.dp)
+                  ) {
                     RadioButton(
                       selected = isSelected,
                       onClick = { viewModel.setAiProviderMode(modeKey) }
@@ -611,7 +715,8 @@ fun SettingsScreen(
                       text = modeTitle,
                       fontSize = 12.sp,
                       fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                      color = MaterialTheme.colorScheme.onSurface
+                      color = MaterialTheme.colorScheme.onSurface,
+                      modifier = Modifier.weight(1f)
                     )
                   }
                   if (isSelected) {
@@ -622,6 +727,152 @@ fun SettingsScreen(
                       modifier = Modifier.size(16.dp)
                     )
                   }
+                }
+              }
+            }
+          }
+
+          Spacer(modifier = Modifier.height(10.dp))
+
+          // Guaranteed Fallback Notice Box
+          Surface(
+            shape = RoundedCornerShape(10.dp),
+            color = PalettePaleCeladon.copy(alpha = 0.7f),
+            modifier = Modifier.fillMaxWidth()
+          ) {
+            Row(
+              modifier = Modifier.padding(12.dp),
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Icon(
+                imageVector = Icons.Default.CheckCircle,
+                contentDescription = null,
+                tint = PaletteDeepSage,
+                modifier = Modifier.size(20.dp)
+              )
+              Spacer(modifier = Modifier.width(10.dp))
+              Column {
+                Text(
+                  text = "Guaranteed AI Response System",
+                  style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                  color = PaletteDeepSage
+                )
+                Text(
+                  text = "Every question is answered. If cloud APIs face quota limits or network outages, the on-device Local Academic AI (symbolic math, code algorithms & university science graph) immediately handles your query without disruption.",
+                  style = MaterialTheme.typography.bodySmall,
+                  fontSize = 11.sp,
+                  color = MaterialTheme.colorScheme.onSurface
+                )
+              }
+            }
+          }
+
+          Spacer(modifier = Modifier.height(10.dp))
+
+          // Local Llama / Ollama Runner Card
+          Card(
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = PalettePaleCeladon.copy(alpha = 0.45f)),
+            border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage.copy(alpha = 0.6f)),
+            modifier = Modifier.fillMaxWidth()
+          ) {
+            Column(modifier = Modifier.padding(14.dp)) {
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                Row(
+                  verticalAlignment = Alignment.CenterVertically,
+                  modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 8.dp)
+                ) {
+                  Text("🦙", fontSize = 18.sp)
+                  Spacer(modifier = Modifier.width(8.dp))
+                  Column(modifier = Modifier.weight(1f)) {
+                    Text("Local Llama / Ollama Engine", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = PaletteDarkText)
+                    Text("100% on-device neural AI daemon", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                  }
+                }
+                Surface(
+                  shape = RoundedCornerShape(6.dp),
+                  color = PaletteMediumSage.copy(alpha = 0.3f)
+                ) {
+                  Text(
+                    text = inputOllamaModel.ifBlank { "llama3.2" },
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = PaletteDeepSage,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                  )
+                }
+              }
+
+              Spacer(modifier = Modifier.height(10.dp))
+
+              Text("Ollama Daemon URL (10.0.2.2 connects emulator to your PC):", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+              Spacer(modifier = Modifier.height(4.dp))
+              OutlinedTextField(
+                value = inputOllamaUrl,
+                onValueChange = { inputOllamaUrl = it },
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = { Text("http://10.0.2.2:11434", fontSize = 12.sp) },
+                singleLine = true,
+                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp)
+              )
+
+              Spacer(modifier = Modifier.height(8.dp))
+
+              Text("Llama Model Tag:", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+              Spacer(modifier = Modifier.height(4.dp))
+              OutlinedTextField(
+                value = inputOllamaModel,
+                onValueChange = { inputOllamaModel = it },
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = { Text("llama3.2, llama3.3, mistral", fontSize = 12.sp) },
+                singleLine = true,
+                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp)
+              )
+
+              if (ollamaTestStatus != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Surface(
+                  shape = RoundedCornerShape(8.dp),
+                  color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                  modifier = Modifier.fillMaxWidth()
+                ) {
+                  Text(
+                    text = ollamaTestStatus ?: "",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = if (ollamaTestStatus?.startsWith("✅") == true) EmeraldSuccess else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(8.dp)
+                  )
+                }
+              }
+
+              Spacer(modifier = Modifier.height(10.dp))
+
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+              ) {
+                OutlinedButton(
+                  onClick = { viewModel.testLocalOllamaConnection(inputOllamaUrl) },
+                  shape = RoundedCornerShape(8.dp),
+                  modifier = Modifier.weight(1f)
+                ) {
+                  Text("Test Ollama", fontSize = 11.sp)
+                }
+
+                Button(
+                  onClick = { viewModel.setLocalOllamaConfig(inputOllamaUrl, inputOllamaModel) },
+                  colors = ButtonDefaults.buttonColors(containerColor = PaletteDeepSage),
+                  shape = RoundedCornerShape(8.dp),
+                  modifier = Modifier.weight(1f)
+                ) {
+                  Text("Save Llama", fontSize = 11.sp)
                 }
               }
             }
@@ -688,16 +939,20 @@ fun SettingsScreen(
                 Button(
                   onClick = { viewModel.saveCustomGeminiKey(inputGeminiKey) },
                   shape = RoundedCornerShape(8.dp),
-                  modifier = Modifier.weight(1f).height(36.dp)
+                  modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 44.dp)
                 ) {
-                  Text("Save Key", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                  Text("Save Key", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
                 }
                 OutlinedButton(
                   onClick = { viewModel.testApiConnection("GEMINI", inputGeminiKey.ifBlank { viewModel.repository.geminiService.getGeminiApiKey() }) },
                   shape = RoundedCornerShape(8.dp),
-                  modifier = Modifier.weight(1f).height(36.dp)
+                  modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 44.dp)
                 ) {
-                  Text("Test Gemini", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                  Text("Test Gemini", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
                 }
                 if (customGeminiKey.isNotBlank()) {
                   TextButton(
@@ -705,404 +960,9 @@ fun SettingsScreen(
                       inputGeminiKey = ""
                       viewModel.saveCustomGeminiKey("")
                     },
-                    modifier = Modifier.height(36.dp)
+                    modifier = Modifier.heightIn(min = 44.dp)
                   ) {
-                    Text("Clear", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
-                  }
-                }
-              }
-            }
-          }
-
-          Spacer(modifier = Modifier.height(10.dp))
-
-          // --- 2. Groq AI Key ---
-          Card(
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = PalettePaleCeladon.copy(alpha = 0.3f)),
-            border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage.copy(alpha = 0.4f)),
-            modifier = Modifier.fillMaxWidth()
-          ) {
-            Column(modifier = Modifier.padding(12.dp)) {
-              Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-              ) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                  Icon(Icons.Default.Key, contentDescription = null, tint = PaletteDeepSage, modifier = Modifier.size(18.dp))
-                  Spacer(modifier = Modifier.width(6.dp))
-                  Text("Groq AI API Key", fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                Surface(
-                  shape = RoundedCornerShape(6.dp),
-                  color = EmeraldSuccess.copy(alpha = 0.15f)
-                ) {
-                  Text(
-                    text = if (customGroqKey.isNotBlank()) "Custom Active" else "Default Active",
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = EmeraldSuccess,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                  )
-                }
-              }
-              Spacer(modifier = Modifier.height(8.dp))
-              OutlinedTextField(
-                value = inputGroqKey,
-                onValueChange = { inputGroqKey = it },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Enter Groq API Key", fontSize = 12.sp) },
-                singleLine = true,
-                visualTransformation = if (showGroqKeyPassword) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                trailingIcon = {
-                  IconButton(onClick = { showGroqKeyPassword = !showGroqKeyPassword }) {
-                    Icon(if (showGroqKeyPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility, contentDescription = "Toggle key", modifier = Modifier.size(18.dp))
-                  }
-                },
-                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp)
-              )
-              Spacer(modifier = Modifier.height(8.dp))
-              Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                  onClick = { viewModel.saveCustomGroqKey(inputGroqKey) },
-                  shape = RoundedCornerShape(8.dp),
-                  modifier = Modifier.weight(1f).height(36.dp)
-                ) {
-                  Text("Save Key", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                }
-                OutlinedButton(
-                  onClick = { viewModel.testApiConnection("GROQ", inputGroqKey.ifBlank { viewModel.repository.geminiService.getGroqApiKey() }) },
-                  shape = RoundedCornerShape(8.dp),
-                  modifier = Modifier.weight(1f).height(36.dp)
-                ) {
-                  Text("Test Groq", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                }
-                if (customGroqKey.isNotBlank()) {
-                  TextButton(
-                    onClick = {
-                      inputGroqKey = ""
-                      viewModel.saveCustomGroqKey("")
-                    },
-                    modifier = Modifier.height(36.dp)
-                  ) {
-                    Text("Clear", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
-                  }
-                }
-              }
-            }
-          }
-
-          Spacer(modifier = Modifier.height(10.dp))
-
-          // --- 3. OpenAI ChatGPT Key ---
-          Card(
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = PalettePaleCeladon.copy(alpha = 0.3f)),
-            border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage.copy(alpha = 0.4f)),
-            modifier = Modifier.fillMaxWidth()
-          ) {
-            Column(modifier = Modifier.padding(12.dp)) {
-              Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-              ) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                  Icon(Icons.Default.Key, contentDescription = null, tint = PaletteDeepSage, modifier = Modifier.size(18.dp))
-                  Spacer(modifier = Modifier.width(6.dp))
-                  Text("OpenAI (ChatGPT) Key", fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                Surface(
-                  shape = RoundedCornerShape(6.dp),
-                  color = if (customOpenAIKey.isNotBlank()) EmeraldSuccess.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant
-                ) {
-                  Text(
-                    text = if (customOpenAIKey.isNotBlank()) "Configured" else "Not Set",
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (customOpenAIKey.isNotBlank()) EmeraldSuccess else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                  )
-                }
-              }
-              Spacer(modifier = Modifier.height(8.dp))
-              OutlinedTextField(
-                value = inputOpenAIKey,
-                onValueChange = { inputOpenAIKey = it },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("sk-proj-...", fontSize = 12.sp) },
-                singleLine = true,
-                visualTransformation = if (showOpenAIKeyPassword) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                trailingIcon = {
-                  IconButton(onClick = { showOpenAIKeyPassword = !showOpenAIKeyPassword }) {
-                    Icon(if (showOpenAIKeyPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility, contentDescription = "Toggle key", modifier = Modifier.size(18.dp))
-                  }
-                },
-                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp)
-              )
-              Spacer(modifier = Modifier.height(8.dp))
-              Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                  onClick = { viewModel.saveCustomOpenAIKey(inputOpenAIKey) },
-                  shape = RoundedCornerShape(8.dp),
-                  modifier = Modifier.weight(1f).height(36.dp)
-                ) {
-                  Text("Save Key", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                }
-                OutlinedButton(
-                  onClick = { viewModel.testApiConnection("OPENAI", inputOpenAIKey) },
-                  shape = RoundedCornerShape(8.dp),
-                  modifier = Modifier.weight(1f).height(36.dp)
-                ) {
-                  Text("Test ChatGPT", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                }
-                if (customOpenAIKey.isNotBlank()) {
-                  TextButton(
-                    onClick = {
-                      inputOpenAIKey = ""
-                      viewModel.saveCustomOpenAIKey("")
-                    },
-                    modifier = Modifier.height(36.dp)
-                  ) {
-                    Text("Clear", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
-                  }
-                }
-              }
-            }
-          }
-
-          Spacer(modifier = Modifier.height(10.dp))
-
-          // --- 4. DeepSeek Key ---
-          Card(
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = PalettePaleCeladon.copy(alpha = 0.3f)),
-            border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage.copy(alpha = 0.4f)),
-            modifier = Modifier.fillMaxWidth()
-          ) {
-            Column(modifier = Modifier.padding(12.dp)) {
-              Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-              ) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                  Icon(Icons.Default.Key, contentDescription = null, tint = PaletteDeepSage, modifier = Modifier.size(18.dp))
-                  Spacer(modifier = Modifier.width(6.dp))
-                  Text("DeepSeek AI Key", fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                Surface(
-                  shape = RoundedCornerShape(6.dp),
-                  color = if (customDeepSeekKey.isNotBlank()) EmeraldSuccess.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant
-                ) {
-                  Text(
-                    text = if (customDeepSeekKey.isNotBlank()) "Configured" else "Not Set",
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (customDeepSeekKey.isNotBlank()) EmeraldSuccess else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                  )
-                }
-              }
-              Spacer(modifier = Modifier.height(8.dp))
-              OutlinedTextField(
-                value = inputDeepSeekKey,
-                onValueChange = { inputDeepSeekKey = it },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("sk-...", fontSize = 12.sp) },
-                singleLine = true,
-                visualTransformation = if (showDeepSeekKeyPassword) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                trailingIcon = {
-                  IconButton(onClick = { showDeepSeekKeyPassword = !showDeepSeekKeyPassword }) {
-                    Icon(if (showDeepSeekKeyPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility, contentDescription = "Toggle key", modifier = Modifier.size(18.dp))
-                  }
-                },
-                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp)
-              )
-              Spacer(modifier = Modifier.height(8.dp))
-              Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                  onClick = { viewModel.saveCustomDeepSeekKey(inputDeepSeekKey) },
-                  shape = RoundedCornerShape(8.dp),
-                  modifier = Modifier.weight(1f).height(36.dp)
-                ) {
-                  Text("Save Key", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                }
-                OutlinedButton(
-                  onClick = { viewModel.testApiConnection("DEEPSEEK", inputDeepSeekKey) },
-                  shape = RoundedCornerShape(8.dp),
-                  modifier = Modifier.weight(1f).height(36.dp)
-                ) {
-                  Text("Test DeepSeek", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                }
-                if (customDeepSeekKey.isNotBlank()) {
-                  TextButton(
-                    onClick = {
-                      inputDeepSeekKey = ""
-                      viewModel.saveCustomDeepSeekKey("")
-                    },
-                    modifier = Modifier.height(36.dp)
-                  ) {
-                    Text("Clear", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
-                  }
-                }
-              }
-            }
-          }
-
-          Spacer(modifier = Modifier.height(10.dp))
-
-          // --- 5. Anthropic Claude Key ---
-          Card(
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = PalettePaleCeladon.copy(alpha = 0.3f)),
-            border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage.copy(alpha = 0.4f)),
-            modifier = Modifier.fillMaxWidth()
-          ) {
-            Column(modifier = Modifier.padding(12.dp)) {
-              Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-              ) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                  Icon(Icons.Default.Key, contentDescription = null, tint = PaletteDeepSage, modifier = Modifier.size(18.dp))
-                  Spacer(modifier = Modifier.width(6.dp))
-                  Text("Anthropic Claude Key", fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                Surface(
-                  shape = RoundedCornerShape(6.dp),
-                  color = if (customClaudeKey.isNotBlank()) EmeraldSuccess.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant
-                ) {
-                  Text(
-                    text = if (customClaudeKey.isNotBlank()) "Configured" else "Not Set",
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (customClaudeKey.isNotBlank()) EmeraldSuccess else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                  )
-                }
-              }
-              Spacer(modifier = Modifier.height(8.dp))
-              OutlinedTextField(
-                value = inputClaudeKey,
-                onValueChange = { inputClaudeKey = it },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("sk-ant-...", fontSize = 12.sp) },
-                singleLine = true,
-                visualTransformation = if (showClaudeKeyPassword) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                trailingIcon = {
-                  IconButton(onClick = { showClaudeKeyPassword = !showClaudeKeyPassword }) {
-                    Icon(if (showClaudeKeyPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility, contentDescription = "Toggle key", modifier = Modifier.size(18.dp))
-                  }
-                },
-                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp)
-              )
-              Spacer(modifier = Modifier.height(8.dp))
-              Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                  onClick = { viewModel.saveCustomClaudeKey(inputClaudeKey) },
-                  shape = RoundedCornerShape(8.dp),
-                  modifier = Modifier.weight(1f).height(36.dp)
-                ) {
-                  Text("Save Key", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                }
-                OutlinedButton(
-                  onClick = { viewModel.testApiConnection("CLAUDE", inputClaudeKey) },
-                  shape = RoundedCornerShape(8.dp),
-                  modifier = Modifier.weight(1f).height(36.dp)
-                ) {
-                  Text("Test Claude", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                }
-                if (customClaudeKey.isNotBlank()) {
-                  TextButton(
-                    onClick = {
-                      inputClaudeKey = ""
-                      viewModel.saveCustomClaudeKey("")
-                    },
-                    modifier = Modifier.height(36.dp)
-                  ) {
-                    Text("Clear", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
-                  }
-                }
-              }
-            }
-          }
-
-          Spacer(modifier = Modifier.height(10.dp))
-
-          // --- 6. OpenRouter Key ---
-          Card(
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = PalettePaleCeladon.copy(alpha = 0.3f)),
-            border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage.copy(alpha = 0.4f)),
-            modifier = Modifier.fillMaxWidth()
-          ) {
-            Column(modifier = Modifier.padding(12.dp)) {
-              Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-              ) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                  Icon(Icons.Default.Key, contentDescription = null, tint = PaletteDeepSage, modifier = Modifier.size(18.dp))
-                  Spacer(modifier = Modifier.width(6.dp))
-                  Text("OpenRouter Key", fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                Surface(
-                  shape = RoundedCornerShape(6.dp),
-                  color = if (customOpenRouterKey.isNotBlank()) EmeraldSuccess.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant
-                ) {
-                  Text(
-                    text = if (customOpenRouterKey.isNotBlank()) "Configured" else "Not Set",
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (customOpenRouterKey.isNotBlank()) EmeraldSuccess else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                  )
-                }
-              }
-              Spacer(modifier = Modifier.height(8.dp))
-              OutlinedTextField(
-                value = inputOpenRouterKey,
-                onValueChange = { inputOpenRouterKey = it },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("sk-or-...", fontSize = 12.sp) },
-                singleLine = true,
-                visualTransformation = if (showOpenRouterKeyPassword) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                trailingIcon = {
-                  IconButton(onClick = { showOpenRouterKeyPassword = !showOpenRouterKeyPassword }) {
-                    Icon(if (showOpenRouterKeyPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility, contentDescription = "Toggle key", modifier = Modifier.size(18.dp))
-                  }
-                },
-                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp)
-              )
-              Spacer(modifier = Modifier.height(8.dp))
-              Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                  onClick = { viewModel.saveCustomOpenRouterKey(inputOpenRouterKey) },
-                  shape = RoundedCornerShape(8.dp),
-                  modifier = Modifier.weight(1f).height(36.dp)
-                ) {
-                  Text("Save Key", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                }
-                OutlinedButton(
-                  onClick = { viewModel.testApiConnection("OPENROUTER", inputOpenRouterKey) },
-                  shape = RoundedCornerShape(8.dp),
-                  modifier = Modifier.weight(1f).height(36.dp)
-                ) {
-                  Text("Test OpenRouter", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                }
-                if (customOpenRouterKey.isNotBlank()) {
-                  TextButton(
-                    onClick = {
-                      inputOpenRouterKey = ""
-                      viewModel.saveCustomOpenRouterKey("")
-                    },
-                    modifier = Modifier.height(36.dp)
-                  ) {
-                    Text("Clear", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
+                    Text("Clear", fontSize = 11.sp, color = MaterialTheme.colorScheme.error, maxLines = 1, softWrap = false)
                   }
                 }
               }
@@ -1159,15 +1019,24 @@ fun SettingsScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
           ) {
-            Text("Enrolled Subjects (${subjects.size})", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+            Text(
+              text = "Enrolled Subjects (${subjects.size})",
+              fontWeight = FontWeight.Bold,
+              style = MaterialTheme.typography.titleMedium,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis,
+              modifier = Modifier
+                .weight(1f)
+                .padding(end = 8.dp)
+            )
             Button(
               onClick = { showAddSubjectDialog = true },
               shape = RoundedCornerShape(10.dp),
-              modifier = Modifier.height(36.dp)
+              modifier = Modifier.heightIn(min = 44.dp)
             ) {
               Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
               Spacer(modifier = Modifier.width(4.dp))
-              Text("Add Subject", fontSize = 12.sp)
+              Text("Add Subject", fontSize = 12.sp, maxLines = 1, softWrap = false)
             }
           }
 
@@ -1193,6 +1062,7 @@ fun SettingsScreen(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
                   )
@@ -1207,8 +1077,8 @@ fun SettingsScreen(
                 )
               }
 
-              IconButton(onClick = { viewModel.deleteSubject(sub) }, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
+              IconButton(onClick = { viewModel.deleteSubject(sub) }, modifier = Modifier.size(48.dp)) {
+                Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
               }
             }
           }
@@ -1249,6 +1119,21 @@ fun SettingsScreen(
               .height(44.dp)
           ) {
             Text("Reload Sample University Courses & Topics", fontWeight = FontWeight.SemiBold)
+          }
+
+          Spacer(modifier = Modifier.height(10.dp))
+          OutlinedButton(
+            onClick = { showDeleteSampleDataDialog = true },
+            shape = RoundedCornerShape(10.dp),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
+            modifier = Modifier
+              .fillMaxWidth()
+              .height(44.dp)
+          ) {
+            Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("Delete All Sample Data", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
           }
         }
       }
@@ -1374,6 +1259,34 @@ fun SettingsScreen(
       },
       dismissButton = {
         TextButton(onClick = { accountToDelete = null }) {
+          Text("Cancel")
+        }
+      }
+    )
+  }
+
+  if (showDeleteSampleDataDialog) {
+    AlertDialog(
+      onDismissRequest = { showDeleteSampleDataDialog = false },
+      icon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+      title = { Text("Delete All Sample Data?", fontWeight = FontWeight.Bold) },
+      text = {
+        Text("This will permanently remove all sample subjects, timetable sessions, tasks, and topics from your profile. Once deleted, this sample data will never return automatically.")
+      },
+      confirmButton = {
+        Button(
+          onClick = {
+            viewModel.deleteAllSampleData()
+            showDeleteSampleDataDialog = false
+          },
+          colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+          shape = RoundedCornerShape(10.dp)
+        ) {
+          Text("Delete Permanently", color = MaterialTheme.colorScheme.onError, fontWeight = FontWeight.Bold)
+        }
+      },
+      dismissButton = {
+        TextButton(onClick = { showDeleteSampleDataDialog = false }) {
           Text("Cancel")
         }
       }

@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -99,6 +100,14 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+private val SESSION_DATE_FORMAT = object : ThreadLocal<SimpleDateFormat>() {
+  override fun initialValue(): SimpleDateFormat = SimpleDateFormat("MMM d, h:mm a", Locale.getDefault())
+}
+
+private val CHAT_TIME_FORMAT = object : ThreadLocal<SimpleDateFormat>() {
+  override fun initialValue(): SimpleDateFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
+}
+
 private enum class TutorTab {
   CHAT,
   HISTORY
@@ -117,9 +126,23 @@ fun AiTutorScreen(
   val isChatLoading by viewModel.isChatLoading.collectAsState()
 
   val subjects by viewModel.subjects.collectAsState()
+  val importedChats by viewModel.importedChats.collectAsState()
+  val extractedConcepts by viewModel.extractedConcepts.collectAsState()
   val selectedSubject by viewModel.selectedTutorSubject.collectAsState()
   val tutorSessions by viewModel.tutorSessions.collectAsState()
   val activeSessionId by viewModel.activeSessionId.collectAsState()
+
+  val linkedChatsCountForScope = remember(importedChats, selectedSubject) {
+    val linked = importedChats.filter { it.sourceUrl.isNotBlank() }
+    if (selectedSubject == null) {
+      linked.size
+    } else {
+      linked.count {
+        it.subjectId == selectedSubject?.id ||
+          it.subjectName.equals(selectedSubject?.name, ignoreCase = true)
+      }
+    }
+  }
 
   var selectedTab by remember { mutableStateOf(TutorTab.CHAT) }
   var isHeaderExpanded by remember { mutableStateOf(true) }
@@ -291,10 +314,13 @@ fun AiTutorScreen(
 
           items(subjects, key = { it.id }) { subject ->
             val isSelected = selectedSubject?.id == subject.id
-            val subjectColor = try {
-              Color(android.graphics.Color.parseColor(subject.colorHex))
-            } catch (e: Exception) {
-              MaterialTheme.colorScheme.primary
+            val primaryColor = MaterialTheme.colorScheme.primary
+            val subjectColor = remember(subject.colorHex, primaryColor) {
+              try {
+                Color(android.graphics.Color.parseColor(subject.colorHex))
+              } catch (e: Exception) {
+                primaryColor
+              }
             }
 
             FilterChip(
@@ -334,6 +360,9 @@ fun AiTutorScreen(
         viewModel = viewModel,
         messages = messages,
         selectedSubject = selectedSubject,
+        importedChats = importedChats,
+        extractedConcepts = extractedConcepts,
+        linkedChatsCount = linkedChatsCountForScope,
         selectedModel = selectedModel,
         useGoogleSearch = useGoogleSearch,
         isChatLoading = isChatLoading,
@@ -380,9 +409,10 @@ fun AiTutorScreen(
           )
 
           // Persona Presets
-          Row(
+          FlowRow(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
           ) {
             val profText = "You are StudyPilot Academic Tutor, an expert professor explaining university topics clearly, breaking down proofs and derivations into digestible steps."
             val resText = "You are an Elite Academic Research Guide specializing in STEM literature, citing recent arXiv and IEEE papers with precision."
@@ -399,10 +429,8 @@ fun AiTutorScreen(
                 containerColor = if (isProf) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
                 contentColor = if (isProf) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
               ),
-              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 6.dp),
-              modifier = Modifier
-                .weight(1f)
-                .height(42.dp)
+              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+              modifier = Modifier.heightIn(min = 44.dp)
             ) {
               Text("Professor", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
             }
@@ -414,10 +442,8 @@ fun AiTutorScreen(
                 containerColor = if (isRes) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
                 contentColor = if (isRes) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
               ),
-              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 6.dp),
-              modifier = Modifier
-                .weight(1f)
-                .height(42.dp)
+              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+              modifier = Modifier.heightIn(min = 44.dp)
             ) {
               Text("Researcher", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
             }
@@ -429,10 +455,8 @@ fun AiTutorScreen(
                 containerColor = if (isCoder) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
                 contentColor = if (isCoder) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
               ),
-              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 6.dp),
-              modifier = Modifier
-                .weight(1f)
-                .height(42.dp)
+              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+              modifier = Modifier.heightIn(min = 44.dp)
             ) {
               Text("Coder", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
             }
@@ -498,6 +522,9 @@ private fun ChatTabContent(
   viewModel: StudyPilotViewModel,
   messages: List<ChatMessage>,
   selectedSubject: Subject?,
+  importedChats: List<com.example.data.model.ImportedChat>,
+  extractedConcepts: List<com.example.data.model.ExtractedConcept>,
+  linkedChatsCount: Int,
   selectedModel: TutorModel,
   useGoogleSearch: Boolean,
   isChatLoading: Boolean,
@@ -513,10 +540,13 @@ private fun ChatTabContent(
   Column(modifier = Modifier.fillMaxSize()) {
     // Subject Active Banner (if a subject is selected)
     if (selectedSubject != null) {
-      val subColor = try {
-        Color(android.graphics.Color.parseColor(selectedSubject.colorHex))
-      } catch (e: Exception) {
-        MaterialTheme.colorScheme.primary
+      val primaryColor = MaterialTheme.colorScheme.primary
+      val subColor = remember(selectedSubject.colorHex, primaryColor) {
+        try {
+          Color(android.graphics.Color.parseColor(selectedSubject.colorHex))
+        } catch (e: Exception) {
+          primaryColor
+        }
       }
 
       Surface(
@@ -530,7 +560,12 @@ private fun ChatTabContent(
           horizontalArrangement = Arrangement.SpaceBetween,
           verticalAlignment = Alignment.CenterVertically
         ) {
-          Row(verticalAlignment = Alignment.CenterVertically) {
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+              .weight(1f)
+              .padding(end = 8.dp)
+          ) {
             Icon(
               imageVector = Icons.Default.School,
               contentDescription = null,
@@ -538,24 +573,32 @@ private fun ChatTabContent(
               modifier = Modifier.size(16.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
               Text(
                 text = "${selectedSubject.code}: ${selectedSubject.name}",
                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
               )
               Text(
-                text = "Tutor prompts & answers focused on this syllabus",
+                text = if (linkedChatsCount > 0)
+                  "Searching $linkedChatsCount linked chat(s) first • Gemini / Local AI fallback"
+                else
+                  "No linked chats in subject yet • Gemini & Local AI active",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
               )
             }
           }
 
           TextButton(
-            onClick = { viewModel.selectTutorSubject(null) }
+            onClick = { viewModel.selectTutorSubject(null) },
+            modifier = Modifier.heightIn(min = 44.dp)
           ) {
-            Text("Reset", fontSize = 11.sp, color = subColor)
+            Text("Reset", fontSize = 11.sp, color = subColor, maxLines = 1, softWrap = false)
           }
         }
       }
@@ -572,35 +615,31 @@ private fun ChatTabContent(
         Row(
           modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 5.dp),
+            .padding(horizontal = 16.dp, vertical = 8.dp),
           horizontalArrangement = Arrangement.SpaceBetween,
           verticalAlignment = Alignment.CenterVertically
         ) {
-          Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier
+              .weight(1f)
+              .padding(end = 8.dp)
+          ) {
             Text(
-              text = "⚡ ${selectedModel.displayName}",
+              text = "⚡ ${selectedModel.displayName}" +
+                (if (useGoogleSearch) " • Web" else "") +
+                (if (selectedSubject != null) " • ${selectedSubject.code}" else "") +
+                " • $linkedChatsCount linked",
               fontSize = 11.sp,
               fontWeight = FontWeight.Bold,
-              color = MaterialTheme.colorScheme.primary
+              color = MaterialTheme.colorScheme.primary,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis
             )
-            if (useGoogleSearch) {
-              Text(
-                text = "• 🌐 Web Search On",
-                fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-              )
-            }
-            if (selectedSubject != null) {
-              Text(
-                text = "• ${selectedSubject.code}",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-              )
-            }
           }
           Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Show controls", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
+            Text("Show controls", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary, maxLines = 1, softWrap = false)
             Icon(Icons.Default.ExpandMore, contentDescription = "Expand", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
           }
         }
@@ -615,15 +654,14 @@ private fun ChatTabContent(
       ) {
       Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
         // Model Selection Chips
-        Row(
+        LazyRow(
           modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.spacedBy(8.dp),
+          horizontalArrangement = Arrangement.spacedBy(6.dp),
           verticalAlignment = Alignment.CenterVertically
         ) {
-          TutorModel.values().forEach { model ->
+          items(TutorModel.values()) { model ->
             val isSelected = selectedModel == model
             FilterChip(
-              modifier = Modifier.weight(1f),
               selected = isSelected,
               onClick = {
                 viewModel.selectTutorModel(model)
@@ -632,18 +670,49 @@ private fun ChatTabContent(
                 }
               },
               label = {
-                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                  Text(
-                    text = model.iconBadge,
-                    fontSize = 11.sp,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                  )
-                }
+                Text(
+                  text = model.iconBadge,
+                  fontSize = 11.sp,
+                  fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                )
               },
               colors = FilterChipDefaults.filterChipColors(
                 selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
                 selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
               )
+            )
+          }
+        }
+
+        // Guaranteed Answer Status Indicator
+        Row(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.weight(1f)
+          ) {
+            Icon(
+              imageVector = Icons.Default.Check,
+              contentDescription = null,
+              tint = EmeraldSuccess,
+              modifier = Modifier.size(12.dp)
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+              text = if (linkedChatsCount > 0)
+                "Searching $linkedChatsCount linked chat(s) first • Gemini & Local AI fallback"
+              else
+                "Gemini AI & Local AI Active (Add chat links for memory retrieval)",
+              fontSize = 11.sp,
+              fontWeight = FontWeight.SemiBold,
+              color = EmeraldSuccess,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis
             )
           }
         }
@@ -660,7 +729,12 @@ private fun ChatTabContent(
           horizontalArrangement = Arrangement.SpaceBetween,
           verticalAlignment = Alignment.CenterVertically
         ) {
-          Row(verticalAlignment = Alignment.CenterVertically) {
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+              .weight(1f)
+              .padding(end = 8.dp)
+          ) {
             Icon(
               imageVector = Icons.Default.Public,
               contentDescription = null,
@@ -668,16 +742,20 @@ private fun ChatTabContent(
               modifier = Modifier.size(16.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
               Text(
                 text = "Google Search Grounding",
                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                color = if (useGoogleSearch) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                color = if (useGoogleSearch) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
               )
               Text(
-                text = if (useGoogleSearch) "Live web search active (gemini-2.5-flash)" else "Tap to fetch live web citations",
+                text = if (useGoogleSearch) "Live web search active (Gemini)" else "Tap to fetch live web citations",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
               )
             }
           }
@@ -695,31 +773,51 @@ private fun ChatTabContent(
     }
   }
 
-    // Contextual Subject Quick Prompts (Collapsible)
-    val subjectPrompts = getPromptsForSubject(selectedSubject)
-    AnimatedVisibility(visible = isHeaderExpanded && subjectPrompts.isNotEmpty()) {
+    // Contextual Quick Prompts: prioritized from provided chat links first!
+    val linkPromptChips = remember(importedChats, extractedConcepts, selectedSubject) {
+      com.example.data.ai.ChatHistoryAssistant.buildQuickPromptsFromLinkedChats(
+        importedChats = importedChats,
+        extractedConcepts = extractedConcepts,
+        selectedSubject = selectedSubject
+      )
+    }
+    val subjectPrompts = remember(selectedSubject) {
+      getPromptsForSubject(selectedSubject)
+    }
+    AnimatedVisibility(visible = isHeaderExpanded && (linkPromptChips.isNotEmpty() || subjectPrompts.isNotEmpty())) {
       LazyRow(
-      modifier = Modifier
-        .fillMaxWidth()
-        .padding(horizontal = 16.dp, vertical = 4.dp),
-      horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-      items(subjectPrompts) { prompt ->
-        PromptChip(
-          text = prompt.first,
-          onClick = {
-            if (prompt.third) {
-              viewModel.toggleGoogleSearch(true)
-            }
-            if (prompt.second != null) {
-              viewModel.selectTutorModel(prompt.second)
-            }
-            viewModel.sendChatMessage(prompt.fourth)
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 16.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+      ) {
+        if (linkPromptChips.isNotEmpty()) {
+          items(linkPromptChips, key = { "${it.label}|${it.sourceUrl}|${it.prompt}" }) { linkChip ->
+            PromptChip(
+              text = linkChip.label,
+              onClick = {
+                viewModel.sendChatMessage(linkChip.prompt)
+              }
+            )
           }
-        )
+        } else {
+          items(subjectPrompts, key = { it.first }) { prompt ->
+            PromptChip(
+              text = prompt.first,
+              onClick = {
+                if (prompt.third) {
+                  viewModel.toggleGoogleSearch(true)
+                }
+                if (prompt.second != null) {
+                  viewModel.selectTutorModel(prompt.second)
+                }
+                viewModel.sendChatMessage(prompt.fourth)
+              }
+            )
+          }
+        }
       }
     }
-  }
 
     // Scrollable Chat Thread
     LazyColumn(
@@ -733,6 +831,9 @@ private fun ChatTabContent(
       items(messages, key = { it.id }) { msg ->
         ChatMessageBubble(
           message = msg,
+          importedChats = importedChats,
+          extractedConcepts = extractedConcepts,
+          selectedSubject = selectedSubject,
           onCopy = {
             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             clipboard.setPrimaryClip(ClipData.newPlainText("Tutor Message", msg.text))
@@ -745,6 +846,9 @@ private fun ChatTabContent(
             } catch (e: Exception) {
               Toast.makeText(context, "Could not open URL: $url", Toast.LENGTH_SHORT).show()
             }
+          },
+          onTopicClick = { topic ->
+            viewModel.sendChatMessage(topic)
           }
         )
       }
@@ -785,50 +889,52 @@ private fun ChatTabContent(
       shadowElevation = 8.dp,
       modifier = Modifier.fillMaxWidth()
     ) {
-      Row(
-        modifier = Modifier
-          .fillMaxWidth()
-          .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-      ) {
-        OutlinedTextField(
-          value = inputText,
-          onValueChange = onInputTextChange,
-          placeholder = {
-            Text(
-              text = if (selectedSubject != null) "Ask a concept in ${selectedSubject.code}..." else "Ask a concept, proof, or question...",
-              fontSize = 13.sp
-            )
-          },
-          modifier = Modifier.weight(1f),
-          shape = RoundedCornerShape(24.dp),
-          colors = OutlinedTextFieldDefaults.colors(
-            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
-          ),
-          maxLines = 3
-        )
-
-        Spacer(modifier = Modifier.width(8.dp))
-
-        IconButton(
-          onClick = {
-            if (inputText.isNotBlank() && !isChatLoading) {
-              viewModel.sendChatMessage(inputText)
-              onInputTextChange("")
-            }
-          },
-          enabled = inputText.isNotBlank() && !isChatLoading,
+      Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
           modifier = Modifier
-            .size(44.dp)
-            .clip(CircleShape)
-            .background(if (inputText.isNotBlank() && !isChatLoading) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+          verticalAlignment = Alignment.CenterVertically
         ) {
-          Icon(
-            imageVector = Icons.AutoMirrored.Filled.Send,
-            contentDescription = "Send",
-            tint = if (inputText.isNotBlank() && !isChatLoading) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-            modifier = Modifier.size(20.dp)
+          OutlinedTextField(
+            value = inputText,
+            onValueChange = onInputTextChange,
+            placeholder = {
+              Text(
+                text = if (selectedSubject != null) "Ask a concept in ${selectedSubject.code}..." else "Ask any academic concept...",
+                fontSize = 13.sp
+              )
+            },
+            modifier = Modifier.weight(1f),
+            shape = RoundedCornerShape(24.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+              unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+            ),
+            maxLines = 3
           )
+
+          Spacer(modifier = Modifier.width(8.dp))
+
+          IconButton(
+            onClick = {
+              if (inputText.isNotBlank() && !isChatLoading) {
+                viewModel.sendChatMessage(inputText)
+                onInputTextChange("")
+              }
+            },
+            enabled = inputText.isNotBlank() && !isChatLoading,
+            modifier = Modifier
+              .size(44.dp)
+              .clip(CircleShape)
+              .background(if (inputText.isNotBlank() && !isChatLoading) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
+          ) {
+            Icon(
+              imageVector = Icons.AutoMirrored.Filled.Send,
+              contentDescription = "Send",
+              tint = if (inputText.isNotBlank() && !isChatLoading) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+              modifier = Modifier.size(20.dp)
+            )
+          }
         }
       }
     }
@@ -848,13 +954,15 @@ private fun HistoryTabContent(
   val context = LocalContext.current
   var searchQuery by remember { mutableStateOf("") }
 
-  val filteredSessions = tutorSessions.filter { session ->
-    val matchesSubject = selectedSubject == null || session.subjectId == selectedSubject.id
-    val matchesSearch = searchQuery.isBlank() ||
-      session.title.contains(searchQuery, ignoreCase = true) ||
-      session.previewSnippet.contains(searchQuery, ignoreCase = true) ||
-      session.subjectName.contains(searchQuery, ignoreCase = true)
-    matchesSubject && matchesSearch
+  val filteredSessions = remember(tutorSessions, selectedSubject, searchQuery) {
+    tutorSessions.filter { session ->
+      val matchesSubject = selectedSubject == null || session.subjectId == selectedSubject.id
+      val matchesSearch = searchQuery.isBlank() ||
+        session.title.contains(searchQuery, ignoreCase = true) ||
+        session.previewSnippet.contains(searchQuery, ignoreCase = true) ||
+        session.subjectName.contains(searchQuery, ignoreCase = true)
+      matchesSubject && matchesSearch
+    }
   }
 
   Column(
@@ -896,12 +1004,17 @@ private fun HistoryTabContent(
       Text(
         text = if (selectedSubject != null) "Sessions for ${selectedSubject.name} (${filteredSessions.size})" else "All Past Tutoring Sessions (${filteredSessions.size})",
         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-        color = MaterialTheme.colorScheme.onBackground
+        color = MaterialTheme.colorScheme.onBackground,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier
+          .weight(1f)
+          .padding(end = 8.dp)
       )
 
       if (tutorSessions.isNotEmpty()) {
-        TextButton(onClick = onClearAllHistory) {
-          Text("Clear All", fontSize = 12.sp, color = RoseError)
+        TextButton(onClick = onClearAllHistory, modifier = Modifier.heightIn(min = 44.dp)) {
+          Text("Clear All", fontSize = 12.sp, color = RoseError, maxLines = 1, softWrap = false)
         }
       }
     }
@@ -992,8 +1105,9 @@ private fun TutorSessionHistoryCard(
   onCopy: () -> Unit,
   onDelete: () -> Unit
 ) {
-  val dateFormat = SimpleDateFormat("MMM d, h:mm a", Locale.getDefault())
-  val dateStr = dateFormat.format(Date(session.lastUpdatedAt))
+  val dateStr = remember(session.lastUpdatedAt) {
+    SESSION_DATE_FORMAT.get()?.format(Date(session.lastUpdatedAt)).orEmpty()
+  }
 
   val cleanSnippet = remember(session.previewSnippet) {
     session.previewSnippet
@@ -1092,32 +1206,37 @@ private fun TutorSessionHistoryCard(
       ) {
         Surface(
           shape = RoundedCornerShape(6.dp),
-          color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+          color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+          modifier = Modifier
+            .weight(1f, fill = false)
+            .padding(end = 8.dp)
         ) {
           Text(
             text = "${session.modelUsed} • ${session.messageCount} turns",
             fontSize = 11.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
           )
         }
 
         Row(verticalAlignment = Alignment.CenterVertically) {
-          IconButton(onClick = onCopy, modifier = Modifier.size(32.dp)) {
+          IconButton(onClick = onCopy, modifier = Modifier.size(44.dp)) {
             Icon(
               imageVector = Icons.Default.ContentCopy,
               contentDescription = "Copy Snippet",
               tint = MaterialTheme.colorScheme.onSurfaceVariant,
-              modifier = Modifier.size(15.dp)
+              modifier = Modifier.size(16.dp)
             )
           }
 
-          IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
+          IconButton(onClick = onDelete, modifier = Modifier.size(44.dp)) {
             Icon(
               imageVector = Icons.Default.Delete,
               contentDescription = "Delete Session",
               tint = MaterialTheme.colorScheme.error,
-              modifier = Modifier.size(15.dp)
+              modifier = Modifier.size(16.dp)
             )
           }
 
@@ -1126,10 +1245,10 @@ private fun TutorSessionHistoryCard(
           Button(
             onClick = onClick,
             shape = RoundedCornerShape(8.dp),
-            modifier = Modifier.height(30.dp),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 0.dp)
+            modifier = Modifier.heightIn(min = 40.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 0.dp)
           ) {
-            Text("Open Chat", fontSize = 11.sp)
+            Text("Open Chat", fontSize = 11.sp, maxLines = 1, softWrap = false)
           }
         }
       }
@@ -1141,12 +1260,17 @@ private fun TutorSessionHistoryCard(
 @Composable
 private fun ChatMessageBubble(
   message: ChatMessage,
+  importedChats: List<com.example.data.model.ImportedChat>,
+  extractedConcepts: List<com.example.data.model.ExtractedConcept>,
+  selectedSubject: Subject?,
   onCopy: () -> Unit,
-  onOpenUrl: (String) -> Unit
+  onOpenUrl: (String) -> Unit,
+  onTopicClick: (String) -> Unit
 ) {
   val isUser = message.role == "user"
-  val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
-  val timeStr = timeFormat.format(Date(message.timestamp))
+  val timeStr = remember(message.timestamp) {
+    CHAT_TIME_FORMAT.get()?.format(Date(message.timestamp)).orEmpty()
+  }
 
   Row(
     modifier = Modifier.fillMaxWidth(),
@@ -1169,26 +1293,49 @@ private fun ChatMessageBubble(
       modifier = if (isUser) Modifier.widthIn(max = 280.dp) else Modifier.fillMaxWidth().weight(1f),
       horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
     ) {
-      // Model & Source Badge
+      // Model & Source Badge (Linked Chat History, Gemini, or Local AI)
       if (!isUser) {
-        Row(
-          verticalAlignment = Alignment.CenterVertically,
-          modifier = Modifier.padding(bottom = 4.dp)
+        val cleanModelName = remember(message.modelName) {
+          when {
+            message.modelName.contains("Linked Chat", ignoreCase = true) -> "Linked Chat History"
+            message.modelName.contains("Local Llama", ignoreCase = true) -> "Local Llama"
+            message.modelName.contains("Knowledge Engine", ignoreCase = true) -> "Local Academic AI"
+            message.modelName.contains("Local Academic", ignoreCase = true) -> "Local Academic AI"
+            message.modelName.contains("Symbolic", ignoreCase = true) -> "Local Math Solver"
+            message.modelName.contains("Algorithmic", ignoreCase = true) -> "Local Code Engine"
+            message.modelName.contains("gemini-3.8-flash", ignoreCase = true) -> "Gemini 3.8 Flash"
+            message.modelName.contains("gemini-3.1-pro", ignoreCase = true) -> "Gemini 3.1 Pro"
+            message.modelName.contains("gemini-3.1-flash-lite", ignoreCase = true) -> "Gemini Flash-Lite"
+            message.modelName.contains("gemini", ignoreCase = true) -> "Gemini AI"
+            else -> message.modelName.take(28)
+          }
+        }
+
+        FlowRow(
+          horizontalArrangement = Arrangement.spacedBy(6.dp),
+          verticalArrangement = Arrangement.spacedBy(4.dp),
+          modifier = Modifier.padding(bottom = 6.dp)
         ) {
           Surface(
             shape = RoundedCornerShape(6.dp),
             color = MaterialTheme.colorScheme.surfaceVariant
           ) {
             Text(
-              text = message.modelName,
+              text = cleanModelName,
               style = MaterialTheme.typography.labelSmall,
               color = MaterialTheme.colorScheme.onSurfaceVariant,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis,
               modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
             )
           }
 
-          if (message.searchGroundingUsed || message.groundingSources.isNotEmpty()) {
-            Spacer(modifier = Modifier.width(4.dp))
+          if ((message.searchGroundingUsed || message.groundingSources.isNotEmpty()) &&
+            !cleanModelName.contains("Academic") &&
+            !cleanModelName.contains("Local") &&
+            !cleanModelName.contains("Solver") &&
+            !cleanModelName.contains("Engine")
+          ) {
             Surface(
               shape = RoundedCornerShape(6.dp),
               color = CyanAccent.copy(alpha = 0.15f)
@@ -1199,7 +1346,13 @@ private fun ChatMessageBubble(
               ) {
                 Icon(Icons.Default.Public, contentDescription = null, tint = CyanAccent, modifier = Modifier.size(10.dp))
                 Spacer(modifier = Modifier.width(3.dp))
-                Text("Google Search", style = MaterialTheme.typography.labelSmall, color = CyanAccent)
+                Text(
+                  text = "Google Search",
+                  style = MaterialTheme.typography.labelSmall,
+                  color = CyanAccent,
+                  maxLines = 1,
+                  softWrap = false
+                )
               }
             }
           }
@@ -1219,10 +1372,50 @@ private fun ChatMessageBubble(
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = if (isUser) 0.dp else 2.dp)
       ) {
+        val linkScopedTopics = remember(message.text, message.groundingSources, importedChats, extractedConcepts, selectedSubject) {
+          if (isUser) {
+            emptyList()
+          } else {
+            com.example.data.ai.ChatHistoryAssistant.getMiniTopicsForLinkedScope(
+              queryOrText = message.text,
+              groundingUrls = message.groundingSources.map { it.url },
+              importedChats = importedChats,
+              extractedConcepts = extractedConcepts,
+              selectedSubject = selectedSubject
+            )
+          }
+        }
+        val (displayContent, dynamicTopics) = remember(
+          message.text,
+          message.modelName,
+          message.relatedTopics,
+          linkScopedTopics
+        ) {
+          if (isUser) {
+            Pair(message.text, emptyList())
+          } else {
+            val (cleaned, extracted) = com.example.data.ai.AcademicPedagogySynthesizer.extractAndCleanRelatedTopics(
+              rawContent = message.text,
+              fallbackQuery = message.text
+            )
+            val topics = when {
+              linkScopedTopics.isNotEmpty() -> {
+                if (message.modelName.startsWith("Linked Chat", ignoreCase = true) && message.relatedTopics.isNotEmpty()) {
+                  message.relatedTopics
+                } else {
+                  linkScopedTopics
+                }
+              }
+              else -> message.relatedTopics.ifEmpty { extracted }
+            }
+            Pair(cleaned, topics)
+          }
+        }
+
         Column(modifier = Modifier.padding(14.dp)) {
           // Render rich formatted response (Code blocks, headings, lists, callouts)
           FormattedTutorResponse(
-            content = message.text,
+            content = displayContent,
             isUser = isUser
           )
 
@@ -1269,6 +1462,178 @@ private fun ChatMessageBubble(
                         Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(10.dp))
                       }
                     }
+                  }
+                }
+              }
+            }
+          }
+
+          // 1. Quick Action Follow-Up Buttons ("Another Example", "Example in Code", "Summarize", "Explain Example")
+          if (!isUser) {
+            Spacer(modifier = Modifier.height(12.dp))
+
+            val linkedChatTitle = remember(message.groundingSources, importedChats) {
+              val urls = message.groundingSources.map { it.url.trim() }.filter { it.isNotBlank() }
+              importedChats.firstOrNull { chat ->
+                chat.sourceUrl.isNotBlank() && urls.any { it.equals(chat.sourceUrl.trim(), ignoreCase = true) }
+              }?.title
+            }
+            val detectedTopic = remember(message.text, linkedChatTitle, linkScopedTopics) {
+              linkedChatTitle?.takeIf { it.isNotBlank() }
+                ?: com.example.data.ai.LocalAiEngine.extractTopicFromMessage(message.text)
+                ?: linkScopedTopics.firstOrNull()
+            }
+
+            FlowRow(
+              horizontalArrangement = Arrangement.spacedBy(6.dp),
+              verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+              // Action 1: Another Example
+              Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
+                modifier = Modifier.clickable {
+                  val query = if (detectedTopic != null) "Give another example of $detectedTopic. Answer only with the alternative example and its walkthrough."
+                              else "Give another example. Answer only with the new example and walkthrough."
+                  onTopicClick(query)
+                }
+              ) {
+                Row(
+                  modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                  verticalAlignment = Alignment.CenterVertically
+                ) {
+                  Text(
+                    text = "💡 Another Example",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                  )
+                }
+              }
+
+              // Action 2: Example in Code
+              Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
+                modifier = Modifier.clickable {
+                  val query = if (detectedTopic != null) "Show an example in code for $detectedTopic. Answer only with the code implementation and explanation."
+                              else "Show an example in code. Answer only with the code and explanation."
+                  onTopicClick(query)
+                }
+              ) {
+                Row(
+                  modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                  verticalAlignment = Alignment.CenterVertically
+                ) {
+                  Text(
+                    text = "💻 Example in Code",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                  )
+                }
+              }
+
+              // Action 2b: Another Example in Code
+              Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
+                modifier = Modifier.clickable {
+                  val query = if (detectedTopic != null) "Show another example in code for $detectedTopic. Answer only with the alternative code implementation and explanation."
+                              else "Show another example in code. Answer only with the alternative code and explanation."
+                  onTopicClick(query)
+                }
+              ) {
+                Row(
+                  modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                  verticalAlignment = Alignment.CenterVertically
+                ) {
+                  Text(
+                    text = "⚡ Another Example in Code",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                  )
+                }
+              }
+
+              // Action 3: Summarize
+              Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
+                modifier = Modifier.clickable {
+                  val query = if (detectedTopic != null) "Summarize $detectedTopic. Answer only with a concise summary and key takeaways."
+                              else "Summarize this. Answer only with a concise summary."
+                  onTopicClick(query)
+                }
+              ) {
+                Row(
+                  modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                  verticalAlignment = Alignment.CenterVertically
+                ) {
+                  Text(
+                    text = "📌 Summarize",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                  )
+                }
+              }
+
+              // Action 4: Explain Example
+              Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
+                modifier = Modifier.clickable {
+                  val query = if (detectedTopic != null) "Explain the example of $detectedTopic. Answer only with a step-by-step walkthrough of the example."
+                              else "Explain the example. Answer only with a step-by-step walkthrough."
+                  onTopicClick(query)
+                }
+              ) {
+                Row(
+                  modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                  verticalAlignment = Alignment.CenterVertically
+                ) {
+                  Text(
+                    text = "🔍 Explain Example",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                  )
+                }
+              }
+            }
+          }
+
+          // 2. Related Domain-Specific Subtopic Buttons Section (Only Buttons, Domain-Specific)
+          if (!isUser && dynamicTopics.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            FlowRow(
+              horizontalArrangement = Arrangement.spacedBy(6.dp),
+              verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+              dynamicTopics.forEach { topic ->
+                Surface(
+                  shape = RoundedCornerShape(16.dp),
+                  color = MaterialTheme.colorScheme.primaryContainer,
+                  modifier = Modifier.clickable { onTopicClick(topic) }
+                ) {
+                  Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                  ) {
+                    Icon(
+                      imageVector = Icons.Default.AutoAwesome,
+                      contentDescription = null,
+                      tint = MaterialTheme.colorScheme.primary,
+                      modifier = Modifier.size(12.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                      text = topic,
+                      style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                      color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
                   }
                 }
               }
@@ -1329,10 +1694,11 @@ private fun PromptChip(
 private fun getPromptsForSubject(subject: Subject?): List<PromptOption> {
   if (subject == null) {
     return listOf(
-      PromptOption("🔍 AVL trees research", TutorModel.FLASH, true, "What are the latest research advancements and real-world variants of AVL and self-balancing trees? Include citations."),
-      PromptOption("🧠 Prove Matrix Diagonalization", TutorModel.PRO, false, "Provide a rigorous step-by-step mathematical proof of the condition for matrix diagonalizability with eigenvalues."),
-      PromptOption("⚡ Spaced repetition protocol", TutorModel.FLASH_LITE, false, "Give me a concise 3-bullet breakdown of the optimal 1-3-7-14 day spaced repetition protocol for semester exams."),
-      PromptOption("💻 Code review: AVL rotation", TutorModel.PRO, false, "Show a production-quality Kotlin implementation of Left and Right AVL rotations with edge-case handling.")
+      PromptOption("💻 Java Objects & Memory", TutorModel.LOCAL_AI, false, "Explain Java Objects, reference semantics, and heap/stack memory architecture with code examples."),
+      PromptOption("⚛️ Quantum Physics & Superposition", TutorModel.LOCAL_AI, false, "Explain Quantum Superposition, wave-particle duality, and mathematical formulation."),
+      PromptOption("✈️ Aerodynamics: How Planes Fly", TutorModel.LOCAL_AI, false, "Explain how airplanes fly with Bernoulli's principle, angle of attack, and lift mechanics."),
+      PromptOption("🔬 Bayesian Inference & MCMC", TutorModel.LOCAL_AI, false, "Explain Bayes' Theorem, prior/posterior distributions, and Markov Chain Monte Carlo sampling."),
+      PromptOption("📈 Inflation & Monetary Policy", TutorModel.LOCAL_AI, false, "Explain inflation, currency supply, interest rates, and central bank monetary policy mechanisms.")
     )
   }
 
@@ -1376,3 +1742,28 @@ private data class PromptOption(
   val third: Boolean,
   val fourth: String
 )
+
+private fun extractRelatedTopics(content: String): List<String> {
+  val lines = content.lines()
+  val topics = mutableListOf<String>()
+  var capturing = false
+  for (line in lines) {
+    val trimmed = line.trim()
+    if (trimmed.contains("Connecting") || trimmed.contains("Related Topics") || trimmed.contains("Next Topics")) {
+      capturing = true
+      continue
+    }
+    if (capturing) {
+      if (trimmed.startsWith("###") || trimmed.startsWith("##") || trimmed.startsWith("#") || trimmed.startsWith("🔗 **Source")) {
+        break
+      }
+      if (trimmed.startsWith("-") || trimmed.startsWith("*") || trimmed.startsWith("•")) {
+        val cleanTopic = trimmed.replace(Regex("^[-*•#]+\\s*"), "").replace("**", "").trim()
+        if (cleanTopic.isNotBlank()) {
+          topics.add(cleanTopic)
+        }
+      }
+    }
+  }
+  return topics.distinct().take(6)
+}

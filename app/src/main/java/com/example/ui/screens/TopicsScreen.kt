@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -66,6 +67,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.StudyTopic
@@ -290,21 +292,25 @@ fun TopicCard(
         ) {
           Surface(
             shape = RoundedCornerShape(6.dp),
-            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
+            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
+            modifier = Modifier
+              .weight(1f, fill = false)
+              .padding(end = 6.dp)
           ) {
             Text(
               text = topic.subjectName,
               style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
               color = MaterialTheme.colorScheme.onPrimaryContainer,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis,
               modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
             )
           }
 
           Row(verticalAlignment = Alignment.CenterVertically) {
             MasteryBadge(level = topic.masteryLevel)
-            Spacer(modifier = Modifier.width(4.dp))
-            IconButton(onClick = onDelete, modifier = Modifier.size(28.dp)) {
-              Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
+            IconButton(onClick = onDelete, modifier = Modifier.size(44.dp)) {
+              Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
             }
           }
         }
@@ -332,12 +338,19 @@ fun TopicCard(
           Text(
             text = "Studied: ${topic.dateStudied} • Interval: ${topic.repetitionIntervalDays}d",
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+              .weight(1f)
+              .padding(end = 8.dp)
           )
           Text(
             text = "Next: ${topic.nextRevisionDate}",
             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-            color = MaterialTheme.colorScheme.primary
+            color = MaterialTheme.colorScheme.primary,
+            maxLines = 1,
+            softWrap = false
           )
         }
       }
@@ -643,16 +656,18 @@ fun TopicDetailDialog(
               OutlinedButton(
                 onClick = { onUpdateMastery("MASTERED") },
                 shape = RoundedCornerShape(8.dp),
-                modifier = Modifier.weight(1f)
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                modifier = Modifier.weight(1f).heightIn(min = 44.dp)
               ) {
-                Text("Understood", fontSize = 11.sp, color = EmeraldSuccess)
+                Text("Understood", fontSize = 11.sp, color = EmeraldSuccess, maxLines = 1, softWrap = false)
               }
               OutlinedButton(
                 onClick = { onUpdateMastery("STRUGGLING") },
                 shape = RoundedCornerShape(8.dp),
-                modifier = Modifier.weight(1f)
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                modifier = Modifier.weight(1f).heightIn(min = 44.dp)
               ) {
-                Text("Needs Review", fontSize = 11.sp, color = RoseError)
+                Text("Needs Review", fontSize = 11.sp, color = RoseError, maxLines = 1, softWrap = false)
               }
             }
           }

@@ -6,6 +6,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -21,6 +23,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Assignment
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Book
@@ -45,8 +48,19 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Surface
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.AlarmOff
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -66,6 +80,9 @@ import android.content.Intent
 import com.example.ui.components.ActiveAlarmAlertDialog
 import com.example.ui.screens.LoginScreen
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -78,6 +95,7 @@ import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.TasksScreen
 import com.example.ui.screens.TimetableScreen
 import com.example.ui.screens.TopicsScreen
+import com.example.ui.screens.AiChatImportScreen
 import com.example.ui.theme.AmberAccent
 import com.example.ui.theme.StudyPilotTheme
 import com.example.ui.viewmodel.Screen
@@ -153,8 +171,8 @@ fun StudyPilotApp(viewModel: StudyPilotViewModel) {
     }
   }
 
-  // Handle system back navigation to return to Dashboard if on a subscreen
-  BackHandler(enabled = currentScreen != Screen.Dashboard && currentScreen != Screen.ActiveQuiz && currentScreen != Screen.Login) {
+  // Handle system back navigation to return to Dashboard if on a subscreen or Login
+  BackHandler(enabled = currentScreen != Screen.Dashboard && currentScreen != Screen.ActiveQuiz) {
     viewModel.navigateTo(Screen.Dashboard)
   }
 
@@ -169,7 +187,8 @@ fun StudyPilotApp(viewModel: StudyPilotViewModel) {
 
   val isSubScreen = currentScreen == Screen.AiTutor ||
     currentScreen == Screen.Tasks ||
-    currentScreen == Screen.Settings
+    currentScreen == Screen.Settings ||
+    currentScreen == Screen.AiChatImport
 
   val screenTitle = when (currentScreen) {
     Screen.Login -> "Authentication"
@@ -182,6 +201,7 @@ fun StudyPilotApp(viewModel: StudyPilotViewModel) {
     Screen.Tasks -> "Tasks & Deadlines"
     Screen.Settings -> "Settings & Courses"
     Screen.ActiveQuiz -> "Interactive Quiz"
+    Screen.AiChatImport -> "AI Chat Import & Memory"
   }
 
   BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
@@ -198,14 +218,19 @@ fun StudyPilotApp(viewModel: StudyPilotViewModel) {
               horizontalAlignment = Alignment.CenterHorizontally,
               modifier = Modifier.padding(top = 16.dp, bottom = 12.dp)
             ) {
-              Box(
+              Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = Color(0xFF17253B),
                 modifier = Modifier
-                  .size(40.dp)
-                  .clip(CircleShape)
-                  .background(com.example.ui.theme.PaletteDeepSage),
-                contentAlignment = Alignment.Center
+                  .size(42.dp)
+                  .testTag("nav_rail_logo")
               ) {
-                Text("SP", fontWeight = FontWeight.ExtraBold, color = com.example.ui.theme.PaletteCreamIvory, fontSize = 14.sp)
+                Image(
+                  painter = painterResource(id = R.drawable.studypilot_logo),
+                  contentDescription = "StudyPilot Logo",
+                  contentScale = ContentScale.Fit,
+                  modifier = Modifier.fillMaxSize()
+                )
               }
             }
           }
@@ -225,7 +250,9 @@ fun StudyPilotApp(viewModel: StudyPilotViewModel) {
                 Text(
                   text = label,
                   fontSize = 11.sp,
-                  fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                  fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis
                 )
               },
               colors = NavigationRailItemDefaults.colors(
@@ -276,6 +303,25 @@ fun StudyPilotApp(viewModel: StudyPilotViewModel) {
           },
           actions = {
             // Symmetrical, evenly-spaced quick action icons for secondary features
+            IconButton(
+              onClick = { viewModel.navigateTo(Screen.AiChatImport) }
+            ) {
+              Box(
+                modifier = Modifier
+                  .size(36.dp)
+                  .clip(CircleShape)
+                  .background(if (currentScreen == Screen.AiChatImport) MaterialTheme.colorScheme.primaryContainer else Color.Transparent),
+                contentAlignment = Alignment.Center
+              ) {
+                Icon(
+                  imageVector = Icons.AutoMirrored.Filled.Chat,
+                  contentDescription = "AI Chat Import",
+                  tint = if (currentScreen == Screen.AiChatImport) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                  modifier = Modifier.size(20.dp)
+                )
+              }
+            }
+
             IconButton(
               onClick = { viewModel.navigateTo(Screen.AiTutor) }
             ) {
@@ -380,7 +426,9 @@ fun StudyPilotApp(viewModel: StudyPilotViewModel) {
                 Text(
                   text = label,
                   fontSize = 11.sp,
-                  fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                  fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis
                 )
               },
               colors = NavigationBarItemDefaults.colors(
@@ -408,58 +456,131 @@ fun StudyPilotApp(viewModel: StudyPilotViewModel) {
           .widthIn(max = 860.dp),
         contentAlignment = Alignment.TopCenter
       ) {
-        when (currentScreen) {
-          Screen.Login -> {
-          LoginScreen(
-            viewModel = viewModel,
-            onLoginSuccess = { viewModel.navigateTo(Screen.Dashboard) }
-          )
-        }
-        Screen.Dashboard -> {
-          DashboardScreen(
-            viewModel = viewModel,
-            onNavigate = { screen -> viewModel.navigateTo(screen) },
-            onQuickAddTopic = {
-              quickAddTopicTrigger = true
-              viewModel.navigateTo(Screen.MyTopics)
-            },
-            onQuickAddSession = {
-              quickAddSessionTrigger = true
-              viewModel.navigateTo(Screen.Timetable)
+        Column(modifier = Modifier.fillMaxSize()) {
+          // Persistent Floating/Top Alarm Ringing Banner: Always visible on ANY screen when an alarm is actively ringing!
+          ringingAlarmSession?.let { ringingSession ->
+            Surface(
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+              shape = RoundedCornerShape(14.dp),
+              color = MaterialTheme.colorScheme.errorContainer,
+              shadowElevation = 4.dp,
+              border = androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.error)
+            ) {
+              Row(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                Icon(
+                  imageVector = Icons.Default.NotificationsActive,
+                  contentDescription = "Alarm Ringing",
+                  tint = MaterialTheme.colorScheme.error,
+                  modifier = Modifier.size(22.dp)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                  Text(
+                    text = "ALARM RINGING: ${ringingSession.subjectName}",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black),
+                    color = MaterialTheme.colorScheme.error,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                  )
+                  Text(
+                    text = "${ringingSession.topic} (${ringingSession.startTime})",
+                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                  )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Button(
+                  onClick = { viewModel.dismissAlarm() },
+                  colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.error,
+                    contentColor = MaterialTheme.colorScheme.onError
+                  ),
+                  shape = RoundedCornerShape(8.dp),
+                  contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                  modifier = Modifier.heightIn(min = 40.dp)
+                ) {
+                  Icon(
+                    imageVector = Icons.Default.AlarmOff,
+                    contentDescription = "Turn Off Alarm",
+                    modifier = Modifier.size(16.dp)
+                  )
+                  Spacer(modifier = Modifier.width(4.dp))
+                  Text("Turn Off", fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1, softWrap = false)
+                }
+              }
             }
-          )
-        }
-        Screen.Timetable -> {
-          val trigger = quickAddSessionTrigger
-          if (trigger) quickAddSessionTrigger = false
-          TimetableScreen(viewModel = viewModel, showAddDialogOnInit = trigger)
-        }
-        Screen.MyTopics -> {
-          val trigger = quickAddTopicTrigger
-          if (trigger) quickAddTopicTrigger = false
-          TopicsScreen(viewModel = viewModel, showAddDialogOnInit = trigger)
-        }
-        Screen.WeekendQuizzes -> {
-          QuizScreen(viewModel = viewModel)
-        }
-        Screen.ActiveQuiz -> {
-          ActiveQuizScreen(viewModel = viewModel)
-        }
-        Screen.AiTutor -> {
-          AiTutorScreen(viewModel = viewModel)
-        }
-        Screen.Progress -> {
-          ProgressScreen(viewModel = viewModel)
-        }
-        Screen.Tasks -> {
-          TasksScreen(viewModel = viewModel)
-        }
-        Screen.Settings -> {
-          SettingsScreen(viewModel = viewModel)
+          }
+
+          Box(
+            modifier = Modifier
+              .weight(1f)
+              .fillMaxWidth()
+          ) {
+            when (currentScreen) {
+              Screen.Login -> {
+                LoginScreen(
+                  viewModel = viewModel,
+                  onLoginSuccess = { viewModel.navigateTo(Screen.Dashboard) }
+                )
+              }
+              Screen.Dashboard -> {
+                DashboardScreen(
+                  viewModel = viewModel,
+                  onNavigate = { screen -> viewModel.navigateTo(screen) },
+                  onQuickAddTopic = {
+                    quickAddTopicTrigger = true
+                    viewModel.navigateTo(Screen.MyTopics)
+                  },
+                  onQuickAddSession = {
+                    quickAddSessionTrigger = true
+                    viewModel.navigateTo(Screen.Timetable)
+                  }
+                )
+              }
+              Screen.Timetable -> {
+                val trigger = quickAddSessionTrigger
+                if (trigger) quickAddSessionTrigger = false
+                TimetableScreen(viewModel = viewModel, showAddDialogOnInit = trigger)
+              }
+              Screen.MyTopics -> {
+                val trigger = quickAddTopicTrigger
+                if (trigger) quickAddTopicTrigger = false
+                TopicsScreen(viewModel = viewModel, showAddDialogOnInit = trigger)
+              }
+              Screen.WeekendQuizzes -> {
+                QuizScreen(viewModel = viewModel)
+              }
+              Screen.ActiveQuiz -> {
+                ActiveQuizScreen(viewModel = viewModel)
+              }
+              Screen.AiTutor -> {
+                AiTutorScreen(viewModel = viewModel)
+              }
+              Screen.Progress -> {
+                ProgressScreen(viewModel = viewModel)
+              }
+              Screen.Tasks -> {
+                TasksScreen(viewModel = viewModel)
+              }
+              Screen.Settings -> {
+                SettingsScreen(viewModel = viewModel)
+              }
+              Screen.AiChatImport -> {
+                AiChatImportScreen(viewModel = viewModel)
+              }
+            }
+          }
         }
       }
-    }
-  }
     }
   }
 }
@@ -478,3 +599,5 @@ fun StudyPilotApp(viewModel: StudyPilotViewModel) {
     )
   }
 }
+}
+

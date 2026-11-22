@@ -5,7 +5,10 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
+import com.example.data.model.ImportedChat
+import com.example.data.model.ExtractedConcept
 import com.example.data.model.QuizAttempt
 import com.example.data.model.QuizQuestion
 import com.example.data.model.StudyTask
@@ -76,11 +79,17 @@ interface StudyPilotDao {
   @Query("SELECT * FROM study_topics WHERE id = :id LIMIT 1")
   suspend fun getTopicById(id: Long): StudyTopic?
 
+  @Query("SELECT * FROM study_topics WHERE id IN (:topicIds)")
+  suspend fun getTopicsByIds(topicIds: List<Long>): List<StudyTopic>
+
   @Insert(onConflict = OnConflictStrategy.REPLACE)
   suspend fun insertTopic(topic: StudyTopic): Long
 
   @Update
   suspend fun updateTopic(topic: StudyTopic)
+
+  @Update
+  suspend fun updateTopics(topics: List<StudyTopic>)
 
   @Query("DELETE FROM study_topics WHERE id = :id")
   suspend fun deleteTopicById(id: Long)
@@ -186,6 +195,18 @@ interface StudyPilotDao {
   @Query("DELETE FROM tutor_messages")
   suspend fun clearAllTutorMessages()
 
+  @Transaction
+  suspend fun deleteTutorSessionAtomic(sessionId: Long) {
+    deleteMessagesForSession(sessionId)
+    deleteTutorSessionById(sessionId)
+  }
+
+  @Transaction
+  suspend fun clearAllTutorHistoryAtomic() {
+    clearAllTutorMessages()
+    clearAllTutorSessions()
+  }
+
   // --- Schedule Formats / Templates ---
   @Query("SELECT * FROM schedule_formats WHERE userId = :userId ORDER BY createdAt ASC")
   fun getScheduleFormatsForUser(userId: String): Flow<List<com.example.data.model.ScheduleFormat>>
@@ -204,6 +225,18 @@ interface StudyPilotDao {
 
   @Query("DELETE FROM timetable_sessions WHERE userId = :userId AND date = :date")
   suspend fun deleteSessionsForDateAndUser(userId: String, date: String)
+
+  @Transaction
+  suspend fun replaceSessionsForDateAndUser(userId: String, date: String, sessions: List<TimetableSession>) {
+    deleteSessionsForDateAndUser(userId, date)
+    if (sessions.isNotEmpty()) insertSessions(sessions)
+  }
+
+  @Transaction
+  suspend fun replaceSessionsForDate(date: String, sessions: List<TimetableSession>) {
+    deleteSessionsForDate(date)
+    if (sessions.isNotEmpty()) insertSessions(sessions)
+  }
 
   // --- Per-User Account Data Deletion ---
   @Query("DELETE FROM subjects WHERE userId = :userId")
@@ -226,5 +259,82 @@ interface StudyPilotDao {
 
   @Query("DELETE FROM schedule_formats WHERE userId = :userId")
   suspend fun deleteScheduleFormatsForUser(userId: String)
+
+  // --- Imported AI Chats ---
+  @Query("SELECT * FROM imported_chats WHERE userId = :userId ORDER BY importedAt DESC")
+  fun getImportedChatsForUser(userId: String): Flow<List<ImportedChat>>
+
+  @Query("SELECT * FROM imported_chats ORDER BY importedAt DESC")
+  fun getAllImportedChats(): Flow<List<ImportedChat>>
+
+  @Query("SELECT * FROM imported_chats WHERE id = :id LIMIT 1")
+  suspend fun getImportedChatById(id: Long): ImportedChat?
+
+  @Insert(onConflict = OnConflictStrategy.REPLACE)
+  suspend fun insertImportedChat(chat: ImportedChat): Long
+
+  @Insert(onConflict = OnConflictStrategy.REPLACE)
+  suspend fun insertImportedChats(chats: List<ImportedChat>)
+
+  @Update
+  suspend fun updateImportedChat(chat: ImportedChat)
+
+  @Query("DELETE FROM imported_chats WHERE id = :id")
+  suspend fun deleteImportedChatById(id: Long)
+
+  @Query("DELETE FROM imported_chats WHERE userId = :userId")
+  suspend fun deleteImportedChatsForUser(userId: String)
+
+  // --- Extracted Academic Concepts (Learning Memory) ---
+  @Query("SELECT * FROM extracted_concepts WHERE userId = :userId ORDER BY extractedAt DESC")
+  fun getExtractedConceptsForUser(userId: String): Flow<List<ExtractedConcept>>
+
+  @Query("SELECT * FROM extracted_concepts WHERE userId = :userId AND sourceChatId = :chatId ORDER BY id ASC")
+  fun getConceptsForChat(userId: String, chatId: Long): Flow<List<ExtractedConcept>>
+
+  @Query("SELECT * FROM extracted_concepts WHERE userId = :userId AND sourceChatId = :chatId ORDER BY id ASC")
+  suspend fun getConceptsForChatSync(userId: String, chatId: Long): List<ExtractedConcept>
+
+  @Query("SELECT * FROM extracted_concepts WHERE userId = :userId AND subjectId = :subjectId ORDER BY extractedAt DESC")
+  fun getConceptsForSubjectAndUser(userId: String, subjectId: Long): Flow<List<ExtractedConcept>>
+
+  @Query("SELECT * FROM extracted_concepts WHERE id = :id LIMIT 1")
+  suspend fun getExtractedConceptById(id: Long): ExtractedConcept?
+
+  @Query("SELECT * FROM extracted_concepts WHERE userId = :userId AND topic = :topic LIMIT 1")
+  suspend fun getConceptByTopic(userId: String, topic: String): ExtractedConcept?
+
+  @Query("SELECT * FROM extracted_concepts WHERE userId = :userId AND topic IN (:topics)")
+  suspend fun getConceptsByTopics(userId: String, topics: List<String>): List<ExtractedConcept>
+
+  @Insert(onConflict = OnConflictStrategy.REPLACE)
+  suspend fun insertExtractedConcept(concept: ExtractedConcept): Long
+
+  @Insert(onConflict = OnConflictStrategy.REPLACE)
+  suspend fun insertExtractedConcepts(concepts: List<ExtractedConcept>)
+
+  @Update
+  suspend fun updateExtractedConcept(concept: ExtractedConcept)
+
+  @Update
+  suspend fun updateExtractedConcepts(concepts: List<ExtractedConcept>)
+
+  @Query("DELETE FROM extracted_concepts WHERE id = :id")
+  suspend fun deleteExtractedConceptById(id: Long)
+
+  @Query("DELETE FROM extracted_concepts WHERE sourceChatId = :chatId")
+  suspend fun deleteConceptsForChat(chatId: Long)
+
+  @Transaction
+  suspend fun deleteImportedChatAtomic(chatId: Long) {
+    deleteConceptsForChat(chatId)
+    deleteImportedChatById(chatId)
+  }
+
+  @Query("UPDATE extracted_concepts SET subjectId = :subjectId, subjectName = :subjectName WHERE sourceChatId = :chatId")
+  suspend fun updateConceptsSubjectForChat(chatId: Long, subjectId: Long?, subjectName: String)
+
+  @Query("DELETE FROM extracted_concepts WHERE userId = :userId")
+  suspend fun deleteExtractedConceptsForUser(userId: String)
 }
 

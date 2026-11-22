@@ -54,6 +54,9 @@ import androidx.compose.ui.unit.sp
 import com.example.ui.theme.CyanAccent
 import com.example.ui.theme.EmeraldSuccess
 
+private val NUMBERED_ITEM_REGEX = Regex("""^(\d+)[\.\)]\s+(.*)$""")
+private val NUMBERED_PREFIX_REGEX = Regex("""^(\d+)[\.\)]\s+""")
+
 private enum class TableCellAlignment {
   LEFT, CENTER, RIGHT
 }
@@ -79,7 +82,7 @@ fun FormattedTutorResponse(
   isUser: Boolean = false
 ) {
   val context = LocalContext.current
-  val blocks = parseMarkdownBlocks(content)
+  val blocks = remember(content) { parseMarkdownBlocks(content) }
 
   Column(
     modifier = modifier,
@@ -518,7 +521,7 @@ private fun parseMarkdownBlocks(rawText: String): List<MarkdownBlock> {
     }
 
     // 6. Check for Numbered List Items (e.g., "1. ", "2) ")
-    val numberMatch = Regex("""^(\d+)[\.\)]\s+(.*)$""").find(trimmed)
+    val numberMatch = NUMBERED_ITEM_REGEX.find(trimmed)
     if (numberMatch != null) {
       val num = numberMatch.groupValues[1]
       val itemText = numberMatch.groupValues[2]
@@ -540,7 +543,7 @@ private fun parseMarkdownBlocks(rawText: String): List<MarkdownBlock> {
         nextTrimmed.startsWith("- ") ||
         nextTrimmed.startsWith("• ") ||
         nextTrimmed.contains("|") ||
-        Regex("""^(\d+)[\.\)]\s+""").containsMatchIn(nextTrimmed)
+        NUMBERED_PREFIX_REGEX.containsMatchIn(nextTrimmed)
       ) {
         break
       }
@@ -562,75 +565,77 @@ private fun parseInlineMarkdown(text: String, isUser: Boolean): AnnotatedString 
   val codeBgColor = if (isUser) Color.White.copy(alpha = 0.25f) else MaterialTheme.colorScheme.surfaceVariant
   val codeTextColor = if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary
 
-  return buildAnnotatedString {
-    var index = 0
-    val length = text.length
+  return remember(text, boldColor, codeBgColor, codeTextColor) {
+    buildAnnotatedString {
+      var index = 0
+      val length = text.length
 
-    while (index < length) {
-      // Inline Code: `...`
-      if (text[index] == '`') {
-        val nextTick = text.indexOf('`', index + 1)
-        if (nextTick != -1) {
-          val codeText = text.substring(index + 1, nextTick)
-          val start = this.length
-          append(codeText)
-          addStyle(
-            SpanStyle(
-              fontFamily = FontFamily.Monospace,
-              background = codeBgColor,
-              color = codeTextColor,
-              fontSize = 12.sp,
-              fontWeight = FontWeight.SemiBold
-            ),
-            start,
-            this.length
-          )
-          index = nextTick + 1
-          continue
+      while (index < length) {
+        // Inline Code: `...`
+        if (text[index] == '`') {
+          val nextTick = text.indexOf('`', index + 1)
+          if (nextTick != -1) {
+            val codeText = text.substring(index + 1, nextTick)
+            val start = this.length
+            append(codeText)
+            addStyle(
+              SpanStyle(
+                fontFamily = FontFamily.Monospace,
+                background = codeBgColor,
+                color = codeTextColor,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold
+              ),
+              start,
+              this.length
+            )
+            index = nextTick + 1
+            continue
+          }
         }
-      }
 
-      // Bold: **...**
-      if (index + 1 < length && text[index] == '*' && text[index + 1] == '*') {
-        val nextAsterisks = text.indexOf("**", index + 2)
-        if (nextAsterisks != -1) {
-          val boldText = text.substring(index + 2, nextAsterisks)
-          val start = this.length
-          append(boldText)
-          addStyle(
-            SpanStyle(
-              fontWeight = FontWeight.Bold,
-              color = boldColor
-            ),
-            start,
-            this.length
-          )
-          index = nextAsterisks + 2
-          continue
+        // Bold: **...**
+        if (index + 1 < length && text[index] == '*' && text[index + 1] == '*') {
+          val nextAsterisks = text.indexOf("**", index + 2)
+          if (nextAsterisks != -1) {
+            val boldText = text.substring(index + 2, nextAsterisks)
+            val start = this.length
+            append(boldText)
+            addStyle(
+              SpanStyle(
+                fontWeight = FontWeight.Bold,
+                color = boldColor
+              ),
+              start,
+              this.length
+            )
+            index = nextAsterisks + 2
+            continue
+          }
         }
-      }
 
-      // Italic: *...*
-      if (text[index] == '*') {
-        val nextAsterisk = text.indexOf('*', index + 1)
-        if (nextAsterisk != -1) {
-          val italicText = text.substring(index + 1, nextAsterisk)
-          val start = this.length
-          append(italicText)
-          addStyle(
-            SpanStyle(
-              fontStyle = FontStyle.Italic
-            ),
-            start,
-            this.length
-          )
-          index = nextAsterisk + 1
-          continue
+        // Italic: *...*
+        if (text[index] == '*') {
+          val nextAsterisk = text.indexOf('*', index + 1)
+          if (nextAsterisk != -1) {
+            val italicText = text.substring(index + 1, nextAsterisk)
+            val start = this.length
+            append(italicText)
+            addStyle(
+              SpanStyle(
+                fontStyle = FontStyle.Italic
+              ),
+              start,
+              this.length
+            )
+            index = nextAsterisk + 1
+            continue
+          }
         }
-      }
 
-      append(text[index])
-      index++
+        append(text[index])
+        index++
+      }
     }
   }
 }
