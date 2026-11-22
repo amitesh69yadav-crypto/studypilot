@@ -2,7 +2,7 @@ package com.example
 
 import com.example.data.model.QuizQuestion
 import com.example.data.model.StudyTopic
-import com.example.data.remote.GeminiStudyService
+import com.example.data.ai.StudyAi
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -10,7 +10,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 class StudyPilotUnitTest {
 
-  private val service = GeminiStudyService()
+  // No Android context: no phone model and no PC set, so everything uses built-in answers.
+  private val service = StudyAi(null)
 
   @Test
   fun testSpacedRepetitionIntervalProgression() {
@@ -532,15 +533,10 @@ class StudyPilotUnitTest {
   }
 
   @Test
-  fun testGeminiAndLocalProviderNormalizationOnly() {
-    assertEquals("GEMINI", service.normalizeProviderMode("gemini"))
-    assertEquals("LOCAL", service.normalizeProviderMode("local"))
-    assertEquals("AUTO", service.normalizeProviderMode("auto"))
-    assertEquals("AUTO", service.normalizeProviderMode("GROQ"))
-    assertEquals("AUTO", service.normalizeProviderMode("OPENAI"))
-    assertEquals("AUTO", service.normalizeProviderMode("DEEPSEEK"))
-    assertEquals("AUTO", service.normalizeProviderMode("OPENROUTER"))
-    assertEquals("AUTO", service.normalizeProviderMode(""))
+  fun testWithoutAnyModelTheTutorUsesBuiltInAnswers() = runBlocking {
+    val reply = service.chat(listOf(com.example.data.model.ChatMessage(role = "user", text = "what is bellman ford algorithm")))
+    assertEquals(com.example.data.ai.LocalAiEngine.BUILT_IN_LABEL, reply.modelName)
+    assertTrue(reply.text.contains("Bellman-Ford", ignoreCase = true))
   }
 
   @Test
@@ -801,33 +797,6 @@ class StudyPilotUnitTest {
     assertTrue(aiAnswer.text.contains("Bellman-Ford", ignoreCase = true))
     assertTrue(aiAnswer.text.contains("negative", ignoreCase = true))
     assertTrue(aiAnswer.text.contains("V - 1", ignoreCase = true) || aiAnswer.text.contains("O(V * E)", ignoreCase = true))
-  }
-
-  @Test
-  fun testLocalAiCachedOllamaProbeAvoidsRepeatedConnectionDelays() = runBlocking {
-    val previousUrl = com.example.data.ai.LocalAiEngine.localOllamaUrl
-    try {
-      com.example.data.ai.LocalAiEngine.localOllamaUrl = "http://127.0.0.1:59999"
-      com.example.data.ai.LocalAiEngine.invalidateOllamaCache()
-
-      // First call populates the unreachable Ollama probe cache quickly
-      val firstRes = com.example.data.ai.LocalAiEngine.answerQuestion("explain dijkstra")
-      assertFalse(firstRes.isError)
-      assertTrue(firstRes.text.contains("Dijkstra", ignoreCase = true))
-
-      // Subsequent calls must hit the probe cache immediately with negligible overhead
-      val startNs = System.nanoTime()
-      val secondRes = com.example.data.ai.LocalAiEngine.answerQuestion("what is bellman ford algorithm")
-      val thirdRes = com.example.data.ai.LocalAiEngine.answerQuestion("explain avl trees")
-      val elapsedMs = (System.nanoTime() - startNs) / 1_000_000L
-
-      assertFalse(secondRes.isError)
-      assertFalse(thirdRes.isError)
-      assertTrue("Cached probe local answers took ${elapsedMs}ms, expected < 1500ms", elapsedMs < 1500L)
-    } finally {
-      com.example.data.ai.LocalAiEngine.localOllamaUrl = previousUrl
-      com.example.data.ai.LocalAiEngine.invalidateOllamaCache()
-    }
   }
 
   @Test

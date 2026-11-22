@@ -3,7 +3,6 @@ package com.example.ui.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.data.ai.LocalAiEngine
 import com.example.data.local.AppDatabase
 import com.example.data.local.LocalPasswordStore
 import com.example.data.model.ChatMessage
@@ -15,7 +14,9 @@ import com.example.data.model.StudyTopic
 import com.example.data.model.Subject
 import com.example.data.model.TimetableSession
 import com.example.data.model.TutorMessageEntity
-import com.example.data.model.TutorModel
+import com.example.data.ai.AiSource
+import com.example.data.ai.llm.DownloadState
+import com.example.data.ai.llm.PhoneModel
 import com.example.data.model.TutorSession
 import com.example.data.model.ImportedChat
 import com.example.data.model.ExtractedConcept
@@ -93,29 +94,36 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
   // --- AI API Keys & Provider Settings ---
   private val aiPrefs = application.getSharedPreferences("studypilot_ai_config", Context.MODE_PRIVATE)
 
-  private val _customGeminiKey = MutableStateFlow(aiPrefs.getString("custom_gemini_key", "") ?: "")
-  val customGeminiKey: StateFlow<String> = _customGeminiKey.asStateFlow()
-
-  private val _aiProviderMode = MutableStateFlow(
-    repository.geminiService.normalizeProviderMode(aiPrefs.getString("ai_provider_mode", "AUTO") ?: "AUTO")
+  private val _aiSource = MutableStateFlow(
+    aiPrefs.getString("ai_source", null)?.let { name -> AiSource.entries.firstOrNull { it.name == name } } ?: AiSource.AUTO
   )
-  val aiProviderMode: StateFlow<String> = _aiProviderMode.asStateFlow()
+  val aiSource: StateFlow<AiSource> = _aiSource.asStateFlow()
 
-  private val _localOllamaUrl = MutableStateFlow(
-    aiPrefs.getString("local_ollama_url", null) ?: DEFAULT_OLLAMA_URL
-  )
-  val localOllamaUrl: StateFlow<String> = _localOllamaUrl.asStateFlow()
+  private val _pcUrl = MutableStateFlow(aiPrefs.getString("pc_ollama_url", "") ?: "")
+  val pcUrl: StateFlow<String> = _pcUrl.asStateFlow()
 
-  private val _localOllamaModel = MutableStateFlow(
-    aiPrefs.getString("local_ollama_model", null) ?: DEFAULT_OLLAMA_MODEL
-  )
-  val localOllamaModel: StateFlow<String> = _localOllamaModel.asStateFlow()
+  private val _pcModel = MutableStateFlow(aiPrefs.getString("pc_ollama_model", "") ?: "")
+  val pcModel: StateFlow<String> = _pcModel.asStateFlow()
 
-  private val _apiTestStatus = MutableStateFlow<String?>(null)
-  val apiTestStatus: StateFlow<String?> = _apiTestStatus.asStateFlow()
+  /** Result of the last PC check, e.g. "Connected. Models: qwen3:8b". Null until checked. */
+  private val _pcStatus = MutableStateFlow<String?>(null)
+  val pcStatus: StateFlow<String?> = _pcStatus.asStateFlow()
 
-  private val _isTestingApi = MutableStateFlow(false)
-  val isTestingApi: StateFlow<Boolean> = _isTestingApi.asStateFlow()
+  private val _pcModels = MutableStateFlow<List<String>>(emptyList())
+  val pcModels: StateFlow<List<String>> = _pcModels.asStateFlow()
+
+  private val _isCheckingPc = MutableStateFlow(false)
+  val isCheckingPc: StateFlow<Boolean> = _isCheckingPc.asStateFlow()
+
+  /** Which model the next tutor answer will come from, e.g. "Phone · Gemma 4 E2B". */
+  private val _activeAiLabel = MutableStateFlow("Checking...")
+  val activeAiLabel: StateFlow<String> = _activeAiLabel.asStateFlow()
+
+  val phoneDownload: StateFlow<DownloadState> = repository.ai.phone?.download ?: MutableStateFlow(DownloadState.Idle)
+  val phoneInstalled: StateFlow<Set<PhoneModel>> = repository.ai.phone?.installed ?: MutableStateFlow(emptySet())
+  val phoneSelected: StateFlow<PhoneModel?> = repository.ai.phone?.selected ?: MutableStateFlow(null)
+
+  fun deviceRamGb(): Int = repository.ai.phone?.deviceRamGb() ?: 0
 
   // --- UI notifications ---
   private val _snackbarMessage = MutableSharedFlow<String>()
@@ -520,10 +528,10 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
     )
 
   init {
-    repository.geminiService.customGeminiKey = _customGeminiKey.value
-    repository.geminiService.preferredProviderMode = _aiProviderMode.value
-    LocalAiEngine.localOllamaUrl = _localOllamaUrl.value
-    LocalAiEngine.localOllamaModel = _localOllamaModel.value
+    repository.ai.source = _aiSource.value
+    repository.ai.pc.baseUrl = _pcUrl.value
+    repository.ai.pc.preferredModel = _pcModel.value
+    refreshActiveAi()
 
     // Sample data is only added automatically for the first guest launch; signed-in accounts start empty.
     if (_currentUser.value.id == GUEST_USER_ID) {
@@ -573,73 +581,84 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
     }
   }
 
-  // --- AI API Configuration Actions ---
-  fun saveCustomGeminiKey(key: String) {
-    val trimmed = key.trim()
-    aiPrefs.edit().putString("custom_gemini_key", trimmed).apply()
-    _customGeminiKey.value = trimmed
-    repository.geminiService.customGeminiKey = trimmed
+  // --- AI settings ---
+
+  fun setAiSource(source: AiSource) {
+    _aiSource.value = source
+    repository.ai.source = source
+    aiPrefs.edit().putString("ai_source", source.name).apply()
+    refreshActiveAi()
+  }
+
+  /** Saves the PC address (e.g. "192.168.1.60") and model, then checks the connection. */
+  fun setPcConfig(url: String, model: String) {
+    repository.ai.pc.baseUrl = url
+    repository.ai.pc.preferredModel = model.trim()
+    _pcUrl.value = repository.ai.pc.baseUrl
+    _pcModel.value = model.trim()
+    aiPrefs.edit().putString("pc_ollama_url", _pcUrl.value).putString("pc_ollama_model", _pcModel.value).apply()
+    checkPc()
+  }
+
+  fun checkPc() {
     viewModelScope.launch {
-      _snackbarMessage.emit(if (trimmed.isNotBlank()) "Gemini API key saved" else "Custom key removed; using the build key if there is one")
+      _isCheckingPc.value = true
+      val status = repository.ai.pc.status(forceRefresh = true)
+      _pcModels.value = status.models
+      _pcStatus.value = when {
+        repository.ai.pc.baseUrl.isBlank() -> "Enter your PC's address, or tap Find."
+        !status.reachable -> "Can't reach ${repository.ai.pc.baseUrl} (${status.error}). Is Ollama running with OLLAMA_HOST=0.0.0.0, and is the phone on the same Wi-Fi?"
+        status.models.isEmpty() -> "Connected, but no models are installed. On the PC run: ollama pull qwen3:8b"
+        else -> "Connected. Using ${repository.ai.pc.chosenModel()}."
+      }
+      _isCheckingPc.value = false
+      refreshActiveAi()
     }
   }
 
-  fun setAiProviderMode(mode: String) {
-    val normalized = repository.geminiService.normalizeProviderMode(mode)
-    aiPrefs.edit().putString("ai_provider_mode", normalized).apply()
-    _aiProviderMode.value = normalized
-    repository.geminiService.preferredProviderMode = normalized
+  /** Scans the Wi-Fi network for a PC running Ollama. */
+  fun findPc() {
     viewModelScope.launch {
-      _snackbarMessage.emit("AI provider: ${normalized.lowercase().replaceFirstChar { it.uppercase() }}")
+      _isCheckingPc.value = true
+      _pcStatus.value = "Looking for Ollama on your Wi-Fi..."
+      val found = repository.ai.pc.findOnNetwork(getApplication())
+      _isCheckingPc.value = false
+      if (found == null) {
+        _pcStatus.value = "No PC found. Start Ollama with OLLAMA_HOST=0.0.0.0 and allow it through the firewall, or type the PC's address."
+      } else {
+        setPcConfig(found, _pcModel.value)
+      }
     }
   }
 
-  fun testApiConnection(provider: String, keyToTest: String) {
+  fun downloadPhoneModel(model: PhoneModel) {
+    val phone = repository.ai.phone ?: return
+    val ram = phone.deviceRamGb()
+    if (ram in 1 until model.minRamGb) {
+      snackbar("${model.displayName} needs about ${model.minRamGb} GB of RAM; this phone has $ram GB. It may not load.")
+    }
+    phone.startDownload(model)
+  }
+
+  fun cancelPhoneDownload() = repository.ai.phone?.cancelDownload()
+
+  fun selectPhoneModel(model: PhoneModel) {
+    repository.ai.phone?.select(model)
+    refreshActiveAi()
+  }
+
+  fun deletePhoneModel(model: PhoneModel) {
     viewModelScope.launch {
-      _isTestingApi.value = true
-      _apiTestStatus.value = "Testing $provider..."
-      val (success, message) = repository.geminiService.testConnection(provider, keyToTest)
-      _isTestingApi.value = false
-      _apiTestStatus.value = message
-      _snackbarMessage.emit(message)
+      repository.ai.phone?.delete(model)
+      snackbar("Deleted ${model.displayName}")
+      refreshActiveAi()
     }
   }
 
-  fun clearApiTestStatus() {
-    _apiTestStatus.value = null
-  }
-
-
-  private val _ollamaTestStatus = MutableStateFlow<String?>(null)
-  val ollamaTestStatus: StateFlow<String?> = _ollamaTestStatus.asStateFlow()
-
-  fun setLocalOllamaConfig(url: String, model: String) {
-    val cleanUrl = url.trim().ifBlank { DEFAULT_OLLAMA_URL }
-    val cleanModel = model.trim().ifBlank { DEFAULT_OLLAMA_MODEL }
-    aiPrefs.edit()
-      .putString("local_ollama_url", cleanUrl)
-      .putString("local_ollama_model", cleanModel)
-      .apply()
-    _localOllamaUrl.value = cleanUrl
-    _localOllamaModel.value = cleanModel
-    LocalAiEngine.localOllamaUrl = cleanUrl
-    LocalAiEngine.localOllamaModel = cleanModel
+  fun refreshActiveAi() {
     viewModelScope.launch {
-      _snackbarMessage.emit("Ollama set to $cleanModel at $cleanUrl")
+      _activeAiLabel.value = repository.ai.backend()?.label ?: "Built-in answers"
     }
-  }
-
-  fun testLocalOllamaConnection(url: String) {
-    viewModelScope.launch {
-      _ollamaTestStatus.value = "Connecting to Ollama at $url..."
-      val (_, msg) = LocalAiEngine.testOllamaConnection(url)
-      _ollamaTestStatus.value = msg
-      _snackbarMessage.emit(msg)
-    }
-  }
-
-  fun clearOllamaTestStatus() {
-    _ollamaTestStatus.value = null
   }
 
   // --- Account Actions ---
@@ -978,12 +997,6 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
   )
   val chatMessages: StateFlow<List<ChatMessage>> = _chatMessages.asStateFlow()
 
-  private val _selectedModel = MutableStateFlow(TutorModel.FLASH)
-  val selectedModel: StateFlow<TutorModel> = _selectedModel.asStateFlow()
-
-  private val _useGoogleSearch = MutableStateFlow(false)
-  val useGoogleSearch: StateFlow<Boolean> = _useGoogleSearch.asStateFlow()
-
   private fun tutorInstruction(subject: Subject?): String = buildString {
     append("You are StudyPilot, a tutor for university students")
     if (subject != null) append(", helping with ${subject.name} (${subject.code})")
@@ -998,17 +1011,6 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
 
   private val _isChatLoading = MutableStateFlow(false)
   val isChatLoading: StateFlow<Boolean> = _isChatLoading.asStateFlow()
-
-  fun selectTutorModel(model: TutorModel) {
-    _selectedModel.value = model
-  }
-
-  fun toggleGoogleSearch(enabled: Boolean) {
-    _useGoogleSearch.value = enabled
-    if (enabled) {
-      _selectedModel.value = TutorModel.FLASH
-    }
-  }
 
   fun updateSystemInstruction(instruction: String) {
     _systemInstruction.value = instruction
@@ -1035,7 +1037,7 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
           } else {
             "Ask a question about any topic, or pick a subject above to focus the tutor."
           },
-          modelName = _selectedModel.value.modelId,
+          modelName = "",
           relatedTopics = initialLinkTopics
         )
       )
@@ -1070,7 +1072,7 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
         } else {
           "New chat. What are you studying?"
         },
-        modelName = _selectedModel.value.modelId,
+        modelName = "",
         relatedTopics = initialLinkTopics
       )
     )
@@ -1158,44 +1160,27 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
     val trimmed = text.trim()
     if (trimmed.isBlank() || _isChatLoading.value) return
 
-    val currentHistory = _chatMessages.value.toMutableList()
-    val userMsg = ChatMessage(
-      role = "user",
-      text = trimmed,
-      modelName = _selectedModel.value.modelId,
-      searchGroundingUsed = _useGoogleSearch.value
-    )
-    currentHistory.add(userMsg)
+    val currentHistory = _chatMessages.value + ChatMessage(role = "user", text = trimmed)
     _chatMessages.value = currentHistory
 
     viewModelScope.launch {
       _isChatLoading.value = true
-      var sessionId = _activeSessionId.value
+      val replyId = java.util.UUID.randomUUID().toString()
       try {
         val activeSub = _selectedTutorSubject.value
-        if (sessionId == null) {
-          val title = trimmed.take(45).let { if (trimmed.length > 45) "$it..." else it }
-          sessionId = repository.createTutorSession(
-            subjectId = activeSub?.id,
-            subjectName = activeSub?.name ?: "General",
-            title = title,
-            previewSnippet = trimmed,
-            modelUsed = _selectedModel.value.modelId,
-            searchGroundingUsed = _useGoogleSearch.value,
-            userId = _currentUser.value.id
-          )
-          _activeSessionId.value = sessionId
-        }
+        val sessionId = _activeSessionId.value ?: repository.createTutorSession(
+          subjectId = activeSub?.id,
+          subjectName = activeSub?.name ?: "General",
+          title = trimmed.take(45).let { if (trimmed.length > 45) "$it..." else it },
+          previewSnippet = trimmed,
+          modelUsed = _activeAiLabel.value,
+          searchGroundingUsed = false,
+          userId = _currentUser.value.id
+        ).also { _activeSessionId.value = it }
 
-        repository.saveTutorMessage(
-          sessionId = sessionId,
-          role = "user",
-          text = trimmed,
-          modelName = _selectedModel.value.modelId,
-          searchGroundingUsed = _useGoogleSearch.value
-        )
+        repository.saveTutorMessage(sessionId = sessionId, role = "user", text = trimmed, modelName = "", searchGroundingUsed = false)
 
-        // 1. Prioritize link-containing imported chats on a background CPU dispatcher
+        // Imported chats the user linked take priority when they cover the question.
         val chatsSnapshot = importedChats.value
         val conceptsSnapshot = extractedConcepts.value
         val linkedChatResponse = withContext(Dispatchers.Default) {
@@ -1208,14 +1193,21 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
           )
         }
 
-        // 2. Fall back to Gemini AI or Local AI when no linked chat contains the answer
-        val subjectHint = activeSub?.let { "${it.name} (${it.code})" }
+        // Show the reply as it's generated; local models can take a while to finish.
+        var lastPaint = 0L
+        val onPartial: (String) -> Unit = { partial ->
+          val now = System.currentTimeMillis()
+          if (now - lastPaint > 80) {
+            lastPaint = now
+            showReply(ChatMessage(id = replyId, role = "model", text = partial, modelName = _activeAiLabel.value))
+          }
+        }
+
         val response = linkedChatResponse ?: repository.chatWithTutor(
           history = currentHistory,
-          model = _selectedModel.value,
-          useGoogleSearch = _useGoogleSearch.value,
           systemInstruction = _systemInstruction.value,
-          subjectContext = subjectHint
+          subjectContext = activeSub?.let { "${it.name} (${it.code})" },
+          onPartial = onPartial
         )
 
         val (cleanText, finalTopics) = withContext(Dispatchers.Default) {
@@ -1235,95 +1227,56 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
           } else {
             linkScopedTopics.ifEmpty { response.relatedTopics.ifEmpty { extractedTopics } }
           }
-          Pair(cleaned, resolvedTopics)
+          cleaned to resolvedTopics
         }
 
-        val modelMsg = ChatMessage(
-          role = "model",
-          text = cleanText,
-          modelName = response.modelName,
-          searchGroundingUsed = _useGoogleSearch.value,
-          groundingSources = response.groundingSources,
-          searchQueries = response.searchQueries,
-          isError = response.isError,
-          relatedTopics = finalTopics
+        showReply(
+          ChatMessage(
+            id = replyId,
+            role = "model",
+            text = cleanText,
+            modelName = response.modelName,
+            groundingSources = response.groundingSources,
+            searchQueries = response.searchQueries,
+            isError = response.isError,
+            relatedTopics = finalTopics
+          )
         )
-        _chatMessages.value = _chatMessages.value + modelMsg
 
-        val sourcesJson = if (response.groundingSources.isNotEmpty()) {
-          val arr = JSONArray()
-          response.groundingSources.forEach { s ->
-            arr.put(JSONObject().apply {
-              put("title", s.title)
-              put("url", s.url)
-            })
-          }
-          arr.toString()
-        } else ""
-
+        val sourcesJson = if (response.groundingSources.isEmpty()) "" else JSONArray().apply {
+          response.groundingSources.forEach { put(JSONObject().put("title", it.title).put("url", it.url)) }
+        }.toString()
         repository.saveTutorMessage(
           sessionId = sessionId,
           role = "model",
           text = cleanText,
           modelName = response.modelName,
-          searchGroundingUsed = _useGoogleSearch.value,
+          searchGroundingUsed = false,
           groundingSourcesJson = sourcesJson,
           isError = response.isError
         )
       } catch (e: Exception) {
         android.util.Log.e("StudyPilotVM", "Tutor reply failed", e)
-        val fallbackResponse = LocalAiEngine.answerQuestion(
-          userQuery = trimmed,
-          history = currentHistory,
-          model = _selectedModel.value,
-          useGoogleSearch = _useGoogleSearch.value
+        showReply(
+          ChatMessage(
+            id = replyId,
+            role = "model",
+            text = "Something went wrong answering that (${e.message ?: e.javaClass.simpleName}). Try again.",
+            isError = true
+          )
         )
-        val (cleanFallbackText, fallbackTopics) = com.example.data.ai.AcademicPedagogySynthesizer.extractAndCleanRelatedTopics(
-          rawContent = fallbackResponse.text,
-          fallbackQuery = trimmed
-        )
-        val activeSubFallback = _selectedTutorSubject.value
-        val linkFallbackTopics = com.example.data.ai.ChatHistoryAssistant.getMiniTopicsForLinkedScope(
-          queryOrText = "$trimmed $cleanFallbackText",
-          groundingUrls = fallbackResponse.groundingSources.map { it.url },
-          importedChats = importedChats.value,
-          extractedConcepts = extractedConcepts.value,
-          selectedSubject = activeSubFallback
-        )
-        val finalFallbackTopics = linkFallbackTopics.ifEmpty {
-          fallbackResponse.relatedTopics.ifEmpty { fallbackTopics }
-        }
-
-        val fallbackMsg = ChatMessage(
-          role = "model",
-          text = cleanFallbackText,
-          modelName = fallbackResponse.modelName,
-          searchGroundingUsed = _useGoogleSearch.value,
-          groundingSources = fallbackResponse.groundingSources,
-          searchQueries = fallbackResponse.searchQueries,
-          isError = false,
-          relatedTopics = finalFallbackTopics
-        )
-        _chatMessages.value = _chatMessages.value + fallbackMsg
-
-        try {
-          val targetSid = sessionId ?: _activeSessionId.value
-          if (targetSid != null) {
-            repository.saveTutorMessage(
-              sessionId = targetSid,
-              role = "model",
-              text = cleanFallbackText,
-              modelName = fallbackResponse.modelName,
-              searchGroundingUsed = _useGoogleSearch.value,
-              groundingSourcesJson = "",
-              isError = false
-            )
-          }
-        } catch (_: Exception) {}
       } finally {
         _isChatLoading.value = false
+        refreshActiveAi()
       }
     }
+  }
+
+  /** Adds the reply bubble, or updates it in place while it streams. */
+  private fun showReply(message: ChatMessage) {
+    val current = _chatMessages.value
+    val index = current.indexOfFirst { it.id == message.id }
+    _chatMessages.value = if (index < 0) current + message else current.toMutableList().also { it[index] = message }
   }
 
   // --- Subject Actions ---
@@ -2095,7 +2048,7 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
           tags = tags,
           existingConcepts = extractedConcepts.value,
           aiDispatcher = { prompt ->
-            repository.geminiService.executeAiPrompt(prompt, "You extract study concepts from conversations.", 0.2)
+            repository.ai.prompt(prompt, "You extract study concepts from conversations.", 0.2)
           },
           onProgress = { p, status ->
             _importProcessingProgress.value = 0.45f + (p * 0.55f)
@@ -2272,7 +2225,7 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
           tags = chat.tags,
           existingConcepts = extractedConcepts.value,
           aiDispatcher = { prompt ->
-            repository.geminiService.executeAiPrompt(prompt, "You extract study concepts from conversations.", 0.2)
+            repository.ai.prompt(prompt, "You extract study concepts from conversations.", 0.2)
           },
           onProgress = { p, status ->
             _importProcessingProgress.value = p
@@ -2322,7 +2275,7 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
     viewModelScope.launch {
       _isAiLoading.value = true
       try {
-        val questions = repository.geminiService.generateQuestionsForConcept(
+        val questions = repository.ai.generateQuestionsForConcept(
           concept = concept,
           desiredCount = 5,
           difficulty = _quizConfig.value.difficulty

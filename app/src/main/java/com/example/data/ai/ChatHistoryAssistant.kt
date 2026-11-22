@@ -20,7 +20,7 @@ import java.util.Locale
  *    `Summarize`, `Explain Example`) against the active/matched linked chat first.
  * 4. If a linked chat answers the query, returns a grounded ChatResponse citing that linked chat's URL
  *    and subject; if NO linked chat matches, returns `null` so the caller seamlessly falls back to AI
- *    (Gemini or Local AI).
+ *    (the phone or PC model, or built-in answers).
  */
 object ChatHistoryAssistant {
 

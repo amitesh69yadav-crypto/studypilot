@@ -6,7 +6,6 @@ import com.example.data.model.ExtractedConcept
 import com.example.data.model.GroundingSource
 import com.example.data.model.QuizQuestion
 import com.example.data.model.StudyTopic
-import com.example.data.model.TutorModel
 import com.example.data.remote.ChatResponse
 import com.example.data.remote.EvaluationResult
 import kotlinx.coroutines.async
@@ -26,59 +25,22 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
 /**
- * LocalAiEngine: High-Performance On-Device Academic AI & Llama Runner.
- * - Supports Local Ollama / Llama daemon (10.0.2.2:11434 / localhost:11434).
- * - Multi-tier academic structure: from intuitive foundations to advanced research frontiers.
- * - Live real-time encyclopedic retrieval (Wikipedia Search + Extract APIs).
- * - Rich built-in Computer Science, Mathematics, Physics, Chemistry, Biology, Medicine, Economics, Law & Humanities knowledge base.
- * - Symbolic Math Solver & Algorithmic Code Solver.
- * - Non-vague, concrete, deep academic tutor answers for every possible question.
+ * Built-in answers used when no language model is available: canned explanations and code
+ * examples for common topics, a small maths solver, code templates, and Wikipedia summaries.
+ * Much less capable than a real model; the tutor labels these answers as built-in.
  */
 object LocalAiEngine {
 
   private const val TAG = "LocalAiEngine"
-  private const val OLLAMA_PROBE_TTL_MS = 60_000L
+  const val BUILT_IN_LABEL = "Built-in answer"
   private const val MAX_WIKI_CACHE_ENTRIES = 64
   private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
 
-  var localOllamaUrl: String = "http://10.0.2.2:11434"
-    set(value) {
-      if (field != value) {
-        field = value
-        invalidateOllamaCache()
-      }
-    }
-  var localOllamaModel: String = "llama3.2"
-
-  private val sharedPool = ConnectionPool(5, 2, TimeUnit.MINUTES)
-
   private val httpClient = OkHttpClient.Builder()
-    .connectionPool(sharedPool)
     .connectTimeout(4, TimeUnit.SECONDS)
     .readTimeout(10, TimeUnit.SECONDS)
     .writeTimeout(4, TimeUnit.SECONDS)
     .build()
-
-  private val ollamaProbeClient = OkHttpClient.Builder()
-    .connectionPool(sharedPool)
-    .connectTimeout(350, TimeUnit.MILLISECONDS)
-    .readTimeout(600, TimeUnit.MILLISECONDS)
-    .writeTimeout(350, TimeUnit.MILLISECONDS)
-    .build()
-
-  private data class CachedOllamaProbe(
-    val reachableBaseUrl: String?,
-    val availableModels: Set<String>,
-    val checkedAtMs: Long,
-    val configUrl: String
-  )
-
-  @Volatile
-  private var ollamaProbeCache: CachedOllamaProbe? = null
-
-  fun invalidateOllamaCache() {
-    ollamaProbeCache = null
-  }
 
   private data class CachedWikiExtract(
     val value: Pair<String, String>?,
@@ -112,15 +74,13 @@ object LocalAiEngine {
   suspend fun answerQuestion(
     userQuery: String,
     history: List<ChatMessage> = emptyList(),
-    model: TutorModel = TutorModel.LOCAL_AI,
-    useGoogleSearch: Boolean = false,
     subjectContext: String? = null
   ): ChatResponse = withContext(Dispatchers.Default) {
     val cleanQuery = userQuery.trim()
     if (cleanQuery.isBlank()) {
       return@withContext ChatResponse(
-        text = "Hello! I am your StudyPilot Academic AI Tutor. Ask me any concept, equation, code problem, or research question—I can explain everything with intuitive clarity all the way to advanced academic depth!",
-        modelName = "Local Academic AI (Ready)"
+        text = "Ask a question about any topic.",
+        modelName = BUILT_IN_LABEL
       )
     }
 
@@ -133,7 +93,7 @@ object LocalAiEngine {
         val topics = AcademicPedagogySynthesizer.getRelatedTopics(targetTopic)
         return@withContext ChatResponse(
           text = codeText,
-          modelName = "Local Academic AI (Alternative Code Engine)",
+          modelName = BUILT_IN_LABEL,
           relatedTopics = topics
         )
       }
@@ -148,7 +108,7 @@ object LocalAiEngine {
         val topics = AcademicPedagogySynthesizer.getRelatedTopics(targetTopic)
         return@withContext ChatResponse(
           text = codeText,
-          modelName = "Local Academic AI (Code Example Engine)",
+          modelName = BUILT_IN_LABEL,
           relatedTopics = topics
         )
       }
@@ -163,7 +123,7 @@ object LocalAiEngine {
         val topics = AcademicPedagogySynthesizer.getRelatedTopics(targetTopic)
         return@withContext ChatResponse(
           text = summaryText,
-          modelName = "Local Academic AI (Concise Summary Engine)",
+          modelName = BUILT_IN_LABEL,
           relatedTopics = topics
         )
       }
@@ -178,7 +138,7 @@ object LocalAiEngine {
         val topics = AcademicPedagogySynthesizer.getRelatedTopics(targetTopic)
         return@withContext ChatResponse(
           text = explanationText,
-          modelName = "Local Academic AI (Alternative Example Engine)",
+          modelName = BUILT_IN_LABEL,
           relatedTopics = topics
         )
       }
@@ -199,7 +159,7 @@ object LocalAiEngine {
         val topics = AcademicPedagogySynthesizer.getRelatedTopics(targetTopic)
         return@withContext ChatResponse(
           text = explanationText,
-          modelName = "Local Academic AI (Example Walkthrough Engine)",
+          modelName = BUILT_IN_LABEL,
           relatedTopics = topics
         )
       }
@@ -220,23 +180,12 @@ object LocalAiEngine {
 
     val domainRelated = AcademicPedagogySynthesizer.getRelatedTopics(effectiveQuery)
 
-    // Step 1: Check Local Llama / Ollama daemon if active
-    val llamaResponse = tryCallLocalOllama(cleanQuery, history)
-    if (llamaResponse != null) {
-      val (cleanLlamaText, llamaTopics) = AcademicPedagogySynthesizer.extractAndCleanRelatedTopics(llamaResponse, effectiveQuery)
-      return@withContext ChatResponse(
-        text = if (isBriefRequested) "### 📌 Concise Summary\n\n$cleanLlamaText" else cleanLlamaText,
-        modelName = "Local Llama ($localOllamaModel • Ollama)",
-        relatedTopics = llamaTopics.ifEmpty { domainRelated }
-      )
-    }
-
     // Step 2: Check Math / Calculation intent
     val mathResponse = SymbolicMathSolver.trySolve(effectiveQuery)
     if (mathResponse != null) {
       return@withContext ChatResponse(
         text = mathResponse,
-        modelName = "Local AI (Symbolic & Math Engine)",
+        modelName = BUILT_IN_LABEL,
         relatedTopics = domainRelated
       )
     }
@@ -246,7 +195,7 @@ object LocalAiEngine {
     if (codeResponse != null) {
       return@withContext ChatResponse(
         text = codeResponse,
-        modelName = "Local AI (Algorithmic Code Engine)",
+        modelName = BUILT_IN_LABEL,
         relatedTopics = domainRelated
       )
     }
@@ -261,7 +210,7 @@ object LocalAiEngine {
       }
       return@withContext ChatResponse(
         text = responseText,
-        modelName = "Local Academic AI (Knowledge Engine)",
+        modelName = BUILT_IN_LABEL,
         relatedTopics = domainRelated
       )
     }
@@ -276,7 +225,7 @@ object LocalAiEngine {
       )
       return@withContext ChatResponse(
         text = if (isBriefRequested) "### 📌 Concise Summary: $effectiveQuery\n\n${onlineFact.first}" else synthesized,
-        modelName = "Local AI + Live Academic Reference",
+        modelName = BUILT_IN_LABEL,
         groundingSources = listOf(GroundingSource(title = "Encyclopedic Reference: ${effectiveQuery.take(30)}", url = onlineFact.second)),
         searchQueries = listOf(effectiveQuery),
         relatedTopics = domainRelated
@@ -290,162 +239,9 @@ object LocalAiEngine {
     )
     ChatResponse(
       text = if (isBriefRequested) "### 📌 Concise Summary\n\n$concreteResponse" else concreteResponse,
-      modelName = "Local Academic AI (Tutor Engine • Multi-Level Ladder)",
+      modelName = BUILT_IN_LABEL,
       relatedTopics = domainRelated
     )
-  }
-
-  // -------------------------------------------------------------
-  // 2. LOCAL LLAMA / OLLAMA RUNNER (Fast Cached /api/tags Probe)
-  // -------------------------------------------------------------
-  private suspend fun discoverActiveOllamaTarget(): Pair<String, Set<String>>? = withContext(Dispatchers.IO) {
-    val configuredUrl = localOllamaUrl.trimEnd('/')
-    val now = System.currentTimeMillis()
-    val cached = ollamaProbeCache
-    if (cached != null && cached.configUrl == configuredUrl && (now - cached.checkedAtMs) < OLLAMA_PROBE_TTL_MS) {
-      val base = cached.reachableBaseUrl ?: return@withContext null
-      return@withContext base to cached.availableModels
-    }
-
-    val urlsToTry = listOf(
-      configuredUrl,
-      "http://10.0.2.2:11434",
-      "http://localhost:11434"
-    ).distinct()
-
-    val probes = coroutineScope {
-      urlsToTry.map { baseUrl ->
-        async {
-          try {
-            val req = Request.Builder()
-              .url("$baseUrl/api/tags")
-              .get()
-              .build()
-            ollamaProbeClient.newCall(req).execute().use { resp ->
-              if (resp.isSuccessful) {
-                val body = resp.body?.string().orEmpty()
-                val modelsArr = JSONObject(body).optJSONArray("models")
-                val names = mutableSetOf<String>()
-                if (modelsArr != null) {
-                  for (i in 0 until modelsArr.length()) {
-                    val mName = modelsArr.optJSONObject(i)?.optString("name", "").orEmpty().trim()
-                    if (mName.isNotBlank()) {
-                      names.add(mName)
-                      names.add(mName.substringBefore(":"))
-                    }
-                  }
-                }
-                baseUrl to names
-              } else null
-            }
-          } catch (_: Exception) {
-            null
-          }
-        }
-      }.awaitAll()
-    }
-
-    val hit = probes.firstOrNull { it != null }
-    ollamaProbeCache = CachedOllamaProbe(
-      reachableBaseUrl = hit?.first,
-      availableModels = hit?.second ?: emptySet(),
-      checkedAtMs = System.currentTimeMillis(),
-      configUrl = configuredUrl
-    )
-    hit
-  }
-
-  suspend fun tryCallLocalOllama(query: String, history: List<ChatMessage> = emptyList()): String? = withContext(Dispatchers.IO) {
-    val activeTarget = discoverActiveOllamaTarget() ?: return@withContext null
-    val (baseUrl, availableModels) = activeTarget
-
-    val modelsPriority = listOf(localOllamaModel, "llama3.2", "llama3.3", "llama3.1", "llama3", "mistral", "phi3").distinct()
-    val chosenModel = if (availableModels.isNotEmpty()) {
-      modelsPriority.firstOrNull { cand ->
-        availableModels.any { avail -> avail.equals(cand, ignoreCase = true) || avail.startsWith("$cand:", ignoreCase = true) }
-      } ?: availableModels.first()
-    } else {
-      localOllamaModel
-    }
-
-    val promptInstruction = """
-      You are StudyPilot Academic Tutor.
-      Give a clear, direct, and accurate answer specifically to the user's question below.
-      - Lead immediately with the direct answer to what was asked (no generic filler or unnecessary intro).
-      - Only reference prior context if the user asks a follow-up question.
-      - Format cleanly with concise bullet points and code blocks where helpful.
-      At the very end of your response, output related subtopics in this EXACT single-line tag:
-      [RELATED_TOPICS: Subtopic 1, Subtopic 2, Subtopic 3, Subtopic 4, Subtopic 5]
-      User Question: $query
-    """.trimIndent()
-
-    try {
-      val jsonPayload = JSONObject().apply {
-        put("model", chosenModel)
-        put("prompt", promptInstruction)
-        put("stream", false)
-      }
-
-      val request = Request.Builder()
-        .url("$baseUrl/api/generate")
-        .post(jsonPayload.toString().toRequestBody(jsonMediaType))
-        .build()
-
-      httpClient.newCall(request).execute().use { response ->
-        if (response.isSuccessful) {
-          val body = response.body?.string() ?: ""
-          val respText = JSONObject(body).optString("response", "").trim()
-          if (respText.isNotBlank()) {
-            Log.i(TAG, "Local Llama response successfully generated using $chosenModel @ $baseUrl")
-            return@withContext respText
-          }
-        }
-      }
-    } catch (_: Exception) {
-      ollamaProbeCache = null
-    }
-    null
-  }
-
-  suspend fun testOllamaConnection(customUrl: String? = null): Pair<Boolean, String> = withContext(Dispatchers.IO) {
-    val target = (customUrl ?: localOllamaUrl).trimEnd('/')
-    invalidateOllamaCache()
-    try {
-      val request = Request.Builder()
-        .url("$target/api/tags")
-        .get()
-        .build()
-
-      httpClient.newCall(request).execute().use { response ->
-        if (response.isSuccessful) {
-          val body = response.body?.string() ?: ""
-          val json = JSONObject(body)
-          val models = json.optJSONArray("models")
-          val modelNames = mutableListOf<String>()
-          val cachedSet = mutableSetOf<String>()
-          if (models != null) {
-            for (i in 0 until models.length()) {
-              val mName = models.getJSONObject(i).optString("name", "unknown")
-              modelNames.add(mName)
-              cachedSet.add(mName)
-              cachedSet.add(mName.substringBefore(":"))
-            }
-          }
-          ollamaProbeCache = CachedOllamaProbe(
-            reachableBaseUrl = target,
-            availableModels = cachedSet,
-            checkedAtMs = System.currentTimeMillis(),
-            configUrl = localOllamaUrl.trimEnd('/')
-          )
-          val foundStr = if (modelNames.isNotEmpty()) "Available models: ${modelNames.joinToString(", ")}" else "Daemon running (no models downloaded yet)"
-          Pair(true, "✅ Connected to Local Ollama ($target)! $foundStr")
-        } else {
-          Pair(false, "❌ Ollama returned HTTP ${response.code}")
-        }
-      }
-    } catch (e: Exception) {
-      Pair(false, "❌ Could not reach Ollama at $target: ${e.message}")
-    }
   }
 
   // -------------------------------------------------------------

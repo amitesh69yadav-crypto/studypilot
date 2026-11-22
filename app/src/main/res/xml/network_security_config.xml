@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Ollama on the user's PC is reached over plain HTTP on the local network (http://192.168.x.x:11434).
+  Android blocks cleartext by default and can't scope an exception to private IP ranges, so it is
+  allowed here; every internet service the app uses (Hugging Face, Wikipedia, Firebase) is HTTPS.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

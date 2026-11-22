@@ -210,14 +210,14 @@ object AcademicPedagogySynthesizer {
       return buildString {
         append("### ⚖️ Comparison: $itemA vs $itemB (${domain.displayName})\n\n")
         append("- **$itemA** and **$itemB** represent distinct mechanisms/concepts within ${domain.displayName}.\n")
-        append("- To compare exact technical rules, connect your Gemini API key in **Settings** or enable **Google Search** above, or paste a chat link discussing **$itemA** & **$itemB** in **AI Chat Import**.")
+        append("- For a real comparison, download a phone model or connect your PC in **Settings > AI**, or import a chat that discusses **$itemA** and **$itemB**.")
       }
     }
 
     return buildString {
       append("### 💬 $clean (${domain.displayName})\n\n")
       append("I do not have an offline article or linked chat covering **$cleanRaw** specifically yet.\n\n")
-      append("- **Get a direct detailed answer:** Enable **Google Search** or ensure your **Gemini AI** key is active in **Settings**.\n")
+      append("- **Get a real answer:** download a phone model or connect your PC in **Settings > AI**.\n")
       append("- **Answer from your own notes:** Paste a ChatGPT/Gemini/Claude link about **$cleanRaw** in **AI Chat Import**.")
     }
   }

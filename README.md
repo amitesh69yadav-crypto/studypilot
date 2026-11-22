@@ -3,7 +3,8 @@
 Android study planner for university students: timetable with exact alarms, topic tracking with
 spaced repetition, weekend revision quizzes, an AI tutor, and importing shared AI chats as study notes.
 
-Kotlin, Jetpack Compose, Room. Gemini over REST for AI; Firebase Auth + Firestore for optional cloud backup.
+Kotlin, Jetpack Compose, Room. AI runs on the phone (LiteRT-LM) or on your own PC (Ollama); no API keys.
+Firebase Auth + Firestore for optional cloud backup.
 
 ## Build
 
@@ -18,7 +19,6 @@ Files that are not in the repo:
 
 | File | Needed for | Without it |
 | --- | --- | --- |
-| `.env` with `GEMINI_API_KEY=...` | Gemini answers out of the box | Users can paste a key in Settings; otherwise the tutor gives offline answers |
 | `app/google-services.json` | Google sign-in and cloud backup | Builds and runs; Firebase features are off |
 | `debug.keystore` | Debug signing (AI Studio provides it) | Create one: `keytool -genkeypair -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -validity 10000 -dname "CN=Android Debug"` |
 
@@ -47,10 +47,27 @@ permission on first launch; without it the alarm still rings, but no notificatio
 
 ## AI
 
-The tutor and quiz generator call Gemini (`gemini-3.8-flash` by default, falling back through
-`gemini-flash-latest` and `gemini-2.5-flash`). With no key, in Offline mode, or when Gemini fails, answers
-come from `LocalAiEngine`: an Ollama server if one is reachable (default `http://10.0.2.2:11434`, the host
-machine from an emulator), otherwise built-in templates and Wikipedia summaries. Offline answers that
-replace a failed Gemini call say so.
+Settings > AI chooses where answers come from. **Auto** tries them in this order:
 
-Multiple-choice and true/false answers are graded on the device; short answers and code go to Gemini.
+1. **Your PC** with [Ollama](https://ollama.com). Strongest; needs the phone on the same Wi-Fi.
+2. **A model on the phone**, downloaded once in the app. Works offline:
+   - Gemma 4 E2B (2.6 GB, phones with about 6 GB+ RAM) — recommended
+   - Qwen 3.5 0.8B (0.96 GB, older phones)
+3. **Built-in answers** (`LocalAiEngine`): canned explanations, a small maths and code solver, and Wikipedia.
+   Used when neither model is available; such answers are labelled.
+
+Replies stream in as they're generated. Multiple-choice and true/false answers are graded without a model.
+
+### Setting up the PC
+
+```powershell
+winget install Ollama.Ollama
+ollama pull qwen3:8b
+setx OLLAMA_HOST 0.0.0.0
+```
+
+Quit Ollama from the system tray and start it again so it listens on the network, and allow it through
+Windows Firewall on private networks when asked. In the app, tap **Find** under "On your PC", or type the
+PC's Wi-Fi address (`ipconfig` → IPv4 Address). From the emulator, the PC is `10.0.2.2`.
+
+`qwen3:8b` (about 5 GB) fits a 6 GB+ GPU; use `qwen3:4b` on smaller machines.

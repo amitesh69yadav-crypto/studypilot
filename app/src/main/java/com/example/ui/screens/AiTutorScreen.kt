@@ -89,7 +89,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.ChatMessage
 import com.example.data.model.Subject
-import com.example.data.model.TutorModel
+import com.example.data.ai.AiSource
 import com.example.data.model.TutorSession
 import com.example.ui.components.FormattedTutorResponse
 import com.example.ui.theme.CyanAccent
@@ -120,8 +120,8 @@ fun AiTutorScreen(
 ) {
   val context = LocalContext.current
   val messages by viewModel.chatMessages.collectAsState()
-  val selectedModel by viewModel.selectedModel.collectAsState()
-  val useGoogleSearch by viewModel.useGoogleSearch.collectAsState()
+  val aiSource by viewModel.aiSource.collectAsState()
+  val activeAiLabel by viewModel.activeAiLabel.collectAsState()
   val systemInstruction by viewModel.systemInstruction.collectAsState()
   val isChatLoading by viewModel.isChatLoading.collectAsState()
 
@@ -153,7 +153,7 @@ fun AiTutorScreen(
   val listState = rememberLazyListState()
 
   // Auto scroll to bottom when new messages arrive in Chat tab
-  LaunchedEffect(messages.size) {
+  LaunchedEffect(messages.size, messages.lastOrNull()?.text?.length?.div(200)) {
     if (messages.isNotEmpty() && selectedTab == TutorTab.CHAT) {
       listState.animateScrollToItem(messages.size - 1)
     }
@@ -363,8 +363,8 @@ fun AiTutorScreen(
         importedChats = importedChats,
         extractedConcepts = extractedConcepts,
         linkedChatsCount = linkedChatsCountForScope,
-        selectedModel = selectedModel,
-        useGoogleSearch = useGoogleSearch,
+        aiSource = aiSource,
+        activeAiLabel = activeAiLabel,
         isChatLoading = isChatLoading,
         isHeaderExpanded = isHeaderExpanded,
         onToggleHeader = { isHeaderExpanded = !isHeaderExpanded },
@@ -525,8 +525,8 @@ private fun ChatTabContent(
   importedChats: List<com.example.data.model.ImportedChat>,
   extractedConcepts: List<com.example.data.model.ExtractedConcept>,
   linkedChatsCount: Int,
-  selectedModel: TutorModel,
-  useGoogleSearch: Boolean,
+  aiSource: AiSource,
+  activeAiLabel: String,
   isChatLoading: Boolean,
   isHeaderExpanded: Boolean,
   onToggleHeader: () -> Unit,
@@ -582,10 +582,7 @@ private fun ChatTabContent(
                 overflow = TextOverflow.Ellipsis
               )
               Text(
-                text = if (linkedChatsCount > 0)
-                  "Searching $linkedChatsCount linked chat(s) first • Gemini / Local AI fallback"
-                else
-                  "No linked chats in subject yet • Gemini & Local AI active",
+                text = if (linkedChatsCount > 0) "Checks $linkedChatsCount linked chat(s) first" else "No linked chats for this subject yet",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -627,8 +624,7 @@ private fun ChatTabContent(
               .padding(end = 8.dp)
           ) {
             Text(
-              text = selectedModel.displayName +
-                (if (useGoogleSearch) " • Web" else "") +
+              text = activeAiLabel +
                 (if (selectedSubject != null) " • ${selectedSubject.code}" else "") +
                 " • $linkedChatsCount linked",
               fontSize = 11.sp,
@@ -653,25 +649,20 @@ private fun ChatTabContent(
         modifier = Modifier.fillMaxWidth()
       ) {
       Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
-        // Model Selection Chips
+        // Where answers come from (also in Settings > AI)
         LazyRow(
           modifier = Modifier.fillMaxWidth(),
           horizontalArrangement = Arrangement.spacedBy(6.dp),
           verticalAlignment = Alignment.CenterVertically
         ) {
-          items(TutorModel.values()) { model ->
-            val isSelected = selectedModel == model
+          items(AiSource.entries) { option ->
+            val isSelected = aiSource == option
             FilterChip(
               selected = isSelected,
-              onClick = {
-                viewModel.selectTutorModel(model)
-                if (model != TutorModel.FLASH && useGoogleSearch) {
-                  viewModel.toggleGoogleSearch(false)
-                }
-              },
+              onClick = { viewModel.setAiSource(option) },
               label = {
                 Text(
-                  text = model.iconBadge,
+                  text = option.label,
                   fontSize = 11.sp,
                   fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                 )
@@ -684,91 +675,16 @@ private fun ChatTabContent(
           }
         }
 
-        // Guaranteed Answer Status Indicator
-        Row(
-          modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 2.dp),
-          verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-          Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.weight(1f)
-          ) {
-            Icon(
-              imageVector = Icons.Default.Check,
-              contentDescription = null,
-              tint = EmeraldSuccess,
-              modifier = Modifier.size(12.dp)
-            )
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(
-              text = if (linkedChatsCount > 0)
-                "Searching $linkedChatsCount linked chat(s) first • Gemini & Local AI fallback"
-              else
-                "Gemini AI & Local AI Active (Add chat links for memory retrieval)",
-              fontSize = 11.sp,
-              fontWeight = FontWeight.SemiBold,
-              color = EmeraldSuccess,
-              maxLines = 1,
-              overflow = TextOverflow.Ellipsis
-            )
-          }
-        }
-
-        Spacer(modifier = Modifier.height(4.dp))
-
-        // Google Search Grounding Toggle Bar
-        Row(
-          modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(if (useGoogleSearch) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface)
-            .padding(horizontal = 10.dp, vertical = 5.dp),
-          horizontalArrangement = Arrangement.SpaceBetween,
-          verticalAlignment = Alignment.CenterVertically
-        ) {
-          Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-              .weight(1f)
-              .padding(end = 8.dp)
-          ) {
-            Icon(
-              imageVector = Icons.Default.Public,
-              contentDescription = null,
-              tint = if (useGoogleSearch) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-              modifier = Modifier.size(16.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Column(modifier = Modifier.weight(1f)) {
-              Text(
-                text = "Google Search Grounding",
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                color = if (useGoogleSearch) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-              )
-              Text(
-                text = if (useGoogleSearch) "Live web search active (Gemini)" else "Tap to fetch live web citations",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-              )
-            }
-          }
-
-          Switch(
-            checked = useGoogleSearch,
-            onCheckedChange = { viewModel.toggleGoogleSearch(it) },
-            colors = SwitchDefaults.colors(
-              checkedThumbColor = MaterialTheme.colorScheme.primary,
-              checkedTrackColor = MaterialTheme.colorScheme.primaryContainer
-            )
-          )
-        }
+        Text(
+          text = "Answering with: $activeAiLabel" +
+            (if (linkedChatsCount > 0) " • checks $linkedChatsCount linked chat(s) first" else ""),
+          fontSize = 11.sp,
+          fontWeight = FontWeight.SemiBold,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+          maxLines = 2,
+          overflow = TextOverflow.Ellipsis,
+          modifier = Modifier.padding(vertical = 2.dp)
+        )
       }
     }
   }
@@ -804,15 +720,7 @@ private fun ChatTabContent(
           items(subjectPrompts, key = { it.first }) { prompt ->
             PromptChip(
               text = prompt.first,
-              onClick = {
-                if (prompt.third) {
-                  viewModel.toggleGoogleSearch(true)
-                }
-                if (prompt.second != null) {
-                  viewModel.selectTutorModel(prompt.second)
-                }
-                viewModel.sendChatMessage(prompt.fourth)
-              }
+              onClick = { viewModel.sendChatMessage(prompt.fourth) }
             )
           }
         }
@@ -853,7 +761,7 @@ private fun ChatTabContent(
         )
       }
 
-      if (isChatLoading) {
+      if (isChatLoading && messages.lastOrNull()?.role == "user") {
         item {
           Row(
             modifier = Modifier
@@ -874,7 +782,7 @@ private fun ChatTabContent(
             CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-              text = if (useGoogleSearch) "Searching Google & synthesizing response..." else "Tutor is formatting explanation...",
+              text = "Thinking...",
               style = MaterialTheme.typography.bodySmall,
               color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -1295,21 +1203,8 @@ private fun ChatMessageBubble(
     ) {
       // Model & Source Badge (Linked Chat History, Gemini, or Local AI)
       if (!isUser) {
-        val cleanModelName = remember(message.modelName) {
-          when {
-            message.modelName.contains("Linked Chat", ignoreCase = true) -> "Linked Chat History"
-            message.modelName.contains("Local Llama", ignoreCase = true) -> "Local Llama"
-            message.modelName.contains("Knowledge Engine", ignoreCase = true) -> "Local Academic AI"
-            message.modelName.contains("Local Academic", ignoreCase = true) -> "Local Academic AI"
-            message.modelName.contains("Symbolic", ignoreCase = true) -> "Local Math Solver"
-            message.modelName.contains("Algorithmic", ignoreCase = true) -> "Local Code Engine"
-            message.modelName.contains("gemini-3.8-flash", ignoreCase = true) -> "Gemini 3.8 Flash"
-            message.modelName.contains("gemini-3.1-pro", ignoreCase = true) -> "Gemini 3.1 Pro"
-            message.modelName.contains("gemini-3.1-flash-lite", ignoreCase = true) -> "Gemini Flash-Lite"
-            message.modelName.contains("gemini", ignoreCase = true) -> "Gemini AI"
-            else -> message.modelName.take(28)
-          }
-        }
+        // Labels are already short ("PC · qwen3:8b", "Phone · Gemma 4 E2B", "Built-in answer").
+        val cleanModelName = message.modelName.ifBlank { "Tutor" }.take(32)
 
         FlowRow(
           horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -1688,17 +1583,15 @@ private fun PromptChip(
   }
 }
 
-/**
- * Returns a quadruple of (Chip Label, Optional Model, Use Search, Prompt Text)
- */
+/** Suggested questions for the selected subject: chip label and the prompt it sends. */
 private fun getPromptsForSubject(subject: Subject?): List<PromptOption> {
   if (subject == null) {
     return listOf(
-      PromptOption("💻 Java Objects & Memory", TutorModel.LOCAL_AI, false, "Explain Java Objects, reference semantics, and heap/stack memory architecture with code examples."),
-      PromptOption("⚛️ Quantum Physics & Superposition", TutorModel.LOCAL_AI, false, "Explain Quantum Superposition, wave-particle duality, and mathematical formulation."),
-      PromptOption("✈️ Aerodynamics: How Planes Fly", TutorModel.LOCAL_AI, false, "Explain how airplanes fly with Bernoulli's principle, angle of attack, and lift mechanics."),
-      PromptOption("🔬 Bayesian Inference & MCMC", TutorModel.LOCAL_AI, false, "Explain Bayes' Theorem, prior/posterior distributions, and Markov Chain Monte Carlo sampling."),
-      PromptOption("📈 Inflation & Monetary Policy", TutorModel.LOCAL_AI, false, "Explain inflation, currency supply, interest rates, and central bank monetary policy mechanisms.")
+      PromptOption("💻 Java Objects & Memory", "Explain Java Objects, reference semantics, and heap/stack memory architecture with code examples."),
+      PromptOption("⚛️ Quantum Physics & Superposition", "Explain Quantum Superposition, wave-particle duality, and mathematical formulation."),
+      PromptOption("✈️ Aerodynamics: How Planes Fly", "Explain how airplanes fly with Bernoulli's principle, angle of attack, and lift mechanics."),
+      PromptOption("🔬 Bayesian Inference & MCMC", "Explain Bayes' Theorem, prior/posterior distributions, and Markov Chain Monte Carlo sampling."),
+      PromptOption("📈 Inflation & Monetary Policy", "Explain inflation, currency supply, interest rates, and central bank monetary policy mechanisms.")
     )
   }
 
@@ -1707,39 +1600,37 @@ private fun getPromptsForSubject(subject: Subject?): List<PromptOption> {
 
   return when {
     name.contains("data structure") || name.contains("algorithm") || code.contains("cs2") -> listOf(
-      PromptOption("💻 AVL Double Rotations in Kotlin", TutorModel.PRO, false, "Explain how Left-Right and Right-Left double rotations work in AVL trees, and provide clean Kotlin code."),
-      PromptOption("⚡ Dijkstra vs Bellman-Ford", TutorModel.FLASH_LITE, false, "Compare Dijkstra and Bellman-Ford algorithms regarding time complexity, negative edges, and cycle detection."),
-      PromptOption("🧠 Prove Master Theorem case 2", TutorModel.PRO, false, "Derive and prove Case 2 of the Master Theorem for divide-and-conquer algorithmic recurrences."),
-      PromptOption("🔍 Self-balancing trees research", TutorModel.FLASH, true, "What are the modern variants of self-balancing search trees (e.g. WAVL, Zip trees) used in database indexing?")
+      PromptOption("💻 AVL Double Rotations in Kotlin", "Explain how Left-Right and Right-Left double rotations work in AVL trees, and provide clean Kotlin code."),
+      PromptOption("⚡ Dijkstra vs Bellman-Ford", "Compare Dijkstra and Bellman-Ford algorithms regarding time complexity, negative edges, and cycle detection."),
+      PromptOption("🧠 Prove Master Theorem case 2", "Derive and prove Case 2 of the Master Theorem for divide-and-conquer algorithmic recurrences."),
+      PromptOption("🔍 Self-balancing trees research", "What are the modern variants of self-balancing search trees (e.g. WAVL, Zip trees) used in database indexing?")
     )
     name.contains("linear algebra") || name.contains("calculus") || code.contains("math") -> listOf(
-      PromptOption("🧠 Matrix Diagonalization Proof", TutorModel.PRO, false, "Prove the necessary and sufficient conditions for matrix diagonalizability with eigenvalues and eigenspaces."),
-      PromptOption("📐 Gram-Schmidt Step-by-Step", TutorModel.PRO, false, "Walk me through the Gram-Schmidt orthogonalization algorithm with an example step-by-step derivation."),
-      PromptOption("⚡ Eigenvalues of Orthogonal Matrix", TutorModel.FLASH_LITE, false, "Explain why all eigenvalues of a real orthogonal matrix must have absolute value equal to 1."),
-      PromptOption("🔍 Spectral Theorem application", TutorModel.FLASH, true, "Explain the Spectral Theorem and its modern applications in machine learning SVD and PCA with citations.")
+      PromptOption("🧠 Matrix Diagonalization Proof", "Prove the necessary and sufficient conditions for matrix diagonalizability with eigenvalues and eigenspaces."),
+      PromptOption("📐 Gram-Schmidt Step-by-Step", "Walk me through the Gram-Schmidt orthogonalization algorithm with an example step-by-step derivation."),
+      PromptOption("⚡ Eigenvalues of Orthogonal Matrix", "Explain why all eigenvalues of a real orthogonal matrix must have absolute value equal to 1."),
+      PromptOption("🔍 Spectral Theorem application", "Explain the Spectral Theorem and its modern applications in machine learning SVD and PCA.")
     )
     name.contains("physics") || code.contains("phys") -> listOf(
-      PromptOption("🔍 Davisson-Germer electron diffraction", TutorModel.FLASH, true, "Explain the Davisson-Germer experiment that verified de Broglie's wave hypothesis, with citations."),
-      PromptOption("⚡ Schrödinger 1D Infinite Well", TutorModel.PRO, false, "Derive the energy eigenstates and wavefunctions for a particle in a 1D infinite square well."),
-      PromptOption("🧠 Heisenberg Uncertainty Derivation", TutorModel.PRO, false, "Derive Heisenberg's uncertainty principle using operators and the Cauchy-Schwarz inequality.")
+      PromptOption("🔍 Davisson-Germer electron diffraction", "Explain the Davisson-Germer experiment that verified de Broglie's wave hypothesis,."),
+      PromptOption("⚡ Schrödinger 1D Infinite Well", "Derive the energy eigenstates and wavefunctions for a particle in a 1D infinite square well."),
+      PromptOption("🧠 Heisenberg Uncertainty Derivation", "Derive Heisenberg's uncertainty principle using operators and the Cauchy-Schwarz inequality.")
     )
     name.contains("software") || name.contains("engineering") || code.contains("cs3") -> listOf(
-      PromptOption("💻 SOLID Principles in Kotlin", TutorModel.PRO, false, "Explain all 5 SOLID principles with concrete, clean Kotlin code examples."),
-      PromptOption("⚡ Dependency Injection vs Factory", TutorModel.FLASH_LITE, false, "Explain the key differences and design trade-offs between Dependency Injection and Factory patterns."),
-      PromptOption("🔍 Thread-safe Singleton in Kotlin", TutorModel.PRO, false, "How is the thread-safe Singleton pattern implemented idiomatically in Kotlin?")
+      PromptOption("💻 SOLID Principles in Kotlin", "Explain all 5 SOLID principles with concrete, clean Kotlin code examples."),
+      PromptOption("⚡ Dependency Injection vs Factory", "Explain the key differences and design trade-offs between Dependency Injection and Factory patterns."),
+      PromptOption("🔍 Thread-safe Singleton in Kotlin", "How is the thread-safe Singleton pattern implemented idiomatically in Kotlin?")
     )
     else -> listOf(
-      PromptOption("🔍 Key theorems in ${subject.code}", TutorModel.FLASH, true, "What are the most crucial core theorems and exam questions in ${subject.name}? Cite academic sources."),
-      PromptOption("🧠 Step-by-step concept breakdown", TutorModel.PRO, false, "Break down the core principles of ${subject.name} into clear conceptual pillars with exam tips."),
-      PromptOption("⚡ 5-minute summary", TutorModel.FLASH_LITE, false, "Give me a high-yield 5-minute study summary for ${subject.name}.")
+      PromptOption("🔍 Key theorems in ${subject.code}", "What are the most crucial core theorems and exam questions in ${subject.name}? "),
+      PromptOption("🧠 Step-by-step concept breakdown", "Break down the core principles of ${subject.name} into clear conceptual pillars with exam tips."),
+      PromptOption("⚡ 5-minute summary", "Give me a high-yield 5-minute study summary for ${subject.name}.")
     )
   }
 }
 
 private data class PromptOption(
   val first: String,
-  val second: TutorModel?,
-  val third: Boolean,
   val fourth: String
 )
 

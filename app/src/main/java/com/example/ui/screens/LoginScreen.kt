@@ -324,7 +324,7 @@ fun LoginScreen(
               AcademicPerkItem(
                 icon = Icons.Default.AutoAwesome,
                 title = "AI tutor",
-                desc = "Gemini answers with optional Google Search sources, or offline answers without a key."
+                desc = "Runs on your phone or your own PC. No account or API key needed."
               )
               Spacer(modifier = Modifier.height(10.dp))
               AcademicPerkItem(

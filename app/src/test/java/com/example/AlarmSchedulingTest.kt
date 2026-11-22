@@ -5,7 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.example.data.model.ChatMessage
 import com.example.data.model.QuizQuestion
 import com.example.data.model.TimetableSession
-import com.example.data.remote.GeminiStudyService
+import com.example.data.ai.StudyAi
 import com.example.data.service.AlarmAndCalendarService
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -87,7 +87,7 @@ class AlarmSchedulingTest {
   }
 
   @Test
-  fun geminiChatHistoryStartsWithUserAndAlternates() {
+  fun chatHistoryStartsWithUserAndAlternates() {
     val history = listOf(
       ChatMessage(role = "model", text = "Ask me anything"),
       ChatMessage(role = "user", text = "What is a heap?"),
@@ -96,11 +96,9 @@ class AlarmSchedulingTest {
       ChatMessage(role = "model", text = "A heap is a tree..."),
       ChatMessage(role = "user", text = "Thanks")
     )
-    val contents = GeminiStudyService().buildChatContents(history)
-    val roles = (0 until contents.length()).map { contents.getJSONObject(it).getString("role") }
-    assertEquals(listOf("user", "model", "user"), roles)
-    val firstText = contents.getJSONObject(0).getJSONArray("parts").getJSONObject(0).getString("text")
-    assertEquals("What is a heap?\n\nAnd a min-heap?", firstText)
+    val turns = StudyAi(null).toTurns(history)
+    assertEquals(listOf(true, false, true), turns.map { it.fromUser })
+    assertEquals("What is a heap?\n\nAnd a min-heap?", turns.first().text)
   }
 
   @Test
@@ -109,9 +107,9 @@ class AlarmSchedulingTest {
       topicId = 1L, subjectName = "CS", topicTitle = "Trees", questionType = "MULTIPLE_CHOICE",
       questionText = "AVL search complexity?", optionsJson = "O(log N),O(N)", correctAnswer = "O(log N)", explanation = ""
     )
-    val gemini = GeminiStudyService().apply { customGeminiKey = "fake-key-that-would-fail" }
-    assertTrue(gemini.evaluateAnswer(question, "O(log N)").isCorrect)
-    assertFalse(gemini.evaluateAnswer(question, "O(N)").isCorrect)
+    val ai = StudyAi(null)
+    assertTrue(ai.evaluateAnswer(question, "O(log N)").isCorrect)
+    assertFalse(ai.evaluateAnswer(question, "O(N)").isCorrect)
   }
 
   @Test

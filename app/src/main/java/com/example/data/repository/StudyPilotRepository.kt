@@ -14,7 +14,7 @@ import com.example.data.model.TimetableSession
 import com.example.data.model.TutorMessageEntity
 import com.example.data.model.TutorSession
 import com.example.data.remote.EvaluationResult
-import com.example.data.remote.GeminiStudyService
+import com.example.data.ai.StudyAi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -33,8 +33,8 @@ private fun getFirestoreInstance(): com.google.firebase.firestore.FirebaseFirest
 
 class StudyPilotRepository(
   private val dao: StudyPilotDao,
-  val geminiService: GeminiStudyService = GeminiStudyService(),
-  context: android.content.Context? = null
+  context: android.content.Context? = null,
+  val ai: StudyAi = StudyAi(context)
 ) {
 
   private val prefs: android.content.SharedPreferences? =
@@ -400,17 +400,16 @@ class StudyPilotRepository(
 
   // --- AI Summarization & Chat ---
   suspend fun summarizeMaterial(title: String, rawContent: String): String {
-    return geminiService.summarizeMaterial(title, rawContent)
+    return ai.summarizeMaterial(title, rawContent)
   }
 
   suspend fun chatWithTutor(
     history: List<com.example.data.model.ChatMessage>,
-    model: com.example.data.model.TutorModel,
-    useGoogleSearch: Boolean,
     systemInstruction: String,
-    subjectContext: String? = null
+    subjectContext: String? = null,
+    onPartial: ((String) -> Unit)? = null
   ): com.example.data.remote.ChatResponse {
-    return geminiService.chatWithGemini(history, model, useGoogleSearch, systemInstruction, subjectContext)
+    return ai.chat(history, systemInstruction, subjectContext, onPartial)
   }
 
   // --- AI Tutor History & Persistence ---
@@ -810,9 +809,9 @@ class StudyPilotRepository(
             conceptsByTopicTitle[plan.topic.title]
           } else null
           val generated = if (matchingConcept != null) {
-            geminiService.generateQuestionsForConcept(matchingConcept, plan.stillNeeded, config.difficulty)
+            ai.generateQuestionsForConcept(matchingConcept, plan.stillNeeded, config.difficulty)
           } else {
-            geminiService.generateQuestionsForTopic(plan.topic, plan.stillNeeded, config.difficulty)
+            ai.generateQuestionsForTopic(plan.topic, plan.stillNeeded, config.difficulty)
           }
           plan.topic.id to generated
         }
@@ -848,9 +847,9 @@ class StudyPilotRepository(
           conceptsByTopicTitle[topic.title]
         } else null
         val generated = if (matchingConcept != null) {
-          geminiService.generateQuestionsForConcept(matchingConcept, stillNeeded, config.difficulty)
+          ai.generateQuestionsForConcept(matchingConcept, stillNeeded, config.difficulty)
         } else {
-          geminiService.generateQuestionsForTopic(topic, stillNeeded, config.difficulty)
+          ai.generateQuestionsForTopic(topic, stillNeeded, config.difficulty)
         }
         if (generated.isNotEmpty()) {
           allNewlyGenerated.addAll(generated)
@@ -883,7 +882,7 @@ class StudyPilotRepository(
     question: QuizQuestion,
     userAnswer: String
   ): EvaluationResult {
-    return geminiService.evaluateAnswer(question, userAnswer)
+    return ai.evaluateAnswer(question, userAnswer)
   }
 
   // --- Spaced Repetition Updates ---

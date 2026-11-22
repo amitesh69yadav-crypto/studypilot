@@ -1,6 +1,6 @@
 {
   "name": "StudyPilot AI",
-  "description": "AI-powered study planner, timetable, daily topic tracker, and weekend revision quiz generator for university students.",
+  "description": "Study planner, timetable with alarms, topic tracker and revision quizzes for university students, with an AI tutor that runs on the phone or your own PC.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": []
 }

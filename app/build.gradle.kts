@@ -20,8 +20,6 @@ android {
     versionName = "1.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-    val envGemini = System.getenv("GEMINI_API_KEY") ?: ""
-    buildConfigField("String", "ENV_GEMINI_API_KEY", "\"$envGemini\"")
   }
 
   // Do not remove or modify these signingConfigs. They are necessary for building, installing,
@@ -114,7 +112,7 @@ dependencies {
   implementation(libs.androidx.room.runtime)
   // implementation(libs.coil.compose)
   implementation(libs.converter.moshi)
-  implementation(libs.firebase.ai)
+  implementation(libs.litertlm.android)
   implementation(libs.firebase.firestore)
   implementation(libs.firebase.auth)
   implementation(libs.androidx.credentials)
