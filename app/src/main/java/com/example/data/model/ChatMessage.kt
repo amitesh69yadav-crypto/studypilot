@@ -5,7 +5,7 @@ data class ChatMessage(
   val role: String, // "user" or "model"
   val text: String,
   val timestamp: Long = System.currentTimeMillis(),
-  val modelName: String = "gemini-2.5-flash",
+  val modelName: String = "",
   val searchGroundingUsed: Boolean = false,
   val groundingSources: List<GroundingSource> = emptyList(),
   val searchQueries: List<String> = emptyList(),
@@ -27,25 +27,25 @@ enum class TutorModel(
   FLASH(
     modelId = "gemini-3.8-flash",
     displayName = "Gemini 3.8 Flash",
-    description = "Primary Cloud AI with Google Search grounding",
-    iconBadge = "⚡ Flash"
+    description = "Default. Fast, supports Google Search",
+    iconBadge = "Flash"
   ),
   FLASH_LITE(
-    modelId = "gemini-3.1-flash-lite-preview",
-    displayName = "Flash-Lite 3.1",
-    description = "Fast low-latency definitions and formulas",
-    iconBadge = "🚀 Fast"
+    modelId = "gemini-3.5-flash-lite",
+    displayName = "Gemini 3.5 Flash-Lite",
+    description = "Quickest, for short definitions and formulas",
+    iconBadge = "Lite"
   ),
   PRO(
     modelId = "gemini-3.1-pro-preview",
     displayName = "Gemini 3.1 Pro",
-    description = "Deep mathematical proofs, research & complex reasoning",
-    iconBadge = "🧠 Pro"
+    description = "Slower, better for proofs and multi-step problems",
+    iconBadge = "Pro"
   ),
   LOCAL_AI(
     modelId = "local-ai-academic",
-    displayName = "Local Llama / Academic AI",
-    description = "On-device Llama 3 & Deep Academic Engine (Zero vague answers)",
-    iconBadge = "🦙 Local Llama"
+    displayName = "Offline",
+    description = "No internet needed. Uses Ollama if running, otherwise built-in notes and Wikipedia",
+    iconBadge = "Offline"
   )
 }

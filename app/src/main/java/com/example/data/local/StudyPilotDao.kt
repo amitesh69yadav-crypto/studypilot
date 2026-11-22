@@ -51,6 +51,9 @@ interface StudyPilotDao {
   @Query("SELECT * FROM timetable_sessions ORDER BY date ASC, startTime ASC")
   suspend fun getAllSessionsList(): List<TimetableSession>
 
+  @Query("SELECT * FROM timetable_sessions WHERE id = :id LIMIT 1")
+  suspend fun getSessionById(id: Long): TimetableSession?
+
   @Query("SELECT * FROM timetable_sessions WHERE date = :date ORDER BY startTime ASC")
   fun getSessionsForDate(date: String): Flow<List<TimetableSession>>
 
@@ -201,11 +204,17 @@ interface StudyPilotDao {
     deleteTutorSessionById(sessionId)
   }
 
+  @Query("DELETE FROM tutor_messages WHERE sessionId IN (SELECT id FROM tutor_sessions WHERE userId = :userId)")
+  suspend fun deleteTutorMessagesForUser(userId: String)
+
   @Transaction
-  suspend fun clearAllTutorHistoryAtomic() {
-    clearAllTutorMessages()
-    clearAllTutorSessions()
+  suspend fun clearTutorHistoryForUser(userId: String) {
+    deleteTutorMessagesForUser(userId)
+    deleteTutorSessionsForUser(userId)
   }
+
+  @Query("DELETE FROM quiz_questions WHERE topicId IN (SELECT id FROM study_topics WHERE userId = :userId)")
+  suspend fun deleteQuestionsForUser(userId: String)
 
   // --- Schedule Formats / Templates ---
   @Query("SELECT * FROM schedule_formats WHERE userId = :userId ORDER BY createdAt ASC")

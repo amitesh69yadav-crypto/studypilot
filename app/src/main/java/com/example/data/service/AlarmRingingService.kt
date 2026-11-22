@@ -1,73 +1,72 @@
 package com.example.data.service
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.media.AudioAttributes
-import android.media.Ringtone
-import android.media.RingtoneManager
-import android.media.ToneGenerator
-import android.net.Uri
+import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.PowerManager
-import android.os.VibrationEffect
-import android.os.Vibrator
-import android.os.VibratorManager
 import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 import com.example.MainActivity
 import com.example.data.model.TimetableSession
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
+import com.example.ui.components.formatTimeRange
 
+/**
+ * Foreground service that rings an alarm: one notification, looping sound and vibration,
+ * stopped by Dismiss/Snooze or automatically after [RING_TIMEOUT_MS].
+ */
 class AlarmRingingService : Service() {
 
   companion object {
-    const val CHANNEL_ID = "studypilot_foreground_alarm_channel"
+    private const val CHANNEL_ID = "study_alarms_v2"
+    private val LEGACY_CHANNEL_IDS = listOf("studypilot_foreground_alarm_channel", "studypilot_alarms_channel")
     const val NOTIFICATION_ID = 8881
+    private const val RING_TIMEOUT_MS = 5 * 60_000L
 
-    const val ACTION_START_RINGING = "com.example.data.service.ACTION_START_RINGING"
-    const val ACTION_STOP_RINGING = "com.example.data.service.ACTION_STOP_RINGING"
+    private const val ACTION_START_RINGING = "com.example.data.service.ACTION_START_RINGING"
+
+    /** Id of the session whose alarm is ringing right now, or null. */
+    @Volatile
+    var ringingSessionId: Long? = null
+      private set
 
     fun startRinging(context: Context, session: TimetableSession) {
       val intent = Intent(context, AlarmRingingService::class.java).apply {
         action = ACTION_START_RINGING
-        putExtra(AlarmReceiver.EXTRA_SESSION_ID, session.id)
-        putExtra(AlarmReceiver.EXTRA_SUBJECT_NAME, session.subjectName)
-        putExtra(AlarmReceiver.EXTRA_TOPIC, session.topic)
-        putExtra(AlarmReceiver.EXTRA_START_TIME, session.startTime)
-        putExtra(AlarmReceiver.EXTRA_END_TIME, session.endTime)
-        putExtra(AlarmReceiver.EXTRA_LOCATION, session.location)
-        putExtra(AlarmReceiver.EXTRA_NOTES, session.notes)
+        AlarmReceiver.putSessionExtras(this, session)
       }
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        context.startForegroundService(intent)
-      } else {
-        context.startService(intent)
+      try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+          context.startForegroundService(intent)
+        } else {
+          context.startService(intent)
+        }
+      } catch (e: Exception) {
+        // Background start can be refused (e.g. app in background without an alarm exemption).
+        android.util.Log.w("AlarmRingingService", "Could not start ringing service", e)
+        AlarmSoundManager.startSoundAndVibration(context)
+        ringingSessionId = session.id
       }
     }
 
     fun stopRinging(context: Context) {
-      AlarmSoundManager.stopSoundAndVibration(context)
-      val intent = Intent(context, AlarmRingingService::class.java).apply {
-        action = ACTION_STOP_RINGING
-      }
-      try {
-        context.startService(intent)
-      } catch (e: Exception) {
-        // Ignore
-      }
+      ringingSessionId = null
+      AlarmSoundManager.stopSoundAndVibration()
+      context.stopService(Intent(context, AlarmRingingService::class.java))
     }
   }
 
   private var wakeLock: PowerManager.WakeLock? = null
+  private val handler = Handler(Looper.getMainLooper())
+  private val timeout = Runnable { stopRinging(applicationContext) }
 
   override fun onBind(intent: Intent?): IBinder? = null
 
@@ -77,179 +76,120 @@ class AlarmRingingService : Service() {
   }
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-    when (intent?.action) {
-      ACTION_START_RINGING -> {
-        val sessionId = intent.getLongExtra(AlarmReceiver.EXTRA_SESSION_ID, 0L)
-        val subjectName = intent.getStringExtra(AlarmReceiver.EXTRA_SUBJECT_NAME) ?: "Study Session"
-        val topic = intent.getStringExtra(AlarmReceiver.EXTRA_TOPIC) ?: "Scheduled Alarm"
-        val startTime = intent.getStringExtra(AlarmReceiver.EXTRA_START_TIME) ?: "Now"
-        val endTime = intent.getStringExtra(AlarmReceiver.EXTRA_END_TIME) ?: ""
-        val location = intent.getStringExtra(AlarmReceiver.EXTRA_LOCATION) ?: ""
-        val notes = intent.getStringExtra(AlarmReceiver.EXTRA_NOTES) ?: ""
-
-        val session = TimetableSession(
-          id = sessionId,
-          subjectId = 0L,
-          subjectName = subjectName,
-          topic = topic,
-          date = "",
-          startTime = startTime,
-          endTime = endTime,
-          location = location,
-          notes = notes,
-          isAlarmEnabled = true
-        )
-
-        // 1. Acquire WakeLock so CPU doesn't sleep
-        acquireWakeLock()
-
-        // 2. Build High Priority Notification with FullScreenIntent
-        val notification = buildForegroundNotification(session)
-        startForeground(NOTIFICATION_ID, notification)
-
-        // 3. Play Loud Ringtone & Audio Beeps
-        startSoundAndVibration()
-
-        // 4. Emit event so in-app UI pops up dialog if app is open
-        AlarmEventBus.emit(
-          AlarmEvent.Triggered(
-            sessionId = sessionId,
-            subjectName = subjectName,
-            topic = topic,
-            startTime = startTime,
-            endTime = endTime,
-            location = location,
-            notes = notes
-          )
-        )
-      }
-
-      ACTION_STOP_RINGING -> {
-        stopSoundAndVibration()
-        releaseWakeLock()
-        stopForeground(STOP_FOREGROUND_REMOVE)
-        stopSelf()
-      }
+    if (intent?.action != ACTION_START_RINGING) {
+      stopSelf()
+      return START_NOT_STICKY
     }
+    val session = AlarmReceiver.sessionFromExtras(intent)
+    ringingSessionId = session.id
 
+    val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK else 0
+    ServiceCompat.startForeground(this, NOTIFICATION_ID, buildNotification(session), type)
+
+    acquireWakeLock()
+    AlarmSoundManager.startSoundAndVibration(applicationContext)
+    handler.removeCallbacks(timeout)
+    handler.postDelayed(timeout, RING_TIMEOUT_MS)
+
+    AlarmEventBus.emit(
+      AlarmEvent.Triggered(
+        sessionId = session.id,
+        subjectName = session.subjectName,
+        topic = session.topic,
+        startTime = session.startTime,
+        endTime = session.endTime,
+        location = session.location,
+        notes = session.notes
+      )
+    )
     return START_NOT_STICKY
   }
 
+  override fun onDestroy() {
+    handler.removeCallbacks(timeout)
+    AlarmSoundManager.stopSoundAndVibration()
+    releaseWakeLock()
+    ringingSessionId = null
+    super.onDestroy()
+  }
+
   private fun acquireWakeLock() {
-    try {
-      if (wakeLock == null) {
-        val pm = getSystemService(Context.POWER_SERVICE) as? PowerManager
-        wakeLock = pm?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "StudyPilot:AlarmWakeLock")
-        wakeLock?.acquire(2 * 60 * 1000L) // 2 minutes auto-timeout
-      }
-    } catch (e: Exception) {
-      // Ignore
+    if (wakeLock?.isHeld == true) return
+    val pm = getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return
+    wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "StudyPilot:AlarmWakeLock").apply {
+      acquire(RING_TIMEOUT_MS + 10_000L)
     }
   }
 
   private fun releaseWakeLock() {
-    try {
-      if (wakeLock?.isHeld == true) {
-        wakeLock?.release()
-      }
-      wakeLock = null
-    } catch (e: Exception) {
-      // Ignore
-    }
-  }
-
-  private fun startSoundAndVibration() {
-    AlarmSoundManager.startSoundAndVibration(applicationContext)
-  }
-
-  private fun stopSoundAndVibration() {
-    AlarmSoundManager.stopSoundAndVibration(applicationContext)
+    wakeLock?.takeIf { it.isHeld }?.release()
+    wakeLock = null
   }
 
   private fun createNotificationChannel() {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-      val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
-      val channel = NotificationChannel(
-        CHANNEL_ID,
-        "StudyPilot Alarm Foreground Service",
-        NotificationManager.IMPORTANCE_HIGH
-      ).apply {
-        description = "Urgent high-priority alarms for scheduled classes and study sessions"
-        enableVibration(true)
-        setSound(
-          RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM),
-          AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).build()
-        )
-      }
-      notificationManager?.createNotificationChannel(channel)
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+    val manager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
+    LEGACY_CHANNEL_IDS.forEach { manager.deleteNotificationChannel(it) }
+    // The service plays the alarm sound itself, so the channel stays silent to avoid a second sound.
+    val channel = NotificationChannel(CHANNEL_ID, "Study alarms", NotificationManager.IMPORTANCE_HIGH).apply {
+      description = "Rings when a scheduled class or study session starts"
+      setSound(null, null)
+      enableVibration(false)
     }
+    manager.createNotificationChannel(channel)
   }
 
-  private fun buildForegroundNotification(session: TimetableSession): android.app.Notification {
+  private fun buildNotification(session: TimetableSession): Notification {
     val showIntent = Intent(applicationContext, MainActivity::class.java).apply {
       flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-      putExtra("extra_ringing_session_id", session.id)
+      putExtra(MainActivity.EXTRA_RINGING_SESSION_ID, session.id)
     }
     val showPendingIntent = PendingIntent.getActivity(
       applicationContext,
-      (session.id + 70000).toInt(),
+      AlarmAndCalendarService.requestCode(session.id, AlarmAndCalendarService.RequestCode.TRIGGER),
       showIntent,
       PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     )
 
-    val dismissIntent = Intent(applicationContext, AlarmReceiver::class.java).apply {
-      action = AlarmReceiver.ACTION_DISMISS_ALARM
-      putExtra(AlarmReceiver.EXTRA_SESSION_ID, session.id)
+    fun receiverIntent(action: String, kind: AlarmAndCalendarService.RequestCode): PendingIntent {
+      val intent = Intent(applicationContext, AlarmReceiver::class.java).apply {
+        this.action = action
+        AlarmReceiver.putSessionExtras(this, session)
+      }
+      return PendingIntent.getBroadcast(
+        applicationContext,
+        AlarmAndCalendarService.requestCode(session.id, kind),
+        intent,
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+      )
     }
-    val dismissPendingIntent = PendingIntent.getBroadcast(
-      applicationContext,
-      (session.id + 80000).toInt(),
-      dismissIntent,
-      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-    )
 
-    val snoozeIntent = Intent(applicationContext, AlarmReceiver::class.java).apply {
-      action = AlarmReceiver.ACTION_SNOOZE_ALARM
-      putExtra(AlarmReceiver.EXTRA_SESSION_ID, session.id)
-      putExtra(AlarmReceiver.EXTRA_SUBJECT_NAME, session.subjectName)
-      putExtra(AlarmReceiver.EXTRA_TOPIC, session.topic)
-      putExtra(AlarmReceiver.EXTRA_START_TIME, session.startTime)
+    val title = session.subjectName.ifBlank { session.topic }
+    val time = formatTimeRange(session.startTime, session.endTime)
+    val details = buildString {
+      append(session.topic)
+      if (time.isNotBlank()) append(" · ").append(time)
+      if (session.location.isNotBlank()) append("\n").append(session.location)
     }
-    val snoozePendingIntent = PendingIntent.getBroadcast(
-      applicationContext,
-      (session.id + 90000).toInt(),
-      snoozeIntent,
-      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-    )
-
-    val timeSummary = if (session.endTime.isNotBlank()) {
-      "Scheduled: ${session.startTime} - ${session.endTime}"
-    } else {
-      "Alarm Time: ${session.startTime}"
-    }
-    val locationLine = if (session.location.isNotBlank()) "\nLocation: ${session.location}" else ""
 
     return NotificationCompat.Builder(this, CHANNEL_ID)
       .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-      .setContentTitle("⏰ EVENT STARTING NOW: ${session.subjectName.ifBlank { session.topic }}")
-      .setContentText("${session.topic} (Started at ${session.startTime})")
-      .setStyle(NotificationCompat.BigTextStyle().bigText(
-        "Event Starting Now: ${session.topic}\n$timeSummary$locationLine"
-      ))
+      .setContentTitle(title)
+      .setContentText(details.lineSequence().first())
+      .setStyle(NotificationCompat.BigTextStyle().bigText(details))
       .setPriority(NotificationCompat.PRIORITY_MAX)
       .setCategory(NotificationCompat.CATEGORY_ALARM)
       .setOngoing(true)
-      .setAutoCancel(true)
       .setFullScreenIntent(showPendingIntent, true)
       .setContentIntent(showPendingIntent)
-      .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Dismiss Alarm", dismissPendingIntent)
-      .addAction(android.R.drawable.ic_popup_reminder, "Snooze 5 Min", snoozePendingIntent)
+      .addAction(
+        android.R.drawable.ic_menu_close_clear_cancel, "Dismiss",
+        receiverIntent(AlarmReceiver.ACTION_DISMISS_ALARM, AlarmAndCalendarService.RequestCode.DISMISS)
+      )
+      .addAction(
+        android.R.drawable.ic_popup_reminder, "Snooze ${AlarmReceiver.SNOOZE_MINUTES} min",
+        receiverIntent(AlarmReceiver.ACTION_SNOOZE_ALARM, AlarmAndCalendarService.RequestCode.SNOOZE_ACTION)
+      )
       .build()
-  }
-
-  override fun onDestroy() {
-    stopSoundAndVibration()
-    releaseWakeLock()
-    super.onDestroy()
   }
 }

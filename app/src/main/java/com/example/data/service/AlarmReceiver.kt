@@ -1,6 +1,5 @@
 package com.example.data.service
 
-import android.app.NotificationManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -28,6 +27,7 @@ sealed class AlarmEvent {
   data class Snoozed(val sessionId: Long, val minutes: Int) : AlarmEvent()
 }
 
+/** Lets the open app react to alarms that ring, get dismissed or snoozed from the notification. */
 object AlarmEventBus {
   private val _events = MutableSharedFlow<AlarmEvent>(extraBufferCapacity = 10)
   val events: SharedFlow<AlarmEvent> = _events.asSharedFlow()
@@ -37,6 +37,7 @@ object AlarmEventBus {
   }
 }
 
+/** Handles the app's own alarm PendingIntents. Not exported. */
 class AlarmReceiver : BroadcastReceiver() {
 
   companion object {
@@ -51,101 +52,90 @@ class AlarmReceiver : BroadcastReceiver() {
     const val EXTRA_END_TIME = "extra_end_time"
     const val EXTRA_LOCATION = "extra_location"
     const val EXTRA_NOTES = "extra_notes"
+
+    const val SNOOZE_MINUTES = 5
+
+    fun putSessionExtras(intent: Intent, session: TimetableSession) {
+      intent.putExtra(EXTRA_SESSION_ID, session.id)
+      intent.putExtra(EXTRA_SUBJECT_NAME, session.subjectName)
+      intent.putExtra(EXTRA_TOPIC, session.topic)
+      intent.putExtra(EXTRA_START_TIME, session.startTime)
+      intent.putExtra(EXTRA_END_TIME, session.endTime)
+      intent.putExtra(EXTRA_LOCATION, session.location)
+      intent.putExtra(EXTRA_NOTES, session.notes)
+    }
+
+    fun sessionFromExtras(intent: Intent): TimetableSession = TimetableSession(
+      id = intent.getLongExtra(EXTRA_SESSION_ID, 0L),
+      subjectId = 0L,
+      subjectName = intent.getStringExtra(EXTRA_SUBJECT_NAME) ?: "Alarm",
+      topic = intent.getStringExtra(EXTRA_TOPIC) ?: "Scheduled alarm",
+      date = "",
+      startTime = intent.getStringExtra(EXTRA_START_TIME) ?: "",
+      endTime = intent.getStringExtra(EXTRA_END_TIME) ?: "",
+      location = intent.getStringExtra(EXTRA_LOCATION) ?: "",
+      notes = intent.getStringExtra(EXTRA_NOTES) ?: "",
+      isAlarmEnabled = true
+    )
   }
 
   override fun onReceive(context: Context, intent: Intent) {
-    val service = AlarmAndCalendarService(context)
-
+    val session = sessionFromExtras(intent)
     when (intent.action) {
       ACTION_TRIGGER_STUDY_ALARM -> {
-        val sessionId = intent.getLongExtra(EXTRA_SESSION_ID, 0L)
-        val subjectName = intent.getStringExtra(EXTRA_SUBJECT_NAME) ?: "Alarm"
-        val topic = intent.getStringExtra(EXTRA_TOPIC) ?: "Scheduled Alarm"
-        val startTime = intent.getStringExtra(EXTRA_START_TIME) ?: "Now"
-        val endTime = intent.getStringExtra(EXTRA_END_TIME) ?: ""
-        val location = intent.getStringExtra(EXTRA_LOCATION) ?: ""
-        val notes = intent.getStringExtra(EXTRA_NOTES) ?: ""
-
-        val session = TimetableSession(
-          id = sessionId,
-          subjectId = 0L,
-          subjectName = subjectName,
-          topic = topic,
-          date = "",
-          startTime = startTime,
-          endTime = endTime,
-          location = location,
-          notes = notes,
-          isAlarmEnabled = true
-        )
-
-        // 1. Start foreground ringing service so alarm rings even if app is closed/killed
         AlarmRingingService.startRinging(context, session)
-
-        // 2. Play sound, vibration, and post system notification fallback
-        service.triggerAlarmAlert(session)
-
-        // 3. Notify in-app state bus if app is open
-        AlarmEventBus.emit(
-          AlarmEvent.Triggered(
-            sessionId = sessionId,
-            subjectName = subjectName,
-            topic = topic,
-            startTime = startTime,
-            endTime = endTime,
-            location = location,
-            notes = notes
-          )
-        )
+        rescheduleNextOccurrence(context, session.id)
       }
 
       ACTION_DISMISS_ALARM -> {
-        val sessionId = intent.getLongExtra(EXTRA_SESSION_ID, 0L)
         AlarmRingingService.stopRinging(context)
-        service.stopAlarmSound()
-
-        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
-        notificationManager?.cancel(sessionId.toInt())
-
-        AlarmEventBus.emit(AlarmEvent.Dismissed(sessionId))
+        AlarmEventBus.emit(AlarmEvent.Dismissed(session.id))
       }
 
       ACTION_SNOOZE_ALARM -> {
-        val sessionId = intent.getLongExtra(EXTRA_SESSION_ID, 0L)
-        val subjectName = intent.getStringExtra(EXTRA_SUBJECT_NAME) ?: "Study Session"
-        val topic = intent.getStringExtra(EXTRA_TOPIC) ?: "Review"
-        val startTime = intent.getStringExtra(EXTRA_START_TIME) ?: "Now"
-
         AlarmRingingService.stopRinging(context)
-        service.stopAlarmSound()
-
-        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
-        notificationManager?.cancel(sessionId.toInt())
-
-        // Reschedule alarm for 5 minutes in future
-        service.scheduleSnoozeAlarm(sessionId, subjectName, topic, startTime, 5)
-
-        AlarmEventBus.emit(AlarmEvent.Snoozed(sessionId, 5))
+        AlarmAndCalendarService(context).scheduleSnoozeAlarm(session, SNOOZE_MINUTES)
+        AlarmEventBus.emit(AlarmEvent.Snoozed(session.id, SNOOZE_MINUTES))
       }
+    }
+  }
 
-      Intent.ACTION_BOOT_COMPLETED,
-      Intent.ACTION_MY_PACKAGE_REPLACED,
-      "android.intent.action.LOCKED_BOOT_COMPLETED",
-      "android.intent.action.QUICKBOOT_POWERON",
-      "com.htc.intent.action.QUICKBOOT_POWERON",
-      "android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" -> {
-        // Reschedule all upcoming alarms from database
-        CoroutineScope(Dispatchers.IO).launch {
-          try {
-            val db = AppDatabase.getDatabase(context)
-            val allSessions = db.studyPilotDao().getAllSessionsList()
-            allSessions.filter { it.isAlarmEnabled }.forEach { s ->
-              service.scheduleSessionAlarm(s)
-            }
-          } catch (e: Exception) {
-            // Ignore
-          }
+  /** Recurring sessions need their next weekly alarm set once this one has fired. */
+  private fun rescheduleNextOccurrence(context: Context, sessionId: Long) {
+    if (sessionId <= 0L) return
+    val pending = goAsync()
+    CoroutineScope(Dispatchers.IO).launch {
+      try {
+        val stored = AppDatabase.getDatabase(context).studyPilotDao().getSessionById(sessionId)
+        if (stored != null && stored.isAlarmEnabled && stored.recurringDays.isNotBlank()) {
+          AlarmAndCalendarService(context).scheduleSessionAlarm(stored)
         }
+      } catch (e: Exception) {
+        android.util.Log.w("AlarmReceiver", "Could not reschedule session $sessionId", e)
+      } finally {
+        pending.finish()
+      }
+    }
+  }
+}
+
+/** Alarms are cleared on reboot and can drift on clock changes; restore them for the active account. */
+class AlarmRescheduleReceiver : BroadcastReceiver() {
+  override fun onReceive(context: Context, intent: Intent) {
+    val pending = goAsync()
+    CoroutineScope(Dispatchers.IO).launch {
+      try {
+        val activeUserId = context.getSharedPreferences("studypilot_auth_prefs", Context.MODE_PRIVATE)
+          .getString("active_user_id", null) ?: "guest_user"
+        val service = AlarmAndCalendarService(context)
+        AppDatabase.getDatabase(context).studyPilotDao()
+          .getSessionsListForUser(activeUserId)
+          .filter { it.isAlarmEnabled }
+          .forEach { service.scheduleSessionAlarm(it) }
+      } catch (e: Exception) {
+        android.util.Log.w("AlarmRescheduleReceiver", "Could not restore alarms", e)
+      } finally {
+        pending.finish()
       }
     }
   }

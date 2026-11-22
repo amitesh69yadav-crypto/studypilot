@@ -129,8 +129,6 @@ fun LoginScreen(
 
   var errorMessage by remember { mutableStateOf<String?>(null) }
   var showForgotPasswordDialog by remember { mutableStateOf(false) }
-  var forgotPasswordEmail by remember { mutableStateOf("") }
-  var resetEmailSentConfirmation by remember { mutableStateOf(false) }
 
   val context = LocalContext.current
   val coroutineScope = rememberCoroutineScope()
@@ -141,9 +139,13 @@ fun LoginScreen(
       isSigningInGoogle = true
       coroutineScope.launch {
         try {
-          val serverClientId = try {
-            context.getString(R.string.default_web_client_id)
-          } catch (_: Exception) {
+          // default_web_client_id is generated from google-services.json, which isn't checked in,
+          // so look it up by name and fall back to the OAuth client from firebase-applet-config.json.
+          @Suppress("DiscouragedApi")
+          val generatedId = context.resources.getIdentifier("default_web_client_id", "string", context.packageName)
+          val serverClientId = if (generatedId != 0) {
+            context.getString(generatedId)
+          } else {
             "924698065159-54lqb8uqm85brdd5hltkqtjgcnuhg9uv.apps.googleusercontent.com"
           }
           val credentialManager = androidx.credentials.CredentialManager.create(context)
@@ -251,13 +253,13 @@ fun LoginScreen(
                 }
                 Column {
                   Text(
-                    text = "StudyPilot AI",
+                    text = "StudyPilot",
                     fontSize = 26.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = PaletteCreamIvory
                   )
                   Text(
-                    text = "University Academic Command Center",
+                    text = "Study planner and AI tutor",
                     fontSize = 13.sp,
                     color = PaletteCreamIvory.copy(alpha = 0.85f)
                   )
@@ -266,7 +268,7 @@ fun LoginScreen(
 
               Spacer(modifier = Modifier.height(28.dp))
 
-              // Dual-Device Sync Highlight
+
               Surface(
                 shape = RoundedCornerShape(16.dp),
                 color = PaletteCreamIvory.copy(alpha = 0.12f),
@@ -294,13 +296,13 @@ fun LoginScreen(
                   }
                   Column {
                     Text(
-                      text = "💻 Laptop + 📱 Mobile Dual Mode",
+                      text = "Works on phones and tablets",
                       fontSize = 14.sp,
                       fontWeight = FontWeight.Bold,
                       color = PaletteCreamIvory
                     )
                     Text(
-                      text = "Seamlessly study on your laptop with expanded analytics and review on your mobile with instant timetable alarms.",
+                      text = "Wider layouts on tablets and foldables, with alarms for every class on your phone.",
                       fontSize = 12.sp,
                       color = PaletteCreamIvory.copy(alpha = 0.85f),
                       lineHeight = 16.sp
@@ -312,7 +314,7 @@ fun LoginScreen(
               Spacer(modifier = Modifier.height(24.dp))
 
               Text(
-                text = "Key Academic Capabilities",
+                text = "What it does",
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
                 color = PaletteCreamIvory
@@ -321,20 +323,20 @@ fun LoginScreen(
 
               AcademicPerkItem(
                 icon = Icons.Default.AutoAwesome,
-                title = "Gemini 3.5 Academic Tutor",
-                desc = "Scored answers, math equations, coding assistance, and Google grounding."
+                title = "AI tutor",
+                desc = "Gemini answers with optional Google Search sources, or offline answers without a key."
               )
               Spacer(modifier = Modifier.height(10.dp))
               AcademicPerkItem(
                 icon = Icons.Default.Speed,
-                title = "Spaced Repetition & Weakness Engine",
-                desc = "Adaptive scheduling prioritizes struggling exam topics automatically."
+                title = "Spaced repetition",
+                desc = "Quizzes put the topics you got wrong first."
               )
               Spacer(modifier = Modifier.height(10.dp))
               AcademicPerkItem(
                 icon = Icons.Default.Laptop,
-                title = "Full-Screen Laptop Optimization",
-                desc = "Side navigation, responsive charts, and formatted schedule templates."
+                title = "Timetable and alarms",
+                desc = "Weekly schedules, reusable day templates and exact alarms."
               )
             }
 
@@ -358,7 +360,7 @@ fun LoginScreen(
                   modifier = Modifier.size(18.dp)
                 )
                 Text(
-                  text = "Zero-cloud leak mode. Private local profile with synchronized study records.",
+                  text = "Email profiles stay on this device. Google sign-in adds cloud backup.",
                   fontSize = 11.sp,
                   color = PaletteCreamIvory
                 )
@@ -406,7 +408,7 @@ fun LoginScreen(
               if (success) {
                 onLoginSuccess()
               } else {
-                errorMessage = "Invalid academic email or password (min 6 characters)."
+                errorMessage = viewModel.lastAuthError ?: "Couldn't sign in."
               }
             },
             onSignUpClick = {
@@ -417,7 +419,7 @@ fun LoginScreen(
                 if (success) {
                   onLoginSuccess()
                 } else {
-                  errorMessage = "Please fill in all required fields properly."
+                  errorMessage = viewModel.lastAuthError ?: "Couldn't create the profile."
                 }
               }
             },
@@ -427,7 +429,6 @@ fun LoginScreen(
               onLoginSuccess()
             },
             onForgotPasswordClick = {
-              forgotPasswordEmail = email
               showForgotPasswordDialog = true
             },
             modifier = Modifier.verticalScroll(rememberScrollState())
@@ -464,20 +465,20 @@ fun LoginScreen(
         Spacer(modifier = Modifier.height(10.dp))
 
         Text(
-          text = "StudyPilot AI",
+          text = "StudyPilot",
           fontSize = 24.sp,
           fontWeight = FontWeight.ExtraBold,
           color = PaletteDarkText
         )
         Text(
-          text = "University Academic Command Center",
+          text = "Study planner and AI tutor",
           fontSize = 12.sp,
           color = PaletteDarkText.copy(alpha = 0.8f)
         )
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Compact Dual Mode Banner
+
         Surface(
           shape = RoundedCornerShape(12.dp),
           color = PalettePaleCeladon,
@@ -491,13 +492,13 @@ fun LoginScreen(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
           ) {
-            Icon(Icons.Default.Laptop, contentDescription = null, tint = PaletteDeepSage, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(text = "Laptop", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = PaletteDeepSage)
-            Text(text = " + ", fontSize = 11.sp, color = PaletteDeepSage)
             Icon(Icons.Default.Smartphone, contentDescription = null, tint = PaletteDeepSage, modifier = Modifier.size(16.dp))
             Spacer(modifier = Modifier.width(4.dp))
-            Text(text = "Mobile Simultaneous Sync", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = PaletteDeepSage)
+            Text(text = "Phone", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = PaletteDeepSage)
+            Text(text = " + ", fontSize = 11.sp, color = PaletteDeepSage)
+            Icon(Icons.Default.Laptop, contentDescription = null, tint = PaletteDeepSage, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(text = "Tablet", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = PaletteDeepSage)
           }
         }
 
@@ -563,7 +564,6 @@ fun LoginScreen(
               onLoginSuccess()
             },
             onForgotPasswordClick = {
-              forgotPasswordEmail = email
               showForgotPasswordDialog = true
             }
           )
@@ -574,92 +574,22 @@ fun LoginScreen(
     }
   }
 
-  // Password Reset / Recovery Dialog
+  // Email profiles have no server behind them, so there is no reset email to send.
   if (showForgotPasswordDialog) {
     AlertDialog(
-      onDismissRequest = {
-        showForgotPasswordDialog = false
-        resetEmailSentConfirmation = false
-      },
-      title = {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-          Icon(Icons.Default.Lock, contentDescription = null, tint = PaletteDeepSage)
-          Spacer(modifier = Modifier.width(8.dp))
-          Text(text = "Reset Academic Password", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-        }
-      },
+      onDismissRequest = { showForgotPasswordDialog = false },
+      title = { Text(text = "Forgot your password?", fontWeight = FontWeight.Bold, fontSize = 18.sp) },
       text = {
-        Column {
-          if (!resetEmailSentConfirmation) {
-            Text(
-              text = "Enter your registered academic email address. We will verify your university profile and issue a session reset token.",
-              fontSize = 13.sp,
-              color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(14.dp))
-            OutlinedTextField(
-              value = forgotPasswordEmail,
-              onValueChange = { forgotPasswordEmail = it },
-              label = { Text("University Email") },
-              leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
-              modifier = Modifier.fillMaxWidth(),
-              singleLine = true,
-              shape = RoundedCornerShape(10.dp)
-            )
-          } else {
-            Surface(
-              color = EmeraldSuccess.copy(alpha = 0.15f),
-              shape = RoundedCornerShape(10.dp),
-              modifier = Modifier.fillMaxWidth()
-            ) {
-              Row(
-                modifier = Modifier.padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-              ) {
-                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = EmeraldSuccess)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                  text = "Password recovery instructions sent to $forgotPasswordEmail. You can also sign in directly using Google Student SSO.",
-                  fontSize = 12.sp,
-                  color = EmeraldSuccess
-                )
-              }
-            }
-          }
-        }
+        Text(
+          text = "Email profiles are stored only on this device, so a password can't be reset by email. " +
+            "You can delete the profile from Settings (this deletes its data) and create it again, " +
+            "or use Google sign-in instead.",
+          fontSize = 13.sp,
+          color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
       },
       confirmButton = {
-        if (!resetEmailSentConfirmation) {
-          Button(
-            onClick = {
-              if (forgotPasswordEmail.isNotBlank()) {
-                resetEmailSentConfirmation = true
-              }
-            },
-            colors = ButtonDefaults.buttonColors(containerColor = PaletteDeepSage),
-            shape = RoundedCornerShape(10.dp)
-          ) {
-            Text("Send Instructions")
-          }
-        } else {
-          Button(
-            onClick = {
-              showForgotPasswordDialog = false
-              resetEmailSentConfirmation = false
-            },
-            colors = ButtonDefaults.buttonColors(containerColor = PaletteDeepSage),
-            shape = RoundedCornerShape(10.dp)
-          ) {
-            Text("Close")
-          }
-        }
-      },
-      dismissButton = {
-        if (!resetEmailSentConfirmation) {
-          TextButton(onClick = { showForgotPasswordDialog = false }) {
-            Text("Cancel")
-          }
-        }
+        TextButton(onClick = { showForgotPasswordDialog = false }) { Text("OK") }
       }
     )
   }
@@ -794,7 +724,7 @@ private fun AuthFormContent(
 
     // Form Subheading
     Text(
-      text = if (authMode == AuthMode.SIGN_IN) "Sign in to access your synchronized courses & schedule" else "Set up your student profile to sync across devices",
+      text = if (authMode == AuthMode.SIGN_IN) "Sign in to your profile on this device" else "Create a profile on this device",
       fontSize = 12.sp,
       color = MaterialTheme.colorScheme.onSurfaceVariant,
       textAlign = TextAlign.Center
@@ -1030,7 +960,7 @@ private fun AuthFormContent(
         horizontalArrangement = Arrangement.Center
       ) {
         Text(
-          text = if (authMode == AuthMode.SIGN_IN) "Sign In to StudyPilot" else "Create Account & Sync",
+          text = if (authMode == AuthMode.SIGN_IN) "Sign in" else "Create profile",
           fontSize = 14.sp,
           fontWeight = FontWeight.Bold
         )

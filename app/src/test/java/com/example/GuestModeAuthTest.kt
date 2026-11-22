@@ -18,7 +18,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
+@Config(sdk = [35])
 class GuestModeAuthTest {
 
   private lateinit var app: Application
@@ -107,10 +107,40 @@ class GuestModeAuthTest {
     assertEquals(StudyPilotViewModel.GUEST_USER_ID, reopened.currentUser.value.id)
     assertEquals(1, reopened.savedAccounts.value.size)
 
-    // Switching back restores Bob's stored info
+    // Switching back to an email profile asks for its password first
     reopened.switchAccount(reopened.savedAccounts.value.first())
+    assertFalse(reopened.isAuthenticated.value)
+    assertEquals(Screen.Login, reopened.currentScreen.value)
+    assertEquals("bob.smith@college.edu", reopened.getRememberedEmail())
+
+    assertTrue(reopened.login(email = "bob.smith@college.edu", pass = "secret123"))
     assertTrue(reopened.isAuthenticated.value)
     assertEquals("bob.smith@college.edu", reopened.currentUser.value.email)
+  }
+
+  @Test
+  fun signingInRequiresTheProfilePassword() {
+    val vm = StudyPilotViewModel(app)
+    assertTrue(vm.register(name = "Cara", email = "cara@uni.edu", pass = "correct-horse", university = ""))
+    vm.logout()
+
+    assertFalse(vm.login(email = "cara@uni.edu", pass = "wrong-password"))
+    assertEquals("Incorrect password for cara@uni.edu.", vm.lastAuthError)
+    assertFalse(vm.isAuthenticated.value)
+    assertEquals(StudyPilotViewModel.GUEST_USER_ID, vm.currentUser.value.id)
+
+    assertTrue(vm.login(email = "CARA@uni.edu", pass = "correct-horse"))
+    assertEquals("cara@uni.edu", vm.currentUser.value.email)
+  }
+
+  @Test
+  fun registeringAnExistingEmailIsRejected() {
+    val vm = StudyPilotViewModel(app)
+    assertTrue(vm.register(name = "Dan", email = "dan@uni.edu", pass = "password1", university = ""))
+    vm.logout()
+    assertFalse(vm.register(name = "Impostor", email = "dan@uni.edu", pass = "password2", university = ""))
+    assertEquals(1, vm.savedAccounts.value.size)
+    assertEquals("Dan", vm.savedAccounts.value.first().name)
   }
 
   @Test

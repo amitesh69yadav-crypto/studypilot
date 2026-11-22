@@ -144,7 +144,6 @@ fun TimetableScreen(
   val subjects by viewModel.subjects.collectAsState()
   val scheduleFormats by viewModel.scheduleFormats.collectAsState()
   val scheduleStatus by viewModel.scheduleStatus.collectAsState()
-  val isCalendarConnected by viewModel.isCalendarConnected.collectAsState()
   val ringingAlarmSession by viewModel.ringingAlarmSession.collectAsState()
 
   val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
@@ -238,7 +237,7 @@ fun TimetableScreen(
         .background(PaletteCreamIvory)
         .padding(padding)
     ) {
-      // 1. Google Calendar-Style Clean Header Bar
+      // Header bar
       Surface(
         color = PaletteCreamIvory,
         border = androidx.compose.foundation.BorderStroke(0.5.dp, PaletteMediumSage.copy(alpha = 0.4f)),
@@ -344,33 +343,6 @@ fun TimetableScreen(
               }
             }
 
-            // Sync with Google Calendar Quick Button
-            Surface(
-              shape = RoundedCornerShape(8.dp),
-              color = PaletteMintFoam,
-              border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage),
-              modifier = Modifier
-                .weight(1f)
-                .heightIn(min = 38.dp)
-                .clickable { viewModel.syncAllTodayToGoogleCalendar() }
-            ) {
-              Row(
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-              ) {
-                Icon(Icons.Default.CalendarMonth, contentDescription = null, tint = PaletteDarkText, modifier = Modifier.size(14.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                  text = "Sync G-Cal",
-                  fontSize = 11.sp,
-                  fontWeight = FontWeight.Bold,
-                  color = PaletteDarkText,
-                  maxLines = 1,
-                  softWrap = false
-                )
-              }
-            }
           }
 
           Spacer(modifier = Modifier.height(8.dp))
@@ -805,7 +777,6 @@ fun TimetableScreen(
                     onToggleAlarm = { viewModel.toggleSessionAlarm(it) },
                     onTestAlarm = { viewModel.triggerTestAlarm(it) },
                     onSyncGoogleCalendar = { session ->
-                      viewModel.syncSessionToGoogleCalendar(session)
                       val intent = viewModel.alarmAndCalendarService.createGoogleCalendarInsertIntent(session)
                       try {
                         context.startActivity(intent)
@@ -1037,7 +1008,6 @@ fun TimetableScreen(
                     viewModel.openTutorForSubject(session.subjectId, "Help me prepare notes for ${session.topic}")
                   },
                   onSyncCalendar = {
-                    viewModel.syncSessionToGoogleCalendar(session)
                     val intent = viewModel.alarmAndCalendarService.createGoogleCalendarInsertIntent(session)
                     try {
                       context.startActivity(intent)
@@ -1213,7 +1183,6 @@ fun TimetableScreen(
                     viewModel.openTutorForSubject(session.subjectId, "Help me prepare notes for ${session.topic}")
                   },
                   onSyncCalendar = {
-                    viewModel.syncSessionToGoogleCalendar(session)
                     val intent = viewModel.alarmAndCalendarService.createGoogleCalendarInsertIntent(session)
                     try {
                       context.startActivity(intent)
@@ -2325,7 +2294,7 @@ fun GoogleCalendarEventCard(
             }
           }
 
-          // Google Calendar Sync Button
+          // Opens the device calendar's "new event" screen prefilled with this session.
           Surface(
             shape = RoundedCornerShape(8.dp),
             color = PalettePaleCeladon,
@@ -2338,9 +2307,9 @@ fun GoogleCalendarEventCard(
               modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
               verticalAlignment = Alignment.CenterVertically
             ) {
-              Icon(Icons.Default.CalendarMonth, contentDescription = "Sync G-Cal", tint = PaletteDarkText, modifier = Modifier.size(14.dp))
+              Icon(Icons.Default.CalendarMonth, contentDescription = "Add to calendar", tint = PaletteDarkText, modifier = Modifier.size(14.dp))
               Spacer(modifier = Modifier.width(4.dp))
-              Text("Sync G-Cal", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = PaletteDarkText)
+              Text("Calendar", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = PaletteDarkText)
             }
           }
         }

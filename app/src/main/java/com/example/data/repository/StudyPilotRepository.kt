@@ -26,14 +26,10 @@ import java.util.Date
 import java.util.Locale
 
 
-  private val FIRESTORE_DB_ID = "ai-studio-android-studypil-1b9a5a78-c2bd-40f4-9199-e1b41747056c"
-  private fun getFirestoreInstance(): com.google.firebase.firestore.FirebaseFirestore {
-    return try {
-      com.google.firebase.firestore.FirebaseFirestore.getInstance(FIRESTORE_DB_ID)
-    } catch (_: Exception) {
-      com.google.firebase.firestore.FirebaseFirestore.getInstance()
-    }
-  }
+private const val FIRESTORE_DB_ID = "ai-studio-android-studypil-1b9a5a78-c2bd-40f4-9199-e1b41747056c"
+
+private fun getFirestoreInstance(): com.google.firebase.firestore.FirebaseFirestore =
+  com.google.firebase.firestore.FirebaseFirestore.getInstance(FIRESTORE_DB_ID)
 
 class StudyPilotRepository(
   private val dao: StudyPilotDao,
@@ -58,14 +54,6 @@ class StudyPilotRepository(
     deleteUserData(targetUserId)
   }
 
-  val allSubjects: Flow<List<Subject>> = dao.getAllSubjects()
-  val allSessions: Flow<List<TimetableSession>> = dao.getAllSessions()
-  val allTopics: Flow<List<StudyTopic>> = dao.getAllTopics()
-  val allTasks: Flow<List<StudyTask>> = dao.getAllTasks()
-  val allQuizAttempts: Flow<List<QuizAttempt>> = dao.getAllQuizAttempts()
-  val allTutorSessions: Flow<List<TutorSession>> = dao.getAllTutorSessions()
-  val allScheduleFormats: Flow<List<com.example.data.model.ScheduleFormat>> = dao.getAllScheduleFormats()
-
   private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
   private val dateTimeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
 
@@ -86,17 +74,30 @@ class StudyPilotRepository(
       addOnCanceledListener { cont.cancel() }
     }
 
+  /**
+   * Cloud sync only applies to the Firebase user who is signed in on this device (Google sign-in).
+   * Firestore rules allow each user to touch only users/{their uid}, so anything else would be rejected.
+   * Returns false when Firebase isn't configured (no google-services.json).
+   */
+  fun isCloudUser(userId: String): Boolean = try {
+    userId.isNotBlank() && com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid == userId
+  } catch (_: Exception) {
+    false // Firebase not initialised (no google-services.json)
+  }
+
   private fun syncToFirestore(path: String, data: Map<String, Any?>) {
+    if (!isCloudUser(path.removePrefix("users/").substringBefore("/"))) return
     try {
-      val firestore = getFirestoreInstance()
-      firestore.document(path).set(data)
-    } catch (_: Exception) {
-      // Offline fallback
+      getFirestoreInstance().document(path).set(data)
+        .addOnFailureListener { android.util.Log.w(TAG, "Firestore write failed for $path", it) }
+    } catch (e: Exception) {
+      android.util.Log.w(TAG, "Firestore unavailable", e)
     }
   }
 
+  suspend fun getSessionById(id: Long): TimetableSession? = dao.getSessionById(id)
+
   fun saveUserProfile(user: com.example.data.model.UserProfile) {
-    if (user.id.isBlank() || user.id == "guest_user") return
     syncToFirestore(
       "users/${user.id}",
       mapOf(
@@ -114,47 +115,43 @@ class StudyPilotRepository(
   }
 
   private fun deleteFromFirestore(path: String) {
+    if (!isCloudUser(path.removePrefix("users/").substringBefore("/"))) return
     try {
-      val firestore = getFirestoreInstance()
-      firestore.document(path).delete()
-    } catch (_: Exception) {
-      // Offline fallback
+      getFirestoreInstance().document(path).delete()
+    } catch (e: Exception) {
+      android.util.Log.w(TAG, "Firestore unavailable", e)
     }
   }
 
   suspend fun deleteUserData(userId: String) {
+    dao.deleteQuestionsForUser(userId)
     dao.deleteSubjectsForUser(userId)
     dao.deleteSessionsForUser(userId)
     dao.deleteTopicsForUser(userId)
     dao.deleteTasksForUser(userId)
     dao.deleteQuizAttemptsForUser(userId)
-    dao.deleteTutorSessionsForUser(userId)
+    dao.clearTutorHistoryForUser(userId)
     dao.deleteScheduleFormatsForUser(userId)
+    dao.deleteExtractedConceptsForUser(userId)
+    dao.deleteImportedChatsForUser(userId)
+    if (!isCloudUser(userId)) return
     try {
       val firestore = getFirestoreInstance()
       firestore.document("users/$userId").delete()
-      firestore.collection("users/$userId/subjects").get().addOnSuccessListener { snap ->
-        for (doc in snap.documents) doc.reference.delete()
+      for (collection in CLOUD_COLLECTIONS) {
+        firestore.collection("users/$userId/$collection").get().addOnSuccessListener { snap ->
+          for (doc in snap.documents) doc.reference.delete()
+        }
       }
-      firestore.collection("users/$userId/sessions").get().addOnSuccessListener { snap ->
-        for (doc in snap.documents) doc.reference.delete()
-      }
-      firestore.collection("users/$userId/tasks").get().addOnSuccessListener { snap ->
-        for (doc in snap.documents) doc.reference.delete()
-      }
-      firestore.collection("users/$userId/topics").get().addOnSuccessListener { snap ->
-        for (doc in snap.documents) doc.reference.delete()
-      }
-    } catch (_: Exception) {}
+    } catch (e: Exception) {
+      android.util.Log.w(TAG, "Firestore unavailable", e)
+    }
   }
 
-  suspend fun pullUserDataFromFirestore(userId: String) {
-    val targetUserId = userId.ifBlank { "guest_user" }
-    if (targetUserId == "guest_user") return
-    if (prefs?.getBoolean("sample_data_deleted_$targetUserId", false) == true) {
-      return
-    }
-    try {
+  /** Copies cloud subjects, sessions and tasks this device doesn't have yet. Returns false if the cloud was unreachable. */
+  suspend fun pullUserDataFromFirestore(userId: String): Boolean {
+    if (!isCloudUser(userId)) return false
+    return try {
       val firestore = getFirestoreInstance()
       coroutineScope {
         val subjectsDeferred = async { firestore.collection("users/$userId/subjects").get().awaitTask() }
@@ -198,7 +195,7 @@ class StudyPilotRepository(
                 location = doc.getString("location") ?: "",
                 notes = doc.getString("notes") ?: "",
                 recurringDays = doc.getString("recurringDays") ?: "",
-                isAlarmEnabled = doc.getBoolean("isAlarmEnabled") ?: true
+                isAlarmEnabled = doc.getBoolean("isAlarmEnabled") ?: doc.getBoolean("alarmEnabled") ?: true
               )
             } else null
           }
@@ -226,8 +223,10 @@ class StudyPilotRepository(
           if (newTasks.isNotEmpty()) dao.insertTasks(newTasks)
         }
       }
-    } catch (_: Exception) {
-      // Offline fallback
+      true
+    } catch (e: Exception) {
+      android.util.Log.w(TAG, "Cloud pull failed", e)
+      false
     }
   }
 
@@ -255,43 +254,31 @@ class StudyPilotRepository(
     }
   }
 
+  private fun sessionDocument(session: TimetableSession, id: Long) = mapOf(
+    "id" to id.toString(),
+    "userId" to session.userId,
+    "subjectId" to session.subjectId.toString(),
+    "subjectName" to session.subjectName,
+    "topic" to session.topic,
+    "date" to session.date,
+    "startTime" to session.startTime,
+    "endTime" to session.endTime,
+    "location" to session.location,
+    "notes" to session.notes,
+    "recurringDays" to session.recurringDays,
+    "status" to session.status,
+    "isAlarmEnabled" to session.isAlarmEnabled
+  )
+
   suspend fun addSession(session: TimetableSession): Long {
     val id = dao.insertSession(session)
-    if (session.userId.isNotBlank()) {
-      syncToFirestore("users/${session.userId}/sessions/$id", mapOf(
-        "id" to id.toString(),
-        "userId" to session.userId,
-        "subjectId" to session.subjectId.toString(),
-        "subjectName" to session.subjectName,
-        "topic" to session.topic,
-        "date" to session.date,
-        "startTime" to session.startTime,
-        "endTime" to session.endTime,
-        "location" to session.location,
-        "status" to session.status,
-        "alarmEnabled" to session.isAlarmEnabled
-      ))
-    }
+    syncToFirestore("users/${session.userId}/sessions/$id", sessionDocument(session, id))
     return id
   }
 
   suspend fun updateSession(session: TimetableSession) {
     dao.updateSession(session)
-    if (session.userId.isNotBlank()) {
-      syncToFirestore("users/${session.userId}/sessions/${session.id}", mapOf(
-        "id" to session.id.toString(),
-        "userId" to session.userId,
-        "subjectId" to session.subjectId.toString(),
-        "subjectName" to session.subjectName,
-        "topic" to session.topic,
-        "date" to session.date,
-        "startTime" to session.startTime,
-        "endTime" to session.endTime,
-        "location" to session.location,
-        "status" to session.status,
-        "alarmEnabled" to session.isAlarmEnabled
-      ))
-    }
+    syncToFirestore("users/${session.userId}/sessions/${session.id}", sessionDocument(session, session.id))
   }
 
   suspend fun deleteSession(id: Long, userId: String = "") {
@@ -518,8 +505,8 @@ class StudyPilotRepository(
     dao.deleteTutorSessionAtomic(sessionId)
   }
 
-  suspend fun clearAllTutorHistory() {
-    dao.clearAllTutorHistoryAtomic()
+  suspend fun clearTutorHistory(userId: String) {
+    dao.clearTutorHistoryForUser(userId)
   }
 
   // --- AI Chat History Import & Intelligent Learning Memory ---
@@ -1038,15 +1025,6 @@ class StudyPilotRepository(
       }
     }
 
-    // Try pulling from cloud Firestore for cross-device consistency
-    pullUserDataFromFirestore(targetUserId)
-
-    val existing = dao.getSubjectsForUser(targetUserId).first()
-    if (!force && existing.isNotEmpty()) {
-      prefs?.edit()?.putBoolean(seededKey, true)?.apply()
-      return
-    }
-
     // Mark as seeded
     prefs?.edit()
       ?.putBoolean(seededKey, true)
@@ -1135,7 +1113,7 @@ class StudyPilotRepository(
     val standardDayJson = org.json.JSONArray().apply {
       put(org.json.JSONObject().apply {
         put("subjectId", csId)
-        put("subjectName", "Data Structures & Algorithms")
+        put("subjectName", csSub.name)
         put("topic", "Core Computer Science Lecture & Lab")
         put("startTime", "09:00")
         put("endTime", "10:30")
@@ -1145,7 +1123,7 @@ class StudyPilotRepository(
       })
       put(org.json.JSONObject().apply {
         put("subjectId", mathId)
-        put("subjectName", "Linear Algebra & Calculus")
+        put("subjectName", mathSub.name)
         put("topic", "Theoretical Proofs & Practice Exercises")
         put("startTime", "11:00")
         put("endTime", "12:30")
@@ -1155,7 +1133,7 @@ class StudyPilotRepository(
       })
       put(org.json.JSONObject().apply {
         put("subjectId", physId)
-        put("subjectName", "Classical & Quantum Physics")
+        put("subjectName", physSub.name)
         put("topic", "Laboratory Experiment & Group Problem Set")
         put("startTime", "14:00")
         put("endTime", "15:30")
@@ -1322,7 +1300,7 @@ class StudyPilotRepository(
     dao.insertTopics(topics)
 
     // Initial questions for instant weekend quiz
-    val allInsertedTopics = dao.getAllTopics().first()
+    val allInsertedTopics = dao.getTopicsForUser(targetUserId).first()
     val questions = mutableListOf<QuizQuestion>()
     for (t in allInsertedTopics) {
       if (t.title.contains("AVL")) {
@@ -1654,5 +1632,9 @@ To counter the exponential **Ebbinghaus Forgetting Curve**, structure your revis
       )
     )
   }
-}
 
+  private companion object {
+    const val TAG = "StudyPilotRepository"
+    val CLOUD_COLLECTIONS = listOf("subjects", "sessions", "tasks", "topics", "quizAttempts", "tutorSessions")
+  }
+}

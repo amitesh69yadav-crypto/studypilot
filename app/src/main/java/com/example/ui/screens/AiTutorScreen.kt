@@ -627,7 +627,7 @@ private fun ChatTabContent(
               .padding(end = 8.dp)
           ) {
             Text(
-              text = "⚡ ${selectedModel.displayName}" +
+              text = selectedModel.displayName +
                 (if (useGoogleSearch) " • Web" else "") +
                 (if (selectedSubject != null) " • ${selectedSubject.code}" else "") +
                 " • $linkedChatsCount linked",

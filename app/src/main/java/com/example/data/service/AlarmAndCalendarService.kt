@@ -1,30 +1,12 @@
 package com.example.data.service
 
 import android.app.AlarmManager
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.app.PendingIntent
-import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
-import android.media.AudioAttributes
-import android.media.Ringtone
-import android.media.RingtoneManager
-import android.net.Uri
-import android.os.Build
-import android.os.VibrationEffect
-import android.os.Vibrator
-import android.os.VibratorManager
 import android.provider.CalendarContract
-import androidx.core.app.NotificationCompat
 import com.example.MainActivity
 import com.example.data.model.TimetableSession
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -52,31 +34,7 @@ enum class ScheduleState {
 
 class AlarmAndCalendarService(private val context: Context) {
 
-  private val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
   private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-  private val channelId = "studypilot_alarms_channel"
-
-  private var activeRingtone: Ringtone? = null
-
-  init {
-    createNotificationChannel()
-  }
-
-  private fun createNotificationChannel() {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-      val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
-      val channel = NotificationChannel(
-        channelId,
-        "StudyPilot Study Alarms",
-        NotificationManager.IMPORTANCE_HIGH
-      ).apply {
-        description = "Urgent reminders for scheduled study sessions and lectures"
-        enableVibration(true)
-        vibrationPattern = longArrayOf(0, 400, 200, 400, 200, 400)
-      }
-      notificationManager?.createNotificationChannel(channel)
-    }
-  }
 
   // --- Real-Time "What Should I Do Now" Calculation ---
   fun evaluateCurrentStatus(sessions: List<TimetableSession>, currentTime: Date = Date()): CurrentScheduleStatus {
@@ -185,261 +143,119 @@ class AlarmAndCalendarService(private val context: Context) {
     }
   }
 
-  // --- Alarm Scheduling with Android AlarmManager ---
+  // --- Alarm scheduling ---
   private val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
-  private var toneJob: kotlinx.coroutines.Job? = null
-  private var toneGenerator: android.media.ToneGenerator? = null
 
-  fun computeSessionTriggerTimeMillis(session: TimetableSession): Long {
-    return try {
-      val (startH, startM) = parseTime(session.startTime)
-      val localZone = TimeZone.getDefault()
-      val cal = Calendar.getInstance(localZone)
-      val dateParts = session.date.trim().split("-")
-      
-      if (dateParts.size == 3) {
-        val year = dateParts[0].toIntOrNull() ?: cal.get(Calendar.YEAR)
-        val month = (dateParts[1].toIntOrNull() ?: 1) - 1
-        val day = dateParts[2].toIntOrNull() ?: cal.get(Calendar.DAY_OF_MONTH)
-        cal.set(year, month, day, startH, startM, 0)
-      } else {
-        cal.set(Calendar.HOUR_OF_DAY, startH)
-        cal.set(Calendar.MINUTE, startM)
-        cal.set(Calendar.SECOND, 0)
-      }
-      cal.set(Calendar.MILLISECOND, 0)
-
-      // Ring exactly when event is starting (exactStartMs) - no early reminders and not when ending
-      val exactStartMs = cal.timeInMillis
-      var triggerTime = exactStartMs
-
-      val now = System.currentTimeMillis()
-      // Only if date was blank (undated recurring) and exactStartMs has already passed for today, roll forward to tomorrow's instance
-      if (triggerTime <= now && session.date.trim().isEmpty()) {
-        cal.add(Calendar.DAY_OF_YEAR, 1)
-        triggerTime = cal.timeInMillis
-      }
-      triggerTime
-    } catch (e: Exception) {
-      System.currentTimeMillis() + 60000L
+  /**
+   * Next time this session's alarm should ring, at or after [now].
+   *
+   * One-off sessions ring at their date + start time (or today/tomorrow when undated).
+   * Sessions with [TimetableSession.recurringDays] ("Mon,Wed,Fri") ring on the next matching
+   * weekday on or after their date. Returns a time in the past when a one-off session is over.
+   */
+  fun computeSessionTriggerTimeMillis(session: TimetableSession, now: Long = System.currentTimeMillis()): Long {
+    val (startH, startM) = parseTime(session.startTime)
+    val cal = Calendar.getInstance().apply {
+      timeInMillis = now
+      set(Calendar.HOUR_OF_DAY, startH)
+      set(Calendar.MINUTE, startM)
+      set(Calendar.SECOND, 0)
+      set(Calendar.MILLISECOND, 0)
     }
+    val dateParts = session.date.trim().split("-").mapNotNull { it.toIntOrNull() }
+    val hasDate = dateParts.size == 3
+    if (hasDate) cal.set(dateParts[0], dateParts[1] - 1, dateParts[2])
+
+    val days = parseRecurringDays(session.recurringDays)
+    if (days.isEmpty()) {
+      if (!hasDate && cal.timeInMillis <= now) cal.add(Calendar.DAY_OF_YEAR, 1)
+      return cal.timeInMillis
+    }
+
+    // Recurring: start from the later of the session date and today, then walk forward a week.
+    if (cal.timeInMillis < now) {
+      val today = Calendar.getInstance().apply { timeInMillis = now }
+      cal.set(today.get(Calendar.YEAR), today.get(Calendar.MONTH), today.get(Calendar.DAY_OF_MONTH))
+    }
+    repeat(8) {
+      if (cal.get(Calendar.DAY_OF_WEEK) in days && cal.timeInMillis > now) return cal.timeInMillis
+      cal.add(Calendar.DAY_OF_YEAR, 1)
+    }
+    return cal.timeInMillis
+  }
+
+  private fun parseRecurringDays(raw: String): Set<Int> {
+    if (raw.isBlank()) return emptySet()
+    val byPrefix = mapOf(
+      "sun" to Calendar.SUNDAY, "mon" to Calendar.MONDAY, "tue" to Calendar.TUESDAY,
+      "wed" to Calendar.WEDNESDAY, "thu" to Calendar.THURSDAY, "fri" to Calendar.FRIDAY,
+      "sat" to Calendar.SATURDAY
+    )
+    return raw.split(",", " ", "/").mapNotNull { byPrefix[it.trim().lowercase(Locale.ROOT).take(3)] }.toSet()
   }
 
   fun scheduleSessionAlarm(session: TimetableSession) {
     if (!session.isAlarmEnabled) return
     val triggerTime = computeSessionTriggerTimeMillis(session)
-    val now = System.currentTimeMillis()
-    if (triggerTime <= now) return
+    if (triggerTime <= System.currentTimeMillis()) return
+    setAlarm(triggerTime, alarmIntent(session, RequestCode.TRIGGER), showIntent(session.id))
+  }
 
+  fun cancelSessionAlarm(session: TimetableSession) = cancelSessionAlarm(session.id)
+
+  fun cancelSessionAlarm(sessionId: Long) {
+    val intent = Intent(context, AlarmReceiver::class.java).apply { action = AlarmReceiver.ACTION_TRIGGER_STUDY_ALARM }
+    for (kind in listOf(RequestCode.TRIGGER, RequestCode.SNOOZE)) {
+      PendingIntent.getBroadcast(
+        context, requestCode(sessionId, kind), intent,
+        PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+      )?.let {
+        alarmManager?.cancel(it)
+        it.cancel()
+      }
+    }
+  }
+
+  fun scheduleSnoozeAlarm(session: TimetableSession, minutes: Int = 5) {
+    val triggerTime = System.currentTimeMillis() + minutes * 60_000L
+    setAlarm(triggerTime, alarmIntent(session, RequestCode.SNOOZE), showIntent(session.id))
+  }
+
+  private fun alarmIntent(session: TimetableSession, kind: RequestCode): PendingIntent {
     val intent = Intent(context, AlarmReceiver::class.java).apply {
       action = AlarmReceiver.ACTION_TRIGGER_STUDY_ALARM
-      putExtra(AlarmReceiver.EXTRA_SESSION_ID, session.id)
-      putExtra(AlarmReceiver.EXTRA_SUBJECT_NAME, session.subjectName)
-      putExtra(AlarmReceiver.EXTRA_TOPIC, session.topic)
-      putExtra(AlarmReceiver.EXTRA_START_TIME, session.startTime)
-      putExtra(AlarmReceiver.EXTRA_END_TIME, session.endTime)
-      putExtra(AlarmReceiver.EXTRA_LOCATION, session.location)
-      putExtra(AlarmReceiver.EXTRA_NOTES, session.notes)
+      AlarmReceiver.putSessionExtras(this, session)
     }
-
-    val pendingIntent = PendingIntent.getBroadcast(
-      context,
-      session.id.toInt(),
-      intent,
+    return PendingIntent.getBroadcast(
+      context, requestCode(session.id, kind), intent,
       PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     )
-
-    try {
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-        val showIntent = Intent(context, MainActivity::class.java).apply {
-          flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-          putExtra("extra_ringing_session_id", session.id)
-        }
-        val showPendingIntent = PendingIntent.getActivity(
-          context,
-          (session.id + 50000).toInt(),
-          showIntent,
-          PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        val alarmClockInfo = AlarmManager.AlarmClockInfo(triggerTime, showPendingIntent)
-        alarmManager?.setAlarmClock(alarmClockInfo, pendingIntent)
-      } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-        alarmManager?.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
-      } else {
-        alarmManager?.setExact(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
-      }
-    } catch (e: Exception) {
-      try {
-        alarmManager?.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
-      } catch (ex: Exception) {
-        alarmManager?.set(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
-      }
-    }
   }
 
-  fun cancelSessionAlarm(session: TimetableSession) {
-    val intent = Intent(context, AlarmReceiver::class.java).apply {
-      action = AlarmReceiver.ACTION_TRIGGER_STUDY_ALARM
+  private fun showIntent(sessionId: Long): PendingIntent {
+    val intent = Intent(context, MainActivity::class.java).apply {
+      flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+      putExtra(MainActivity.EXTRA_RINGING_SESSION_ID, sessionId)
     }
-    val pendingIntent = PendingIntent.getBroadcast(
-      context,
-      session.id.toInt(),
-      intent,
-      PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
-    )
-    if (pendingIntent != null) {
-      alarmManager?.cancel(pendingIntent)
-      pendingIntent.cancel()
-    }
-  }
-
-  fun scheduleTestAlarm(session: TimetableSession, delaySeconds: Int = 5) {
-    val triggerTime = System.currentTimeMillis() + (delaySeconds * 1000L)
-    val intent = Intent(context, AlarmReceiver::class.java).apply {
-      action = AlarmReceiver.ACTION_TRIGGER_STUDY_ALARM
-      putExtra(AlarmReceiver.EXTRA_SESSION_ID, session.id)
-      putExtra(AlarmReceiver.EXTRA_SUBJECT_NAME, session.subjectName)
-      putExtra(AlarmReceiver.EXTRA_TOPIC, session.topic)
-      putExtra(AlarmReceiver.EXTRA_START_TIME, session.startTime)
-      putExtra(AlarmReceiver.EXTRA_END_TIME, session.endTime)
-      putExtra(AlarmReceiver.EXTRA_LOCATION, session.location)
-      putExtra(AlarmReceiver.EXTRA_NOTES, session.notes)
-    }
-    val pendingIntent = PendingIntent.getBroadcast(
-      context,
-      session.id.toInt(),
-      intent,
+    return PendingIntent.getActivity(
+      context, requestCode(sessionId, RequestCode.TRIGGER), intent,
       PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     )
-    try {
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-        alarmManager?.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
-      } else {
-        alarmManager?.setExact(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
-      }
-    } catch (e: Exception) {
-      alarmManager?.set(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
-    }
   }
 
-  fun scheduleSnoozeAlarm(sessionId: Long, subjectName: String, topic: String, startTime: String, minutes: Int = 5) {
-    val triggerTime = System.currentTimeMillis() + (minutes * 60 * 1000L)
-    val intent = Intent(context, AlarmReceiver::class.java).apply {
-      action = AlarmReceiver.ACTION_TRIGGER_STUDY_ALARM
-      putExtra(AlarmReceiver.EXTRA_SESSION_ID, sessionId)
-      putExtra(AlarmReceiver.EXTRA_SUBJECT_NAME, subjectName)
-      putExtra(AlarmReceiver.EXTRA_TOPIC, topic)
-      putExtra(AlarmReceiver.EXTRA_START_TIME, startTime)
-    }
-    val pendingIntent = PendingIntent.getBroadcast(
-      context,
-      sessionId.toInt(),
-      intent,
-      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-    )
+  private fun setAlarm(triggerTime: Long, operation: PendingIntent, show: PendingIntent) {
+    val manager = alarmManager ?: return
     try {
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-        alarmManager?.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
-      } else {
-        alarmManager?.setExact(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
-      }
-    } catch (e: Exception) {
-      alarmManager?.set(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
+      // AlarmClock alarms are exact, survive Doze and show in the status bar.
+      manager.setAlarmClock(AlarmManager.AlarmClockInfo(triggerTime, show), operation)
+    } catch (_: SecurityException) {
+      // Exact alarms not permitted: fall back to an inexact alarm rather than none.
+      manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerTime, operation)
     }
-  }
-
-  // --- Alarm Audio & Vibration Alert ---
-  fun triggerAlarmAlert(session: TimetableSession) {
-    // 1. Play central alarm sound and vibration
-    AlarmSoundManager.startSoundAndVibration(context)
-
-    // 2. Post System Notification
-    postAlarmNotification(session)
   }
 
   fun stopAlarmSound() {
-    // 1. Stop Foreground Ringing Service
     AlarmRingingService.stopRinging(context)
-
-    // 2. Stop central sound and vibration synchronously
-    AlarmSoundManager.stopSoundAndVibration(context)
-
-    // 3. Cancel notification bar items
-    try {
-      val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
-      notificationManager?.cancelAll()
-    } catch (e: Exception) {
-      // Ignore
-    }
-  }
-
-  private fun postAlarmNotification(session: TimetableSession) {
-    try {
-      val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
-      val intent = Intent(context, MainActivity::class.java).apply {
-        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        putExtra("extra_ringing_session_id", session.id)
-      }
-      val pendingIntent = PendingIntent.getActivity(
-        context,
-        session.id.toInt(),
-        intent,
-        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-      )
-
-      val dismissIntent = Intent(context, AlarmReceiver::class.java).apply {
-        action = AlarmReceiver.ACTION_DISMISS_ALARM
-        putExtra(AlarmReceiver.EXTRA_SESSION_ID, session.id)
-      }
-      val dismissPendingIntent = PendingIntent.getBroadcast(
-        context,
-        (session.id + 10000).toInt(),
-        dismissIntent,
-        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-      )
-
-      val snoozeIntent = Intent(context, AlarmReceiver::class.java).apply {
-        action = AlarmReceiver.ACTION_SNOOZE_ALARM
-        putExtra(AlarmReceiver.EXTRA_SESSION_ID, session.id)
-        putExtra(AlarmReceiver.EXTRA_SUBJECT_NAME, session.subjectName)
-        putExtra(AlarmReceiver.EXTRA_TOPIC, session.topic)
-        putExtra(AlarmReceiver.EXTRA_START_TIME, session.startTime)
-      }
-      val snoozePendingIntent = PendingIntent.getBroadcast(
-        context,
-        (session.id + 20000).toInt(),
-        snoozeIntent,
-        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-      )
-
-      val timeSummary = if (session.endTime.isNotBlank()) {
-        "Scheduled: ${session.startTime} - ${session.endTime}"
-      } else {
-        "Alarm Time: ${session.startTime}"
-      }
-      val locationLine = if (session.location.isNotBlank()) "\nLocation: ${session.location}" else ""
-      val notesLine = if (session.notes.isNotBlank()) "\n${session.notes}" else ""
-      val notification = NotificationCompat.Builder(context, channelId)
-        .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-        .setContentTitle("⏰ Event Starting Now: ${session.subjectName.ifBlank { session.topic }}")
-        .setContentText("${session.topic} (Started at ${session.startTime})")
-        .setStyle(NotificationCompat.BigTextStyle().bigText(
-          "Event Starting Now: ${session.topic}\n$timeSummary$locationLine$notesLine"
-        ))
-        .setPriority(NotificationCompat.PRIORITY_MAX)
-        .setCategory(NotificationCompat.CATEGORY_ALARM)
-        .setAutoCancel(true)
-        .setFullScreenIntent(pendingIntent, true)
-        .setContentIntent(pendingIntent)
-        .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Dismiss", dismissPendingIntent)
-        .addAction(android.R.drawable.ic_popup_reminder, "Snooze 5m", snoozePendingIntent)
-        .addAction(android.R.drawable.ic_media_play, "Start Study", pendingIntent)
-        .build()
-
-      notificationManager?.notify(session.id.toInt(), notification)
-    } catch (e: Exception) {
-      // Ignore
-    }
   }
 
   // --- Google Calendar Sync Helpers ---
@@ -525,45 +341,11 @@ class AlarmAndCalendarService(private val context: Context) {
     }
   }
 
-  /**
-   * Directly inserts event into the local Android Calendar Provider if permission is available.
-   */
-  fun insertIntoCalendarProvider(session: TimetableSession): Long? {
-    return try {
-      val (startH, startM) = parseTime(session.startTime)
+  enum class RequestCode { TRIGGER, SNOOZE, DISMISS, SNOOZE_ACTION }
 
-      val dateParts = session.date.split("-")
-      val year = dateParts.getOrNull(0)?.toIntOrNull() ?: Calendar.getInstance().get(Calendar.YEAR)
-      val month = (dateParts.getOrNull(1)?.toIntOrNull() ?: 1) - 1
-      val day = dateParts.getOrNull(2)?.toIntOrNull() ?: 1
-
-      val startCal = Calendar.getInstance().apply {
-        set(year, month, day, startH, startM, 0)
-      }
-      val endCal = Calendar.getInstance().apply {
-        if (session.endTime.isNotBlank()) {
-          val (endH, endM) = parseTime(session.endTime)
-          set(year, month, day, endH, endM, 0)
-        } else {
-          timeInMillis = startCal.timeInMillis
-          add(Calendar.MINUTE, 30)
-        }
-      }
-
-      val values = ContentValues().apply {
-        put(CalendarContract.Events.DTSTART, startCal.timeInMillis)
-        put(CalendarContract.Events.DTEND, endCal.timeInMillis)
-        put(CalendarContract.Events.TITLE, if (session.subjectName.isNotBlank()) "${session.subjectName}: ${session.topic}" else session.topic)
-        put(CalendarContract.Events.DESCRIPTION, "StudyPilot AI Timetable Session\n${session.notes}")
-        put(CalendarContract.Events.CALENDAR_ID, 1)
-        put(CalendarContract.Events.EVENT_TIMEZONE, TimeZone.getDefault().id)
-        put(CalendarContract.Events.EVENT_LOCATION, session.location)
-      }
-
-      val uri = context.contentResolver.insert(CalendarContract.Events.CONTENT_URI, values)
-      uri?.lastPathSegment?.toLongOrNull()
-    } catch (e: Exception) {
-      null
-    }
+  companion object {
+    /** Distinct PendingIntent request codes per session and purpose. */
+    fun requestCode(sessionId: Long, kind: RequestCode): Int =
+      ((sessionId and 0x0FFFFFFF) * 4 + kind.ordinal).toInt()
   }
 }

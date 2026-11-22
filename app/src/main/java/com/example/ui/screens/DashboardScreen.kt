@@ -197,7 +197,6 @@ fun DashboardScreen(
           onToggleAlarm = { viewModel.toggleSessionAlarm(it) },
           onTestAlarm = { viewModel.triggerTestAlarm(it) },
           onSyncGoogleCalendar = { session ->
-            viewModel.syncSessionToGoogleCalendar(session)
             val intent = viewModel.alarmAndCalendarService.createGoogleCalendarInsertIntent(session)
             try {
               context.startActivity(intent)

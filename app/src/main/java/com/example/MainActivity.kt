@@ -1,39 +1,52 @@
 package com.example
 
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
+import androidx.compose.material.icons.filled.AlarmOff
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -44,29 +57,13 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.NavigationRailItemDefaults
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Surface
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.filled.AlarmOff
-import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -76,41 +73,57 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import android.content.Intent
-import com.example.ui.components.ActiveAlarmAlertDialog
-import com.example.ui.screens.LoginScreen
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
+import com.example.ui.components.ActiveAlarmAlertDialog
 import com.example.ui.screens.ActiveQuizScreen
+import com.example.ui.screens.AiChatImportScreen
 import com.example.ui.screens.AiTutorScreen
 import com.example.ui.screens.DashboardScreen
+import com.example.ui.screens.LoginScreen
 import com.example.ui.screens.ProgressScreen
 import com.example.ui.screens.QuizScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.TasksScreen
 import com.example.ui.screens.TimetableScreen
 import com.example.ui.screens.TopicsScreen
-import com.example.ui.screens.AiChatImportScreen
 import com.example.ui.theme.AmberAccent
 import com.example.ui.theme.StudyPilotTheme
 import com.example.ui.viewmodel.Screen
 import com.example.ui.viewmodel.StudyPilotViewModel
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
+  companion object {
+    const val EXTRA_RINGING_SESSION_ID = "extra_ringing_session_id"
+  }
+
   private val viewModel: StudyPilotViewModel by viewModels()
+
+  private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     enableEdgeToEdge()
-    setupWindowFlagsForRingingAlarm()
     handleAlarmIntent(intent)
+    requestNotificationPermissionIfNeeded()
+
+    // Show over the lock screen only while an alarm is ringing, never for normal use.
+    lifecycleScope.launch {
+      viewModel.ringingAlarmSession.collect { showOverLockScreen(it != null) }
+    }
+
     setContent {
       StudyPilotTheme {
         StudyPilotApp(viewModel = viewModel)
@@ -123,29 +136,31 @@ class MainActivity : ComponentActivity() {
     handleAlarmIntent(intent)
   }
 
-  private fun setupWindowFlagsForRingingAlarm() {
-    try {
-      if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
-        setShowWhenLocked(true)
-        setTurnScreenOn(true)
-      } else {
-        @Suppress("DEPRECATION")
-        window.addFlags(
-          android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-          android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
-          android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
-          android.view.WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
-        )
-      }
-    } catch (e: Exception) {
-      // Ignore
+  private fun handleAlarmIntent(intent: Intent?) {
+    val ringingSessionId = intent?.getLongExtra(EXTRA_RINGING_SESSION_ID, 0L) ?: 0L
+    if (ringingSessionId > 0) {
+      showOverLockScreen(true)
+      viewModel.showRingingAlarm(ringingSessionId)
     }
   }
 
-  private fun handleAlarmIntent(intent: Intent?) {
-    val ringingSessionId = intent?.getLongExtra("extra_ringing_session_id", 0L) ?: 0L
-    if (ringingSessionId > 0) {
-      viewModel.triggerSessionAlarmById(ringingSessionId)
+  /** Alarms can't post their notification on Android 13+ without this permission. */
+  private fun requestNotificationPermissionIfNeeded() {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+    val granted = ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
+      PackageManager.PERMISSION_GRANTED
+    if (!granted) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+  }
+
+  private fun showOverLockScreen(show: Boolean) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+      setShowWhenLocked(show)
+      setTurnScreenOn(show)
+    } else {
+      @Suppress("DEPRECATION")
+      val flags = android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+        android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+      if (show) window.addFlags(flags) else window.clearFlags(flags)
     }
   }
 }
@@ -171,18 +186,17 @@ fun StudyPilotApp(viewModel: StudyPilotViewModel) {
     }
   }
 
-  // Handle system back navigation to return to Dashboard if on a subscreen or Login
+  // System back returns to the Dashboard from any other screen (the quiz has its own exit flow).
   BackHandler(enabled = currentScreen != Screen.Dashboard && currentScreen != Screen.ActiveQuiz) {
     viewModel.navigateTo(Screen.Dashboard)
   }
 
-  // 5 Balanced primary destinations for the bottom navigation bar
   val navItems = listOf(
     Triple(Screen.Dashboard, "Dashboard", Icons.Default.Dashboard),
     Triple(Screen.Timetable, "Timetable", Icons.Default.Schedule),
     Triple(Screen.MyTopics, "Topics", Icons.Default.Book),
     Triple(Screen.WeekendQuizzes, "Quizzes", Icons.Default.AutoAwesome),
-    Triple(Screen.Progress, "Analytics", Icons.AutoMirrored.Filled.TrendingUp)
+    Triple(Screen.Progress, "Progress", Icons.AutoMirrored.Filled.TrendingUp)
   )
 
   val isSubScreen = currentScreen == Screen.AiTutor ||
@@ -191,24 +205,24 @@ fun StudyPilotApp(viewModel: StudyPilotViewModel) {
     currentScreen == Screen.AiChatImport
 
   val screenTitle = when (currentScreen) {
-    Screen.Login -> "Authentication"
-    Screen.Dashboard -> "StudyPilot AI"
-    Screen.Timetable -> "Timetable & Schedule"
-    Screen.MyTopics -> "My Topics Library"
-    Screen.WeekendQuizzes -> "Weekend Quizzes"
-    Screen.Progress -> "Academic Analytics"
-    Screen.AiTutor -> "AI Study Tutor"
-    Screen.Tasks -> "Tasks & Deadlines"
-    Screen.Settings -> "Settings & Courses"
-    Screen.ActiveQuiz -> "Interactive Quiz"
-    Screen.AiChatImport -> "AI Chat Import & Memory"
+    Screen.Login -> "Sign in"
+    Screen.Dashboard -> "StudyPilot"
+    Screen.Timetable -> "Timetable"
+    Screen.MyTopics -> "Topics"
+    Screen.WeekendQuizzes -> "Quizzes"
+    Screen.Progress -> "Progress"
+    Screen.AiTutor -> "AI Tutor"
+    Screen.Tasks -> "Tasks & deadlines"
+    Screen.Settings -> "Settings"
+    Screen.ActiveQuiz -> "Quiz"
+    Screen.AiChatImport -> "Imported chats"
   }
 
   BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
     val isWideScreen = maxWidth >= 600.dp
 
     Row(modifier = Modifier.fillMaxSize()) {
-      // Left Navigation Rail for Laptop / Tablet / Foldable mode
+      // Navigation rail on tablets and foldables, bottom bar on phones.
       if (isWideScreen && currentScreen != Screen.ActiveQuiz && currentScreen != Screen.Login) {
         NavigationRail(
           containerColor = MaterialTheme.colorScheme.surface,
@@ -302,7 +316,6 @@ fun StudyPilotApp(viewModel: StudyPilotViewModel) {
             }
           },
           actions = {
-            // Symmetrical, evenly-spaced quick action icons for secondary features
             IconButton(
               onClick = { viewModel.navigateTo(Screen.AiChatImport) }
             ) {
@@ -380,7 +393,6 @@ fun StudyPilotApp(viewModel: StudyPilotViewModel) {
               }
             }
 
-            // Academic User Profile Avatar Button (Navigates to Profile, Settings & Account)
             IconButton(
               onClick = { viewModel.navigateTo(Screen.Settings) }
             ) {
@@ -404,7 +416,6 @@ fun StudyPilotApp(viewModel: StudyPilotViewModel) {
       }
     },
     bottomBar = {
-      // Show bottom bar on mobile screens, hide on laptop (wide), active quiz, or login
       if (!isWideScreen && currentScreen != Screen.ActiveQuiz && currentScreen != Screen.Login) {
         NavigationBar(
           containerColor = MaterialTheme.colorScheme.surface,
@@ -457,7 +468,7 @@ fun StudyPilotApp(viewModel: StudyPilotViewModel) {
         contentAlignment = Alignment.TopCenter
       ) {
         Column(modifier = Modifier.fillMaxSize()) {
-          // Persistent Floating/Top Alarm Ringing Banner: Always visible on ANY screen when an alarm is actively ringing!
+          // Banner shown on every screen while an alarm rings.
           ringingAlarmSession?.let { ringingSession ->
             Surface(
               modifier = Modifier
@@ -483,7 +494,7 @@ fun StudyPilotApp(viewModel: StudyPilotViewModel) {
                 Spacer(modifier = Modifier.width(10.dp))
                 Column(modifier = Modifier.weight(1f)) {
                   Text(
-                    text = "ALARM RINGING: ${ringingSession.subjectName}",
+                    text = "Alarm: ${ringingSession.subjectName}",
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black),
                     color = MaterialTheme.colorScheme.error,
                     maxLines = 1,
@@ -510,11 +521,11 @@ fun StudyPilotApp(viewModel: StudyPilotViewModel) {
                 ) {
                   Icon(
                     imageVector = Icons.Default.AlarmOff,
-                    contentDescription = "Turn Off Alarm",
+                    contentDescription = "Stop alarm",
                     modifier = Modifier.size(16.dp)
                   )
                   Spacer(modifier = Modifier.width(4.dp))
-                  Text("Turn Off", fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1, softWrap = false)
+                  Text("Stop", fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1, softWrap = false)
                 }
               }
             }
@@ -547,14 +558,14 @@ fun StudyPilotApp(viewModel: StudyPilotViewModel) {
                 )
               }
               Screen.Timetable -> {
-                val trigger = quickAddSessionTrigger
-                if (trigger) quickAddSessionTrigger = false
-                TimetableScreen(viewModel = viewModel, showAddDialogOnInit = trigger)
+                val openAddDialog = quickAddSessionTrigger
+                LaunchedEffect(Unit) { quickAddSessionTrigger = false }
+                TimetableScreen(viewModel = viewModel, showAddDialogOnInit = openAddDialog)
               }
               Screen.MyTopics -> {
-                val trigger = quickAddTopicTrigger
-                if (trigger) quickAddTopicTrigger = false
-                TopicsScreen(viewModel = viewModel, showAddDialogOnInit = trigger)
+                val openAddDialog = quickAddTopicTrigger
+                LaunchedEffect(Unit) { quickAddTopicTrigger = false }
+                TopicsScreen(viewModel = viewModel, showAddDialogOnInit = openAddDialog)
               }
               Screen.WeekendQuizzes -> {
                 QuizScreen(viewModel = viewModel)
@@ -585,7 +596,6 @@ fun StudyPilotApp(viewModel: StudyPilotViewModel) {
   }
 }
 
-  // Global Active Alarm Ringing Dialog: triggers across the entire app
   ringingAlarmSession?.let { ringingSession ->
     ActiveAlarmAlertDialog(
       session = ringingSession,

@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.AlarmOff
 import androidx.compose.material.icons.filled.AlarmOn
 import androidx.compose.material.icons.filled.Check
@@ -104,7 +105,7 @@ fun WhatShouldIDoNowCard(
     elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
   ) {
     Column(modifier = Modifier.padding(16.dp)) {
-      // Header: Alarm indicator + Google Calendar Status
+      // Header
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -172,30 +173,6 @@ fun WhatShouldIDoNowCard(
           }
         }
 
-        // Live Google Calendar sync indicator pill
-        Surface(
-          shape = RoundedCornerShape(12.dp),
-          color = PalettePaleCeladon
-        ) {
-          Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-          ) {
-            Icon(
-              imageVector = Icons.Default.Sync,
-              contentDescription = "Google Calendar Synced",
-              tint = PaletteDarkText,
-              modifier = Modifier.size(12.dp)
-            )
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(
-              text = "G-Calendar",
-              fontSize = 11.sp,
-              fontWeight = FontWeight.Bold,
-              color = PaletteDarkText
-            )
-          }
-        }
       }
 
       Spacer(modifier = Modifier.height(12.dp))
@@ -326,8 +303,8 @@ fun WhatShouldIDoNowCard(
                 }
                 IconButton(onClick = { onSyncGoogleCalendar(active) }, modifier = Modifier.size(44.dp)) {
                   Icon(
-                    imageVector = Icons.Default.Sync,
-                    contentDescription = "Sync with Google Calendar",
+                    imageVector = Icons.Default.CalendarMonth,
+                    contentDescription = "Add to calendar",
                     tint = PaletteDarkText,
                     modifier = Modifier.size(18.dp)
                   )

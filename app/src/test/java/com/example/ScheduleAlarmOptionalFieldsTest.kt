@@ -32,7 +32,7 @@ import java.util.Calendar
 import java.util.Locale
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
+@Config(sdk = [35])
 class ScheduleAlarmOptionalFieldsTest {
 
   @get:Rule
@@ -182,10 +182,16 @@ class ScheduleAlarmOptionalFieldsTest {
       isAlarmEnabled = true
     )
 
-    val url = service.getGoogleCalendarWebUrl(session)
-    assertTrue(url.contains("Morning+Wakeup+Alarm"))
-    assertTrue(url.contains("063000"))
-    assertTrue(url.contains("070000"))
+    // The URL carries UTC times, so pin the device zone to UTC to make 06:30 local == 063000Z.
+    val originalZone = java.util.TimeZone.getDefault()
+    java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("UTC"))
+    try {
+      val url = service.getGoogleCalendarWebUrl(session)
+      assertTrue(url.contains("Morning+Wakeup+Alarm"))
+      assertTrue(url.contains("20261121T063000Z/20261121T070000Z"))
+    } finally {
+      java.util.TimeZone.setDefault(originalZone)
+    }
   }
 
   @Test
@@ -265,6 +271,6 @@ class ScheduleAlarmOptionalFieldsTest {
     composeTestRule.onNodeWithText("AI Tutor").assertIsDisplayed()
     composeTestRule.onNodeWithText("Alarm On").assertIsDisplayed()
     composeTestRule.onNodeWithText("Ring").assertIsDisplayed()
-    composeTestRule.onNodeWithText("Sync G-Cal").assertIsDisplayed()
+    composeTestRule.onNodeWithText("Calendar").assertIsDisplayed()
   }
 }

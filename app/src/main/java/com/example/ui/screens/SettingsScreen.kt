@@ -381,13 +381,13 @@ fun SettingsScreen(
                 )
                 Column(modifier = Modifier.weight(1f)) {
                   Text(
-                    text = "Synced Profile (${currentUser.authProvider})",
+                    text = if (currentUser.authProvider == "Google Sign-In") "Google profile" else "Email profile",
                     fontWeight = FontWeight.Bold,
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurface
                   )
                   Text(
-                    text = "Your account info, coursework, and alarms are saved.",
+                    text = if (currentUser.authProvider == "Google Sign-In") "Saved on this device and backed up to the cloud." else "Saved on this device only.",
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                   )
@@ -668,18 +668,17 @@ fun SettingsScreen(
 
           // Provider Mode Selection Header
           Text(
-            text = "Preferred AI Engine",
+            text = "AI provider",
             fontWeight = FontWeight.Bold,
             fontSize = 13.sp,
             color = MaterialTheme.colorScheme.onSurface
           )
           Spacer(modifier = Modifier.height(6.dp))
 
-          // Strictly Gemini & Local AI Only
           val modes = listOf(
-            "AUTO" to "Auto (Google Gemini → Local Academic AI)",
-            "GEMINI" to "Google Gemini AI (Primary Cloud)",
-            "LOCAL" to "Local Academic AI / Ollama (On-Device)"
+            "AUTO" to "Gemini, with offline answers if it fails",
+            "GEMINI" to "Gemini only",
+            "LOCAL" to "Offline only (Ollama or built-in answers)"
           )
 
           Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -753,12 +752,12 @@ fun SettingsScreen(
               Spacer(modifier = Modifier.width(10.dp))
               Column {
                 Text(
-                  text = "Guaranteed AI Response System",
+                  text = "When Gemini isn't available",
                   style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                   color = PaletteDeepSage
                 )
                 Text(
-                  text = "Every question is answered. If cloud APIs face quota limits or network outages, the on-device Local Academic AI (symbolic math, code algorithms & university science graph) immediately handles your query without disruption.",
+                  text = "Without a key, or when Gemini is unreachable or over quota, you get an offline answer instead: Ollama if it's running, otherwise built-in notes, a small math and code solver, and Wikipedia. Offline answers are labelled and are much less capable than Gemini.",
                   style = MaterialTheme.typography.bodySmall,
                   fontSize = 11.sp,
                   color = MaterialTheme.colorScheme.onSurface

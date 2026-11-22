@@ -2,12 +2,12 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Per-user isolated academic data synced across devices
+    // Each signed-in user can only read and write their own profile and subcollections.
     match /users/{userId} {
-      allow read, write: if true;
+      allow read, write: if request.auth != null && request.auth.uid == userId;
 
-      match /{subcollection}/{document=**} {
-        allow read, write: if true;
+      match /{document=**} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
       }
     }
   }
