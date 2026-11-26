@@ -1339,22 +1339,25 @@ private fun ChatMessageBubble(
                   verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                   message.groundingSources.take(4).forEach { source ->
+                    val opensLink = source.url.startsWith("http")
                     Surface(
                       shape = RoundedCornerShape(6.dp),
                       color = MaterialTheme.colorScheme.surface,
-                      modifier = Modifier.clickable { onOpenUrl(source.url) }
+                      modifier = if (opensLink) Modifier.clickable { onOpenUrl(source.url) } else Modifier
                     ) {
                       Row(
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                       ) {
                         Text(
-                          text = source.title.take(28),
+                          text = source.title.take(48),
                           style = MaterialTheme.typography.labelSmall,
                           color = MaterialTheme.colorScheme.primary
                         )
-                        Spacer(modifier = Modifier.width(2.dp))
-                        Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(10.dp))
+                        if (opensLink) {
+                          Spacer(modifier = Modifier.width(2.dp))
+                          Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(10.dp))
+                        }
                       }
                     }
                   }

@@ -1,5 +1,7 @@
 package com.example.ui.viewmodel
 
+import kotlinx.coroutines.flow.first
+import com.example.data.ai.AiTask
 import kotlinx.coroutines.Job
 import com.example.data.sync.SyncEvents
 import androidx.lifecycle.ViewModel
@@ -113,6 +115,20 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
 
   private val _pcModel = MutableStateFlow(aiPrefs.getString("pc_ollama_model", "") ?: "")
   val pcModel: StateFlow<String> = _pcModel.asStateFlow()
+
+  // Free cloud model (Groq or another OpenAI-compatible provider); the key stays on this device.
+  private val _cloudKey = MutableStateFlow(aiPrefs.getString("cloud_api_key", "") ?: "")
+  val cloudKey: StateFlow<String> = _cloudKey.asStateFlow()
+  private val _cloudModel = MutableStateFlow(aiPrefs.getString("cloud_model", "") ?: "")
+  val cloudModel: StateFlow<String> = _cloudModel.asStateFlow()
+  private val _cloudBaseUrl = MutableStateFlow(aiPrefs.getString("cloud_base_url", "") ?: "")
+  val cloudBaseUrl: StateFlow<String> = _cloudBaseUrl.asStateFlow()
+  private val _cloudStatus = MutableStateFlow<String?>(null)
+  val cloudStatus: StateFlow<String?> = _cloudStatus.asStateFlow()
+  private val _cloudModels = MutableStateFlow<List<String>>(emptyList())
+  val cloudModels: StateFlow<List<String>> = _cloudModels.asStateFlow()
+  private val _isCheckingCloud = MutableStateFlow(false)
+  val isCheckingCloud: StateFlow<Boolean> = _isCheckingCloud.asStateFlow()
 
   /** Result of the last PC check, e.g. "Connected. Models: qwen3:8b". Null until checked. */
   private val _pcStatus = MutableStateFlow<String?>(null)
@@ -551,6 +567,9 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
     repository.ai.source = _aiSource.value
     repository.ai.pc.baseUrl = _pcUrl.value
     repository.ai.pc.preferredModel = _pcModel.value
+    repository.ai.cloud.apiKey = _cloudKey.value
+    repository.ai.cloud.model = _cloudModel.value
+    repository.ai.cloud.baseUrl = _cloudBaseUrl.value
     refreshActiveAi()
     // The "answering with" label must follow downloads, deletions and model switches.
     repository.ai.phone?.let { phone ->
@@ -695,6 +714,43 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
     viewModelScope.launch {
       repository.ai.phone?.delete(model)
       snackbar("Deleted ${model.displayName}")
+      refreshActiveAi()
+    }
+  }
+
+  /** Saves the cloud key, model and provider address (blank for Groq), then checks the key. */
+  fun setCloudConfig(apiKey: String, model: String, baseUrl: String) {
+    _cloudKey.value = apiKey.trim()
+    _cloudModel.value = model.trim()
+    _cloudBaseUrl.value = baseUrl.trim()
+    repository.ai.cloud.apiKey = _cloudKey.value
+    repository.ai.cloud.model = _cloudModel.value
+    repository.ai.cloud.baseUrl = _cloudBaseUrl.value
+    aiPrefs.edit()
+      .putString("cloud_api_key", _cloudKey.value)
+      .putString("cloud_model", _cloudModel.value)
+      .putString("cloud_base_url", _cloudBaseUrl.value)
+      .apply()
+    checkCloud()
+  }
+
+  fun checkCloud() {
+    viewModelScope.launch {
+      if (_cloudKey.value.isBlank()) {
+        _cloudStatus.value = null
+        _cloudModels.value = emptyList()
+        refreshActiveAi()
+        return@launch
+      }
+      _isCheckingCloud.value = true
+      val status = repository.ai.cloud.status()
+      _cloudModels.value = status.models
+      _cloudStatus.value = if (status.ok) {
+        "Connected. Using ${repository.ai.cloud.chosenModel()} · ${repository.ai.cloud.requestsToday} requests today"
+      } else {
+        "Can't use the cloud model: ${status.error}"
+      }
+      _isCheckingCloud.value = false
       refreshActiveAi()
     }
   }
@@ -1233,10 +1289,18 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
 
         repository.saveTutorMessage(sessionId = sessionId, role = "user", text = trimmed, modelName = "", searchGroundingUsed = false)
 
-        // Imported chats the user linked take priority when they cover the question.
         val chatsSnapshot = importedChats.value
         val conceptsSnapshot = extractedConcepts.value
-        val linkedChatResponse = withContext(Dispatchers.Default) {
+        // With a model, answers come from it, grounded in the student's own material (RAG).
+        // Without one, the rule-based answer from imported chats is used when it covers the question.
+        val hasModel = repository.ai.backend() != null
+        val knowledge = if (hasModel) {
+          runCatching {
+            val sessionTitle = repository.getTutorSessionsForUser(_currentUser.value.id).first().firstOrNull { it.id == sessionId }?.title
+            repository.searchKnowledge(_currentUser.value.id, followUpContext(_chatMessages.value, replyingTo).takeLast(4).joinToString(" ") { it.text.take(300) } + " " + trimmed, sessionTitle)
+          }.getOrDefault(emptyList())
+        } else emptyList()
+        val linkedChatResponse = if (hasModel) null else withContext(Dispatchers.Default) {
           com.example.data.ai.ChatHistoryAssistant.answerFromLinkedChats(
             query = trimmed,
             history = currentHistory,
@@ -1260,7 +1324,8 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
           history = currentHistory,
           systemInstruction = _systemInstruction.value,
           subjectContext = activeSub?.let { "${it.name} (${it.code})" },
-          onPartial = onPartial
+          onPartial = onPartial,
+          knowledge = knowledge
         )
 
         val (cleanText, finalTopics) = withContext(Dispatchers.Default) {
@@ -2144,7 +2209,7 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
           tags = tags,
           existingConcepts = extractedConcepts.value,
           aiDispatcher = { prompt ->
-            repository.ai.prompt(prompt, "You extract study concepts from conversations.", 0.2)
+            repository.ai.prompt(prompt, "You extract study concepts from conversations.", 0.2, task = AiTask.BACKGROUND)
           },
           onProgress = { p, status ->
             _importProcessingProgress.value = 0.45f + (p * 0.55f)
@@ -2308,6 +2373,63 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
     }
   }
 
+  private val _checkingChatIds = MutableStateFlow<Set<Long>>(emptySet())
+  /** Imported chats whose link is being checked for new messages right now. */
+  val checkingChatIds: StateFlow<Set<Long>> = _checkingChatIds.asStateFlow()
+
+  /**
+   * Opens [chat]'s share link again and adds any messages that weren't there at import: they are
+   * stored, their concepts extracted, and they become quiz material. [quiet] skips the "nothing new"
+   * message (automatic checks).
+   */
+  fun checkChatForUpdates(chat: ImportedChat, quiet: Boolean = false) {
+    if (chat.sourceUrl.isBlank() || chat.id in _checkingChatIds.value) return
+    _checkingChatIds.value = _checkingChatIds.value + chat.id
+    viewModelScope.launch {
+      try {
+        when (val check = repository.checkChatLink(chat)) {
+          is StudyPilotRepository.ChatLinkCheck.Failed -> if (!quiet) _snackbarMessage.emit(check.message)
+          StudyPilotRepository.ChatLinkCheck.NoChange -> if (!quiet) {
+            _snackbarMessage.emit("No new messages in \"${chat.title}\". If you kept chatting, update the share link in ${chat.aiPlatform} first.")
+          }
+          is StudyPilotRepository.ChatLinkCheck.Updated -> {
+            val result = ChatKnowledgeExtractor.processAndExtract(
+              title = chat.title,
+              subjectName = chat.subjectName,
+              rawText = check.added,
+              tags = chat.tags,
+              existingConcepts = extractedConcepts.value,
+              aiDispatcher = { prompt -> repository.ai.prompt(prompt, "You extract study concepts from conversations.", 0.2, task = AiTask.BACKGROUND) }
+            )
+            repository.applyChatUpdate(_currentUser.value.id, chat, check.fullText, result.concepts, result.messageCount)
+            refreshQuizSources()
+            _snackbarMessage.emit(
+              "\"${chat.title}\" has ${plural(result.messageCount.coerceAtLeast(1), "new message")}" +
+                if (result.concepts.isNotEmpty()) " and ${plural(result.concepts.size, "new concept")}" else ""
+            )
+          }
+        }
+      } catch (e: Exception) {
+        if (!quiet) _snackbarMessage.emit("Couldn't check \"${chat.title}\": ${e.message ?: "unknown error"}")
+      } finally {
+        _checkingChatIds.value = _checkingChatIds.value - chat.id
+      }
+    }
+  }
+
+  /** When the chat library opens: check links not checked in the last few hours, one at a time. */
+  fun checkStaleChatLinks() {
+    viewModelScope.launch {
+      val cutoff = System.currentTimeMillis() - 6 * 3_600_000L
+      importedChats.value
+        .filter { it.sourceUrl.isNotBlank() && (it.lastProcessedAt ?: it.importedAt) < cutoff }
+        .forEach { chat ->
+          checkChatForUpdates(chat, quiet = true)
+          while (chat.id in _checkingChatIds.value) kotlinx.coroutines.delay(300)
+        }
+    }
+  }
+
   fun reprocessImportedChat(chat: ImportedChat) {
     viewModelScope.launch {
       _isImportProcessing.value = true
@@ -2321,7 +2443,7 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
           tags = chat.tags,
           existingConcepts = extractedConcepts.value,
           aiDispatcher = { prompt ->
-            repository.ai.prompt(prompt, "You extract study concepts from conversations.", 0.2)
+            repository.ai.prompt(prompt, "You extract study concepts from conversations.", 0.2, task = AiTask.BACKGROUND)
           },
           onProgress = { p, status ->
             _importProcessingProgress.value = p

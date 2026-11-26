@@ -1,10 +1,15 @@
 package com.example.data.repository
 
+import com.example.data.ai.rag.KnowledgeIndex
+import com.example.data.ai.rag.KnowledgePassage
+import com.example.data.remote.ChatLinkFetcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import com.example.data.ai.ChatKnowledgeExtractor
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.currentCoroutineContext
 import com.example.data.ai.LocalAiEngine
-import com.example.data.ai.ChatKnowledgeExtractor
 import com.example.data.local.StudyPilotDao
 import com.example.data.model.ExtractedConcept
 import com.example.data.model.ImportedChat
@@ -390,9 +395,10 @@ class StudyPilotRepository(
     history: List<com.example.data.model.ChatMessage>,
     systemInstruction: String,
     subjectContext: String? = null,
-    onPartial: ((String) -> Unit)? = null
+    onPartial: ((String) -> Unit)? = null,
+    knowledge: List<KnowledgePassage> = emptyList()
   ): com.example.data.remote.ChatResponse {
-    return ai.chat(history, systemInstruction, subjectContext, onPartial)
+    return ai.chat(history, systemInstruction, subjectContext, onPartial, knowledge)
   }
 
   // --- AI Tutor History & Persistence ---
@@ -510,7 +516,18 @@ class StudyPilotRepository(
     drafts: List<ChatKnowledgeExtractor.ExtractedConceptDraft>
   ): Long {
     val chatId = dao.insertImportedChat(chat.copy(userId = userId, extractedConceptsCount = drafts.size))
+    addConceptsToChat(userId, chat.copy(id = chatId), drafts)
+    invalidateKnowledge()
+    return chatId
+  }
 
+  /** Saves [drafts] as concepts of [chat] and gives each one a topic, so they appear in Topics and quizzes. */
+  private suspend fun addConceptsToChat(
+    userId: String,
+    chat: ImportedChat,
+    drafts: List<ChatKnowledgeExtractor.ExtractedConceptDraft>
+  ) {
+    val chatId = chat.id
     val conceptsToInsert = drafts.map { draft ->
       ExtractedConcept(
         userId = userId,
@@ -579,9 +596,83 @@ class StudyPilotRepository(
       if (topicsToUpdate.isNotEmpty()) dao.updateTopics(topicsToUpdate)
       if (topicsToInsert.isNotEmpty()) dao.insertTopics(topicsToInsert)
     }
-
-    return chatId
   }
+
+  // --- Imported chat links: checking for new messages ---
+
+  sealed class ChatLinkCheck {
+    object NoChange : ChatLinkCheck()
+    /** [added] is only the part that wasn't there before; [fullText] replaces the stored copy. */
+    data class Updated(val added: String, val fullText: String) : ChatLinkCheck()
+    data class Failed(val message: String) : ChatLinkCheck()
+  }
+
+  /**
+   * Opens [chat]'s share link again and returns what's new. Share links are snapshots: ChatGPT and
+   * most others only show later messages after the share is updated on their side.
+   */
+  suspend fun checkChatLink(chat: ImportedChat): ChatLinkCheck {
+    if (chat.sourceUrl.isBlank()) return ChatLinkCheck.Failed("This chat wasn't imported from a link.")
+    val fetched = ChatLinkFetcher.fetchChatFromUrl(chat.sourceUrl, forceFresh = true)
+    if (!fetched.isSuccess || fetched.conversationText.isBlank()) {
+      return ChatLinkCheck.Failed(fetched.errorMessage ?: "Couldn't open the link. Is it still public?")
+    }
+    val added = newChatMaterial(chat.rawConversation, fetched.conversationText)
+    if (added.isBlank()) {
+      dao.updateImportedChat(chat.copy(lastProcessedAt = System.currentTimeMillis()))
+      return ChatLinkCheck.NoChange
+    }
+    return ChatLinkCheck.Updated(added, fetched.conversationText)
+  }
+
+  /** Stores the refreshed conversation and the concepts found in its new part. */
+  suspend fun applyChatUpdate(
+    userId: String,
+    chat: ImportedChat,
+    fullText: String,
+    drafts: List<ChatKnowledgeExtractor.ExtractedConceptDraft>,
+    addedMessages: Int
+  ): ImportedChat {
+    addConceptsToChat(userId, chat, drafts)
+    val updated = chat.copy(
+      rawConversation = fullText,
+      wordCount = fullText.split(Regex("""\s+""")).count { it.isNotBlank() },
+      messageCount = chat.messageCount + addedMessages,
+      extractedConceptsCount = chat.extractedConceptsCount + drafts.size,
+      lastProcessedAt = System.currentTimeMillis()
+    )
+    dao.updateImportedChat(updated)
+    invalidateKnowledge()
+    return updated
+  }
+
+  // --- Searching the student's own material (RAG) ---
+
+  private class CachedIndex(val userId: String, val at: Long, val index: KnowledgeIndex)
+
+  @Volatile private var knowledgeCache: CachedIndex? = null
+
+  /** Everything the student keeps, indexed for search; rebuilt at most every half minute. */
+  suspend fun knowledgeIndex(userId: String): KnowledgeIndex {
+    knowledgeCache?.let { if (it.userId == userId && System.currentTimeMillis() - it.at < 30_000) return it.index }
+    val chats = dao.getImportedChatsForUser(userId).first()
+    val sessions = dao.getTutorSessionsForUser(userId).first().map { it to dao.getMessagesForSessionSync(it.id) }
+    val topics = dao.getTopicsForUser(userId).first()
+    val concepts = dao.getExtractedConceptsForUser(userId).first()
+    val index = withContext(Dispatchers.Default) { KnowledgeIndex.build(chats, sessions, topics, concepts) }
+    knowledgeCache = CachedIndex(userId, System.currentTimeMillis(), index)
+    return index
+  }
+
+  fun invalidateKnowledge() {
+    knowledgeCache = null
+  }
+
+  /** Passages from the student's material that answer [query], leaving out the conversation in progress. */
+  suspend fun searchKnowledge(userId: String, query: String, currentSessionTitle: String? = null): List<KnowledgePassage> =
+    knowledgeIndex(userId).search(query, limit = 6)
+      .filterNot { currentSessionTitle != null && it.sourceTitle == "Tutor chat: $currentSessionTitle" }
+      .take(5)
 
   suspend fun resolveOrCreateSubjectForImport(
     userId: String,
@@ -1725,4 +1816,18 @@ To counter the exponential **Ebbinghaus Forgetting Curve**, structure your revis
     const val TAG = "StudyPilotRepository"
     val CLOUD_COLLECTIONS = listOf("subjects", "sessions", "tasks", "topics", "quizAttempts", "tutorSessions")
   }
+}
+
+/**
+ * What [new] has that [old] didn't: the tail when the conversation simply grew, otherwise the
+ * paragraphs that are new (a re-fetch can format the start slightly differently).
+ */
+fun newChatMaterial(old: String, new: String): String {
+  val o = old.trim()
+  val n = new.trim()
+  if (n == o || n.isBlank()) return ""
+  if (o.isNotBlank() && n.startsWith(o)) return n.substring(o.length).trim()
+  fun norm(t: String) = t.lowercase().replace(Regex("""\s+"""), " ").trim()
+  val known = o.split(Regex("""\n\s*\n""")).map(::norm).toHashSet()
+  return n.split(Regex("""\n\s*\n""")).filter { it.isNotBlank() && norm(it) !in known }.joinToString("\n\n")
 }

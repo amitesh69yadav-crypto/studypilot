@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -74,6 +76,9 @@ fun AiChatImportScreen(
   val tabs = listOf("Chat Library", "Learning Memory", "Coverage & Stats", "Import AI Chat")
 
   val importedChats by viewModel.importedChats.collectAsState()
+  val checkingChatIds by viewModel.checkingChatIds.collectAsState()
+  // Opening the chat library checks links that haven't been checked for a while.
+  LaunchedEffect(Unit) { viewModel.checkStaleChatLinks() }
   val extractedConcepts by viewModel.extractedConcepts.collectAsState()
   val subjects by viewModel.subjects.collectAsState()
   val isProcessing by viewModel.isImportProcessing.collectAsState()
@@ -162,6 +167,8 @@ fun AiChatImportScreen(
           onMoveSubject = { movingChat = it },
           onDelete = { viewModel.deleteImportedChat(it.id) },
           onReprocess = { viewModel.reprocessImportedChat(it) },
+          onCheckUpdates = { viewModel.checkChatForUpdates(it) },
+          checkingIds = checkingChatIds,
           onNavigateToImport = { selectedTab = 3 }
         )
         1 -> LearningMemoryTab(
@@ -293,6 +300,8 @@ fun AiChatImportScreen(
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ChatLibraryTab(
+  onCheckUpdates: (ImportedChat) -> Unit,
+  checkingIds: Set<Long>,
   chats: List<ImportedChat>,
   subjects: List<Subject>,
   onInspect: (ImportedChat) -> Unit,
@@ -536,7 +545,9 @@ private fun ChatLibraryTab(
               onEdit = { onEdit(chat) },
               onMoveSubject = { onMoveSubject(chat) },
               onDelete = { onDelete(chat) },
-              onReprocess = { onReprocess(chat) }
+              onReprocess = { onReprocess(chat) },
+              onCheckUpdates = { onCheckUpdates(chat) },
+              isChecking = chat.id in checkingIds
             )
           }
         }
@@ -554,7 +565,9 @@ private fun ImportedChatCard(
   onEdit: () -> Unit,
   onMoveSubject: () -> Unit,
   onDelete: () -> Unit,
-  onReprocess: () -> Unit
+  onReprocess: () -> Unit,
+  onCheckUpdates: () -> Unit = {},
+  isChecking: Boolean = false
 ) {
   var showMenu by remember { mutableStateOf(false) }
 
@@ -711,6 +724,18 @@ private fun ImportedChatCard(
               overflow = TextOverflow.Ellipsis,
               modifier = Modifier.weight(1f)
             )
+            if (isChecking) {
+              CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp, color = PaletteDeepSage)
+            } else {
+              Text(
+                text = "Check for new messages",
+                fontSize = 11.sp,
+                color = PaletteDeepSage,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                modifier = Modifier.clickable(onClick = onCheckUpdates).padding(horizontal = 4.dp, vertical = 6.dp)
+              )
+            }
           }
         }
       }

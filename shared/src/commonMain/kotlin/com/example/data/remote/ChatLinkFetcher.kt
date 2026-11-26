@@ -113,13 +113,15 @@ object ChatLinkFetcher {
    */
   suspend fun fetchChatFromUrl(
     rawUrl: String,
-    onProgress: (Float, String) -> Unit = { _, _ -> }
+    onProgress: (Float, String) -> Unit = { _, _ -> },
+    /** Skip the short-lived cache, e.g. to look for messages added since the import. */
+    forceFresh: Boolean = false
   ): FetchedChatResult = withContext(Dispatchers.IO) {
     val url = normalizeUrl(rawUrl)
     val platform = detectPlatformFromUrl(url)
 
     val now = System.currentTimeMillis()
-    fetchCache[url]?.let { cached ->
+    if (!forceFresh) fetchCache[url]?.let { cached ->
       if (now - cached.fetchedAtMs < CACHE_TTL_MS && cached.result.isSuccess) {
         onProgress(1.0f, "Loaded cached conversation!")
         return@withContext cached.result

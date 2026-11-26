@@ -1,7 +1,9 @@
 package com.example.data.ai
 
 import com.example.platform.Log
+import com.example.data.ai.llm.CloudClient
 import com.example.data.ai.llm.LlmBackend
+import com.example.data.ai.rag.KnowledgePassage
 import com.example.data.ai.llm.LlmRequest
 import com.example.data.ai.llm.LlmTurn
 import com.example.data.ai.llm.OllamaClient
@@ -19,11 +21,18 @@ import org.json.JSONObject
 
 /** Where answers come from. */
 enum class AiSource(val label: String, val description: String) {
-  AUTO("Auto", "Your PC when it's reachable, otherwise the phone model, otherwise built-in answers"),
+  AUTO("Auto", "The cloud model when it's set up, then your PC, then the phone model, then built-in answers"),
+  CLOUD("Cloud", "Only the free cloud model (needs an API key)"),
   PC("PC", "Only the model on your PC (Ollama)"),
   PHONE("Phone", "Only the model downloaded to this phone"),
   BUILT_IN("Built-in", "Built-in notes, maths and code solvers, and Wikipedia. No model needed")
 }
+
+/**
+ * What a request is for. Answers to the student (tutor replies, quiz questions) get the best model;
+ * background work (summaries, extraction, grading) leaves the cloud's daily budget to them.
+ */
+enum class AiTask { ANSWER, BACKGROUND }
 
 /**
  * Everything the app asks AI for. Runs on Ollama (PC) or LiteRT-LM (phone), and falls back to
@@ -35,26 +44,38 @@ class StudyAi(
 ) {
 
   val pc = OllamaClient()
+  val cloud = CloudClient()
 
   @Volatile var source: AiSource = AiSource.AUTO
 
-  /** The model that will answer next, or null for built-in answers. */
-  suspend fun backend(): LlmBackend? = when (source) {
-    AiSource.AUTO -> pc.backendOrNull() ?: phone?.backendOrNull()
-    AiSource.PC -> pc.backendOrNull()
-    AiSource.PHONE -> phone?.backendOrNull()
-    AiSource.BUILT_IN -> null
+  /** Models to try for [task], best first; the next one is used when one fails or hits its limit. */
+  suspend fun backends(task: AiTask = AiTask.ANSWER): List<LlmBackend> = when (source) {
+    AiSource.AUTO -> listOfNotNull(cloud.backendOrNull(background = task == AiTask.BACKGROUND), pc.backendOrNull(), phone?.backendOrNull())
+    AiSource.CLOUD -> listOfNotNull(cloud.backendOrNull())
+    AiSource.PC -> listOfNotNull(pc.backendOrNull())
+    AiSource.PHONE -> listOfNotNull(phone?.backendOrNull())
+    AiSource.BUILT_IN -> emptyList()
   }
 
-  /** Runs a one-off prompt on the active model. Null when no model is available or it fails. */
-  suspend fun prompt(prompt: String, system: String = DEFAULT_SYSTEM_PROMPT, temperature: Double = 0.5, json: Boolean = false): String? {
-    val backend = backend() ?: return null
-    return try {
-      backend.generate(LlmRequest(system, listOf(LlmTurn(true, prompt)), temperature, json)).takeIf { it.isNotBlank() }
-    } catch (e: Exception) {
-      Log.w(TAG, "${backend.label} failed", e)
-      null
+  /** The model that will answer next, or null for built-in answers. */
+  suspend fun backend(task: AiTask = AiTask.ANSWER): LlmBackend? = backends(task).firstOrNull()
+
+  /** Runs a one-off prompt, trying each model in turn. Null when none is available or all fail. */
+  suspend fun prompt(
+    prompt: String,
+    system: String = DEFAULT_SYSTEM_PROMPT,
+    temperature: Double = 0.5,
+    json: Boolean = false,
+    task: AiTask = AiTask.ANSWER
+  ): String? {
+    for (backend in backends(task)) {
+      try {
+        backend.generate(LlmRequest(system, listOf(LlmTurn(true, prompt)), temperature, json)).takeIf { it.isNotBlank() }?.let { return it }
+      } catch (e: Exception) {
+        Log.w(TAG, "${backend.label} failed", e)
+      }
     }
+    return null
   }
 
   // --- Tutor chat ---
@@ -63,7 +84,9 @@ class StudyAi(
     history: List<ChatMessage>,
     systemInstruction: String = DEFAULT_SYSTEM_PROMPT,
     subjectContext: String? = null,
-    onPartial: ((String) -> Unit)? = null
+    onPartial: ((String) -> Unit)? = null,
+    /** Passages from the student's own chats and notes that match the question (RAG). */
+    knowledge: List<KnowledgePassage> = emptyList()
   ): ChatResponse {
     val lastUserMsg = history.lastOrNull { it.role == "user" }?.text.orEmpty()
 
@@ -72,9 +95,10 @@ class StudyAi(
       return if (note == null) local else local.copy(text = "_${note}_\n\n${local.text}")
     }
 
-    val backend = backend()
-    if (backend == null) {
+    val chain = backends(AiTask.ANSWER)
+    if (chain.isEmpty()) {
       val note = when (source) {
+        AiSource.CLOUD -> if (cloud.isConfigured) "The cloud model isn't available right now (free limit), so this is a built-in answer." else "No cloud API key is set, so this is a built-in answer."
         AiSource.PC -> "Your PC isn't reachable, so this is a built-in answer."
         AiSource.PHONE -> "No phone model is downloaded yet, so this is a built-in answer."
         else -> null
@@ -83,19 +107,37 @@ class StudyAi(
     }
 
     val system = "$systemInstruction $PLAIN_MATH_RULE"
-    val text = try {
-      backend.generate(
-        LlmRequest(system, withLengthHint(toTurns(history)), temperature = 0.6, maxOutputTokens = 2048),
-        onPartial?.let { show -> { partial: String -> show(PlainMath.convert(partial)) } }
-      ).let(PlainMath::convert)
-    } catch (e: Exception) {
-      Log.w(TAG, "${backend.label} failed", e)
-      return builtIn("${backend.label} didn't answer (${e.message}), so this is a built-in answer.")
+    // The student's matching material goes right after their question, where models heed it most.
+    val turns = withLengthHint(toTurns(history)).let { t ->
+      val last = t.lastOrNull()
+      if (knowledge.isEmpty() || last == null || !last.fromUser) t
+      else t.dropLast(1) + last.copy(text = last.text + KnowledgePassage.groundingInstruction(knowledge))
     }
-    if (text.isBlank()) return builtIn("${backend.label} returned an empty answer, so this is a built-in answer.")
-
-    val (cleanText, topics) = AcademicPedagogySynthesizer.extractAndCleanRelatedTopics(rawContent = text, fallbackQuery = lastUserMsg)
-    return ChatResponse(text = cleanText, modelName = backend.label, relatedTopics = topics)
+    var lastError: String? = null
+    for (backend in chain) {
+      val text = try {
+        backend.generate(
+          LlmRequest(system, turns, temperature = 0.6, maxOutputTokens = 2048),
+          onPartial?.let { show -> { partial: String -> show(PlainMath.convert(partial)) } }
+        ).let(PlainMath::convert)
+      } catch (e: Exception) {
+        Log.w(TAG, "${backend.label} failed", e)
+        lastError = "${backend.label} didn't answer (${e.message})"
+        continue
+      }
+      if (text.isBlank()) {
+        lastError = "${backend.label} returned an empty answer"
+        continue
+      }
+      val (cleanText, topics) = AcademicPedagogySynthesizer.extractAndCleanRelatedTopics(rawContent = text, fallbackQuery = lastUserMsg)
+      return ChatResponse(
+        text = cleanText,
+        modelName = backend.label,
+        relatedTopics = topics,
+        groundingSources = KnowledgePassage.citedSources(cleanText, knowledge)
+      )
+    }
+    return builtIn("$lastError, so this is a built-in answer.")
   }
 
   /**
@@ -138,7 +180,7 @@ class StudyAi(
       Notes:
       $rawContent
     """.trimIndent()
-    return prompt(prompt, temperature = 0.4) ?: LocalAiEngine.summarizeMaterial(title, rawContent)
+    return prompt(prompt, temperature = 0.4, task = AiTask.BACKGROUND) ?: LocalAiEngine.summarizeMaterial(title, rawContent)
   }
 
   // --- Quiz generation ---
@@ -328,7 +370,7 @@ class StudyAi(
 
       Is the student's answer conceptually correct? Reply with JSON only: {"isCorrect": true or false, "feedback": "1-2 sentences to the student, addressed as you"}
     """.trimIndent()
-    prompt(prompt, "You grade student answers fairly and briefly.", 0.1, json = true)?.let { raw ->
+    prompt(prompt, "You grade student answers fairly and briefly.", 0.1, json = true, task = AiTask.BACKGROUND)?.let { raw ->
       try {
         val obj = JSONObject(extractJson(raw) ?: raw)
         if (obj.has("isCorrect")) return EvaluationResult(obj.getBoolean("isCorrect"), obj.optString("feedback", question.explanation))

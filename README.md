@@ -115,6 +115,36 @@ How it works: SQLite triggers record each insert, update and delete in a `sync_i
 change time, change number, device). Each side sends the changes after the last number the other
 saw, with references to other records sent as global ids (`SyncEngine`, `SyncHost`, `SyncClient`).
 
+### Free cloud model, and how work is split
+
+With a free Groq API key (console.groq.com, no card) in **Settings > AI > Cloud**, answers and quiz
+questions go to a large cloud model (Llama 3.3 70B by default), which is fast and makes fewer
+mistakes than the local models. Any OpenAI-compatible provider works ("Other provider", e.g.
+OpenRouter). The key stays on the device.
+
+| Work | Goes to |
+| --- | --- |
+| Tutor answers, quiz questions | Cloud, then PC, then phone model, then built-in |
+| Summaries, concept extraction, grading | Cloud while under 70% of the day's free budget, otherwise PC, then phone |
+| Searching your own material | The device itself (no model) |
+
+A rate-limit reply pauses the cloud until the provider says to retry; work moves to the next model
+meanwhile. Nothing is ever charged: past the free limit the provider just says no.
+
+### Answers from your own material (RAG)
+
+Imported chats, tutor conversations, notes and extracted concepts are cut into passages and indexed
+on the device (`KnowledgeIndex`, BM25 keyword search). For each tutor question the best-matching
+passages go to the model with the question; it answers from them, cites them as [1], and the cited
+chats and notes are listed under the answer. Imported chats open their share link.
+
+### Imported chat links
+
+**Check for new messages** on an imported chat opens its share link again, adds only the new
+exchanges, extracts their concepts and makes them quiz material. Opening the chat library checks
+links that weren't checked in the last six hours. A share link is a snapshot: ChatGPT and most others
+show messages sent after sharing only once the share link is updated on their side.
+
 ### Setting up the PC
 
 ```powershell

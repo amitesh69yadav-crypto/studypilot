@@ -1,5 +1,8 @@
 package com.example.ui.screens
 
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -99,7 +102,7 @@ fun AiSettingsCard(viewModel: StudyPilotViewModel) {
             Text(option.label, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
             val description = when {
               !onDesktop -> option.description
-              option == AiSource.AUTO -> "Ollama on this computer when it's running, otherwise built-in answers"
+              option == AiSource.AUTO -> "The cloud model when it's set up, then Ollama on this computer, then built-in answers"
               option == AiSource.PC -> "Only Ollama on this computer"
               else -> option.description
             }
@@ -107,6 +110,9 @@ fun AiSettingsCard(viewModel: StudyPilotViewModel) {
           }
         }
       }
+
+      HorizontalDivider(Modifier.padding(vertical = 16.dp))
+      CloudSection(viewModel)
 
       if (!onDesktop) {
         HorizontalDivider(Modifier.padding(vertical = 16.dp))
@@ -116,6 +122,92 @@ fun AiSettingsCard(viewModel: StudyPilotViewModel) {
       HorizontalDivider(Modifier.padding(vertical = 16.dp))
       PcSection(viewModel)
     }
+  }
+}
+
+/** Free cloud model: the user's own Groq key (or another OpenAI-compatible provider). */
+@Composable
+private fun CloudSection(viewModel: StudyPilotViewModel) {
+  val key by viewModel.cloudKey.collectAsState()
+  val model by viewModel.cloudModel.collectAsState()
+  val baseUrl by viewModel.cloudBaseUrl.collectAsState()
+  val status by viewModel.cloudStatus.collectAsState()
+  val models by viewModel.cloudModels.collectAsState()
+  val checking by viewModel.isCheckingCloud.collectAsState()
+  val actions = com.example.platform.LocalPlatformActions.current
+
+  var keyInput by remember(key) { mutableStateOf(key) }
+  var modelInput by remember(model) { mutableStateOf(model) }
+  var urlInput by remember(baseUrl) { mutableStateOf(baseUrl) }
+  var showKey by remember { mutableStateOf(false) }
+  var showProvider by remember(baseUrl) { mutableStateOf(baseUrl.isNotBlank()) }
+
+  LaunchedEffect(key) { if (key.isNotBlank()) viewModel.checkCloud() }
+
+  SectionTitle(Icons.Default.Cloud, "Cloud (free)", "Fast, large model for answers and quizzes. Your notes stay on this device; questions and the matching passages are sent.")
+  Text(
+    "Make a free account at console.groq.com (no card needed), create an API key and paste it here. " +
+      "The free plan allows about 1,000 requests a day; past that the app uses your other models.",
+    style = MaterialTheme.typography.bodySmall,
+    color = MaterialTheme.colorScheme.onSurfaceVariant
+  )
+  androidx.compose.material3.TextButton(onClick = { actions.openUrl("https://console.groq.com/keys") }) { Text("Get a free key") }
+  OutlinedTextField(
+    value = keyInput,
+    onValueChange = { keyInput = it.trim() },
+    label = { Text("API key") },
+    singleLine = true,
+    visualTransformation = if (showKey) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
+    trailingIcon = {
+      androidx.compose.material3.IconButton(onClick = { showKey = !showKey }) {
+        Icon(if (showKey) Icons.Default.VisibilityOff else Icons.Default.Visibility, contentDescription = if (showKey) "Hide key" else "Show key")
+      }
+    },
+    modifier = Modifier.fillMaxWidth()
+  )
+  Spacer(Modifier.height(6.dp))
+  OutlinedTextField(
+    value = modelInput,
+    onValueChange = { modelInput = it },
+    label = { Text("Model (blank = Llama 3.3 70B)") },
+    singleLine = true,
+    modifier = Modifier.fillMaxWidth()
+  )
+  if (models.isNotEmpty()) {
+    Text(
+      "Available: ${models.take(12).joinToString(", ")}",
+      style = MaterialTheme.typography.bodySmall,
+      color = MaterialTheme.colorScheme.onSurfaceVariant,
+      maxLines = 3
+    )
+  }
+  if (showProvider) {
+    Spacer(Modifier.height(6.dp))
+    OutlinedTextField(
+      value = urlInput,
+      onValueChange = { urlInput = it },
+      label = { Text("Provider address (blank = Groq)") },
+      placeholder = { Text("https://openrouter.ai/api/v1") },
+      singleLine = true,
+      modifier = Modifier.fillMaxWidth()
+    )
+  }
+  Spacer(Modifier.height(8.dp))
+  Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Button(
+      onClick = { viewModel.setCloudConfig(keyInput, modelInput, urlInput) },
+      enabled = !checking,
+      colors = ButtonDefaults.buttonColors(
+        containerColor = MaterialTheme.colorScheme.primary,
+        contentColor = MaterialTheme.colorScheme.onPrimary
+      )
+    ) { Text("Save and test") }
+    if (!showProvider) androidx.compose.material3.TextButton(onClick = { showProvider = true }) { Text("Other provider") }
+    if (checking) CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+  }
+  status?.let {
+    Spacer(Modifier.height(6.dp))
+    Text(it, style = MaterialTheme.typography.bodySmall)
   }
 }
 
