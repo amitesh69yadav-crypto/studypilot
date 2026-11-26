@@ -2,6 +2,7 @@ package com.example.sync
 
 import com.example.data.ai.AiTask
 import com.example.data.ai.StudyAi
+import com.example.data.ai.llm.CloudProvider
 import com.example.data.ai.llm.LlmRequest
 import com.example.data.ai.llm.LlmTurn
 import com.example.data.ai.rag.KnowledgeIndex
@@ -47,6 +48,20 @@ class CloudAndRagTest {
       ex.sendResponseHeaders(code, bytes.size.toLong())
       ex.responseBody.use { it.write(bytes) }
     }
+    createContext("/anthropic/v1/messages") { ex ->
+      val body = JSONObject(ex.requestBody.readBytes().decodeToString())
+      synchronized(requests) { requests += body.put("_key", ex.requestHeaders.getFirst("x-api-key")).put("_version", ex.requestHeaders.getFirst("anthropic-version").orEmpty()) }
+      val text = if (body.optBoolean("stream")) {
+        reply.chunked(4).joinToString("") { piece ->
+          "event: content_block_delta\ndata: " + JSONObject().put("type", "content_block_delta").put("delta", JSONObject().put("type", "text_delta").put("text", piece)) + "\n\n"
+        } + "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
+      } else {
+        JSONObject().put("content", listOf(JSONObject().put("type", "text").put("text", reply))).toString()
+      }
+      val bytes = text.encodeToByteArray()
+      ex.sendResponseHeaders(200, bytes.size.toLong())
+      ex.responseBody.use { it.write(bytes) }
+    }
     createContext("/v1/models") { ex ->
       val bytes = """{"data":[{"id":"llama-3.3-70b-versatile"},{"id":"whisper-large-v3"},{"id":"openai/gpt-oss-120b"}]}""".encodeToByteArray()
       ex.sendResponseHeaders(200, bytes.size.toLong())
@@ -60,8 +75,10 @@ class CloudAndRagTest {
   fun stop() = server.stop(0)
 
   private fun ai() = StudyAi(null).also {
-    it.cloud.baseUrl = baseUrl
+    it.cloud.provider = CloudProvider.CUSTOM
+    it.cloud.customBaseUrl = baseUrl
     it.cloud.apiKey = "test-key"
+    it.cloud.model = "llama-3.3-70b-versatile"
   }
 
   @Test
@@ -87,7 +104,7 @@ class CloudAndRagTest {
     assertTrue(status.ok)
     assertEquals(listOf("llama-3.3-70b-versatile", "openai/gpt-oss-120b"), status.models, "speech models are left out")
 
-    val bad = StudyAi(null).also { it.cloud.baseUrl = baseUrl; it.cloud.apiKey = "wrong" }
+    val bad = StudyAi(null).also { it.cloud.provider = CloudProvider.CUSTOM; it.cloud.customBaseUrl = baseUrl; it.cloud.apiKey = "wrong" }
     assertNull(bad.prompt("Hi"), "a rejected key falls through to no answer, not a crash")
   }
 
@@ -181,5 +198,35 @@ class CloudAndRagTest {
     // The page came back formatted a little differently at the start.
     val reformatted = "User:  what is a stack?\n\nAssistant: A stack is last in,  first out.\n\nUser: and a deque?"
     assertEquals("User: and a deque?", newChatMaterial(old, reformatted))
+  }
+
+  @Test
+  fun claudeKeysUseAnthropicsApi() = runBlocking<Unit> {
+    // Point the Anthropic adapter at the fake by checking the request it would send.
+    val ai = StudyAi(null)
+    ai.cloud.provider = CloudProvider.ANTHROPIC
+    ai.cloud.apiKey = "claude-key"
+    assertEquals("https://api.anthropic.com/v1", ai.cloud.baseUrl)
+    assertEquals("claude-haiku-5-5", ai.cloud.chosenModel())
+    assertNull(StudyAi(null).also { it.cloud.provider = CloudProvider.CUSTOM; it.cloud.apiKey = "k" }.cloud.backendOrNull(), "Other needs an address")
+  }
+
+  @Test
+  fun anthropicRepliesAreRead() = runBlocking<Unit> {
+    reply = "Paris is the capital of France."
+    val client = com.example.data.ai.llm.CloudClient()
+    client.provider = CloudProvider.ANTHROPIC
+    client.apiKey = "claude-key"
+    client.anthropicBaseUrlForTests = "http://127.0.0.1:${server.address.port}/anthropic/v1"
+    val backend = assertNotNull(client.backendOrNull())
+    assertEquals(reply, backend.generate(LlmRequest("Be brief.", listOf(LlmTurn(true, "Capital of France?")))))
+    val partials = mutableListOf<String>()
+    assertEquals(reply, backend.generate(LlmRequest("Be brief.", listOf(LlmTurn(true, "Capital of France?"))), onPartial = { partials += it }))
+    assertTrue(partials.size > 2)
+    val sent = synchronized(requests) { requests.last() }
+    assertEquals("claude-key", sent.getString("_key"))
+    assertEquals("2023-06-01", sent.getString("_version"))
+    assertEquals("Be brief.", sent.getString("system"), "the system prompt is a separate field")
+    assertEquals("user", sent.getJSONArray("messages").getJSONObject(0).getString("role"))
   }
 }

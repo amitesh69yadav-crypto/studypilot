@@ -1,5 +1,6 @@
 package com.example.ui.viewmodel
 
+import com.example.data.ai.llm.CloudProvider
 import kotlinx.coroutines.flow.first
 import com.example.data.ai.AiTask
 import kotlinx.coroutines.Job
@@ -116,13 +117,26 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
   private val _pcModel = MutableStateFlow(aiPrefs.getString("pc_ollama_model", "") ?: "")
   val pcModel: StateFlow<String> = _pcModel.asStateFlow()
 
-  // Free cloud model (Groq or another OpenAI-compatible provider); the key stays on this device.
-  private val _cloudKey = MutableStateFlow(aiPrefs.getString("cloud_api_key", "") ?: "")
+  // Cloud chatbot keys. Each provider keeps its own key and model in a separate store that isn't
+  // backed up, transferred to a new phone or synced to the PC, so a shared copy of the app has no key.
+  private val keyPrefs = platform.prefs("studypilot_keys").also { keys ->
+    // Keys used to live with the other AI settings.
+    aiPrefs.getString("cloud_api_key", null)?.takeIf { it.isNotBlank() }?.let { old ->
+      keys.edit { putString("key_${CloudProvider.GROQ.name}", old) }
+      aiPrefs.edit().remove("cloud_api_key").remove("cloud_model").remove("cloud_base_url").apply()
+    }
+  }
+  private val _cloudProvider = MutableStateFlow(CloudProvider.byName(keyPrefs.getString("provider", null)))
+  val cloudProvider: StateFlow<CloudProvider> = _cloudProvider.asStateFlow()
+  private val _cloudKey = MutableStateFlow(keyPrefs.getString("key_${_cloudProvider.value.name}", "") ?: "")
   val cloudKey: StateFlow<String> = _cloudKey.asStateFlow()
-  private val _cloudModel = MutableStateFlow(aiPrefs.getString("cloud_model", "") ?: "")
+  private val _cloudModel = MutableStateFlow(keyPrefs.getString("model_${_cloudProvider.value.name}", "") ?: "")
   val cloudModel: StateFlow<String> = _cloudModel.asStateFlow()
-  private val _cloudBaseUrl = MutableStateFlow(aiPrefs.getString("cloud_base_url", "") ?: "")
+  private val _cloudBaseUrl = MutableStateFlow(keyPrefs.getString("custom_base_url", "") ?: "")
   val cloudBaseUrl: StateFlow<String> = _cloudBaseUrl.asStateFlow()
+  /** Providers that have a key saved on this device. */
+  private val _providersWithKeys = MutableStateFlow(CloudProvider.entries.filter { !keyPrefs.getString("key_${it.name}", null).isNullOrBlank() }.toSet())
+  val providersWithKeys: StateFlow<Set<CloudProvider>> = _providersWithKeys.asStateFlow()
   private val _cloudStatus = MutableStateFlow<String?>(null)
   val cloudStatus: StateFlow<String?> = _cloudStatus.asStateFlow()
   private val _cloudModels = MutableStateFlow<List<String>>(emptyList())
@@ -567,9 +581,7 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
     repository.ai.source = _aiSource.value
     repository.ai.pc.baseUrl = _pcUrl.value
     repository.ai.pc.preferredModel = _pcModel.value
-    repository.ai.cloud.apiKey = _cloudKey.value
-    repository.ai.cloud.model = _cloudModel.value
-    repository.ai.cloud.baseUrl = _cloudBaseUrl.value
+    applyCloudConfig()
     refreshActiveAi()
     // The "answering with" label must follow downloads, deletions and model switches.
     repository.ai.phone?.let { phone ->
@@ -718,21 +730,44 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
     }
   }
 
-  /** Saves the cloud key, model and provider address (blank for Groq), then checks the key. */
-  fun setCloudConfig(apiKey: String, model: String, baseUrl: String) {
-    _cloudKey.value = apiKey.trim()
-    _cloudModel.value = model.trim()
-    _cloudBaseUrl.value = baseUrl.trim()
+  private fun applyCloudConfig() {
+    repository.ai.cloud.provider = _cloudProvider.value
+    repository.ai.cloud.customBaseUrl = _cloudBaseUrl.value
     repository.ai.cloud.apiKey = _cloudKey.value
     repository.ai.cloud.model = _cloudModel.value
-    repository.ai.cloud.baseUrl = _cloudBaseUrl.value
-    aiPrefs.edit()
-      .putString("cloud_api_key", _cloudKey.value)
-      .putString("cloud_model", _cloudModel.value)
-      .putString("cloud_base_url", _cloudBaseUrl.value)
-      .apply()
+  }
+
+  /** Switches to [provider], with the key and model saved for it on this device (if any). */
+  fun selectCloudProvider(provider: CloudProvider) {
+    _cloudProvider.value = provider
+    _cloudKey.value = keyPrefs.getString("key_${provider.name}", "") ?: ""
+    _cloudModel.value = keyPrefs.getString("model_${provider.name}", "") ?: ""
+    _cloudModels.value = emptyList()
+    _cloudStatus.value = null
+    keyPrefs.edit { putString("provider", provider.name) }
+    applyCloudConfig()
     checkCloud()
   }
+
+  /** Saves the key and model for the chosen provider (and its address, for "Other"), then checks the key. */
+  fun setCloudConfig(apiKey: String, model: String, baseUrl: String) {
+    val provider = _cloudProvider.value
+    _cloudKey.value = apiKey.trim()
+    _cloudModel.value = model.trim()
+    if (provider == CloudProvider.CUSTOM) _cloudBaseUrl.value = baseUrl.trim()
+    keyPrefs.edit {
+      putString("provider", provider.name)
+      putString("key_${provider.name}", _cloudKey.value)
+      putString("model_${provider.name}", _cloudModel.value)
+      if (provider == CloudProvider.CUSTOM) putString("custom_base_url", _cloudBaseUrl.value)
+    }
+    _providersWithKeys.value = if (_cloudKey.value.isBlank()) _providersWithKeys.value - provider else _providersWithKeys.value + provider
+    applyCloudConfig()
+    checkCloud()
+  }
+
+  /** Deletes the chosen provider's key from this device. */
+  fun removeCloudKey() = setCloudConfig("", _cloudModel.value, _cloudBaseUrl.value)
 
   fun checkCloud() {
     viewModelScope.launch {
@@ -746,7 +781,7 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
       val status = repository.ai.cloud.status()
       _cloudModels.value = status.models
       _cloudStatus.value = if (status.ok) {
-        "Connected. Using ${repository.ai.cloud.chosenModel()} · ${repository.ai.cloud.requestsToday} requests today"
+        "Connected to ${_cloudProvider.value.label}. Using ${repository.ai.cloud.chosenModel()} · ${repository.ai.cloud.requestsToday} requests today"
       } else {
         "Can't use the cloud model: ${status.error}"
       }

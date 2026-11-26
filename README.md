@@ -117,14 +117,20 @@ saw, with references to other records sent as global ids (`SyncEngine`, `SyncHos
 
 ### Free cloud model, and how work is split
 
-With a free Groq API key (console.groq.com, no card) in **Settings > AI > Cloud**, answers and quiz
-questions go to a large cloud model (Llama 3.3 70B by default), which is fast and makes fewer
-mistakes than the local models. Any OpenAI-compatible provider works ("Other provider", e.g.
-OpenRouter). The key stays on the device.
+**Settings > AI > API keys** takes your own key for a cloud chatbot: Groq (free, no card; the default,
+Llama 3.3 70B), OpenRouter (free ":free" models), Google Gemini, OpenAI, Anthropic Claude, Mistral,
+DeepSeek, or any other OpenAI-compatible API. Each provider keeps its own saved key; pick which one
+answers. Answers and quiz questions then come from that model, which is fast and makes fewer
+mistakes than the local models.
+
+No key is built into the app. Keys are stored only on the device that entered them (a separate
+`studypilot_keys` store that Android doesn't back up or copy to a new phone, and that phone-PC sync
+doesn't send), and each key goes only to its own provider. Anyone you share the app with adds their
+own key.
 
 | Work | Goes to |
 | --- | --- |
-| Tutor answers, quiz questions | Cloud, then PC, then phone model, then built-in |
+| Tutor answers, quiz questions | Your cloud chatbot, then PC, then phone model, then built-in |
 | Summaries, concept extraction, grading | Cloud while under 70% of the day's free budget, otherwise PC, then phone |
 | Searching your own material | The device itself (no model) |
 

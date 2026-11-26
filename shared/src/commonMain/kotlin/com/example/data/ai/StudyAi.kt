@@ -21,8 +21,8 @@ import org.json.JSONObject
 
 /** Where answers come from. */
 enum class AiSource(val label: String, val description: String) {
-  AUTO("Auto", "The cloud model when it's set up, then your PC, then the phone model, then built-in answers"),
-  CLOUD("Cloud", "Only the free cloud model (needs an API key)"),
+  AUTO("Auto", "Your cloud chatbot when a key is set, then your PC, then the phone model, then built-in answers"),
+  CLOUD("Cloud", "Only the cloud chatbot from your API key (Settings > API keys)"),
   PC("PC", "Only the model on your PC (Ollama)"),
   PHONE("Phone", "Only the model downloaded to this phone"),
   BUILT_IN("Built-in", "Built-in notes, maths and code solvers, and Wikipedia. No model needed")

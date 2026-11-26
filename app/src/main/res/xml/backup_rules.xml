@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Auto Backup on Android 11 and older. Downloaded AI models are large and can be re-downloaded. -->
+<!-- Auto Backup on Android 11 and older. Downloaded AI models are large and can be re-downloaded.
+     Chatbot API keys stay on this device only. -->
 <full-backup-content>
     <exclude domain="file" path="models/" />
+    <exclude domain="sharedpref" path="studypilot_keys.xml" />
 </full-backup-content>

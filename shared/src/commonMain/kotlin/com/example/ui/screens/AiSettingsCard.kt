@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.Cloud
@@ -125,9 +127,15 @@ fun AiSettingsCard(viewModel: StudyPilotViewModel) {
   }
 }
 
-/** Free cloud model: the user's own Groq key (or another OpenAI-compatible provider). */
+/**
+ * API keys for cloud chatbots: pick a provider (Groq is free), paste your own key. Keys stay on this
+ * device only, so anyone you share the app with uses their own.
+ */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun CloudSection(viewModel: StudyPilotViewModel) {
+  val provider by viewModel.cloudProvider.collectAsState()
+  val withKeys by viewModel.providersWithKeys.collectAsState()
   val key by viewModel.cloudKey.collectAsState()
   val model by viewModel.cloudModel.collectAsState()
   val baseUrl by viewModel.cloudBaseUrl.collectAsState()
@@ -136,26 +144,70 @@ private fun CloudSection(viewModel: StudyPilotViewModel) {
   val checking by viewModel.isCheckingCloud.collectAsState()
   val actions = com.example.platform.LocalPlatformActions.current
 
-  var keyInput by remember(key) { mutableStateOf(key) }
-  var modelInput by remember(model) { mutableStateOf(model) }
+  var keyInput by remember(provider, key) { mutableStateOf(key) }
+  var modelInput by remember(provider, model) { mutableStateOf(model) }
   var urlInput by remember(baseUrl) { mutableStateOf(baseUrl) }
   var showKey by remember { mutableStateOf(false) }
-  var showProvider by remember(baseUrl) { mutableStateOf(baseUrl.isNotBlank()) }
+  var pickerOpen by remember { mutableStateOf(false) }
 
-  LaunchedEffect(key) { if (key.isNotBlank()) viewModel.checkCloud() }
+  LaunchedEffect(Unit) { if (key.isNotBlank()) viewModel.checkCloud() }
 
-  SectionTitle(Icons.Default.Cloud, "Cloud (free)", "Fast, large model for answers and quizzes. Your notes stay on this device; questions and the matching passages are sent.")
+  SectionTitle(Icons.Default.Key, "API keys", "Use a cloud chatbot for faster, more accurate answers and quizzes.")
   Text(
-    "Make a free account at console.groq.com (no card needed), create an API key and paste it here. " +
-      "The free plan allows about 1,000 requests a day; past that the app uses your other models.",
+    "Pick a provider and paste your own API key. Groq is free and needs no card.",
     style = MaterialTheme.typography.bodySmall,
     color = MaterialTheme.colorScheme.onSurfaceVariant
   )
-  androidx.compose.material3.TextButton(onClick = { actions.openUrl("https://console.groq.com/keys") }) { Text("Get a free key") }
+  Spacer(Modifier.height(8.dp))
+
+  androidx.compose.material3.ExposedDropdownMenuBox(expanded = pickerOpen, onExpandedChange = { pickerOpen = !pickerOpen }) {
+    OutlinedTextField(
+      value = provider.label + if (provider in withKeys) "  ✓" else "",
+      onValueChange = {},
+      readOnly = true,
+      label = { Text("Provider") },
+      trailingIcon = { androidx.compose.material3.ExposedDropdownMenuDefaults.TrailingIcon(expanded = pickerOpen) },
+      modifier = Modifier.fillMaxWidth().menuAnchor(androidx.compose.material3.MenuAnchorType.PrimaryNotEditable)
+    )
+    ExposedDropdownMenu(expanded = pickerOpen, onDismissRequest = { pickerOpen = false }) {
+      com.example.data.ai.llm.CloudProvider.entries.forEach { option ->
+        androidx.compose.material3.DropdownMenuItem(
+          text = {
+            Column {
+              Text(option.label + if (option in withKeys) "  ✓ key saved" else "", fontWeight = FontWeight.SemiBold)
+              Text(option.costNote, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+          },
+          onClick = {
+            pickerOpen = false
+            if (option != provider) viewModel.selectCloudProvider(option)
+          }
+        )
+      }
+    }
+  }
+  Text(provider.costNote, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+  if (provider.keyUrl.isNotBlank()) {
+    androidx.compose.material3.TextButton(onClick = { actions.openUrl(provider.keyUrl) }) { Text("Get a ${provider.label} key") }
+  } else {
+    Spacer(Modifier.height(6.dp))
+  }
+
+  if (provider == com.example.data.ai.llm.CloudProvider.CUSTOM) {
+    OutlinedTextField(
+      value = urlInput,
+      onValueChange = { urlInput = it },
+      label = { Text("API address") },
+      placeholder = { Text("https://example.com/v1") },
+      singleLine = true,
+      modifier = Modifier.fillMaxWidth()
+    )
+    Spacer(Modifier.height(6.dp))
+  }
   OutlinedTextField(
     value = keyInput,
     onValueChange = { keyInput = it.trim() },
-    label = { Text("API key") },
+    label = { Text("${provider.label} API key") },
     singleLine = true,
     visualTransformation = if (showKey) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
     trailingIcon = {
@@ -169,7 +221,7 @@ private fun CloudSection(viewModel: StudyPilotViewModel) {
   OutlinedTextField(
     value = modelInput,
     onValueChange = { modelInput = it },
-    label = { Text("Model (blank = Llama 3.3 70B)") },
+    label = { Text("Model (blank = ${provider.preferredModels.firstOrNull() ?: "first available"})") },
     singleLine = true,
     modifier = Modifier.fillMaxWidth()
   )
@@ -181,33 +233,35 @@ private fun CloudSection(viewModel: StudyPilotViewModel) {
       maxLines = 3
     )
   }
-  if (showProvider) {
-    Spacer(Modifier.height(6.dp))
-    OutlinedTextField(
-      value = urlInput,
-      onValueChange = { urlInput = it },
-      label = { Text("Provider address (blank = Groq)") },
-      placeholder = { Text("https://openrouter.ai/api/v1") },
-      singleLine = true,
-      modifier = Modifier.fillMaxWidth()
-    )
-  }
   Spacer(Modifier.height(8.dp))
   Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
     Button(
       onClick = { viewModel.setCloudConfig(keyInput, modelInput, urlInput) },
-      enabled = !checking,
+      enabled = !checking && keyInput.isNotBlank(),
       colors = ButtonDefaults.buttonColors(
         containerColor = MaterialTheme.colorScheme.primary,
         contentColor = MaterialTheme.colorScheme.onPrimary
       )
     ) { Text("Save and test") }
-    if (!showProvider) androidx.compose.material3.TextButton(onClick = { showProvider = true }) { Text("Other provider") }
+    if (key.isNotBlank()) {
+      OutlinedButton(onClick = { viewModel.removeCloudKey() }, enabled = !checking) { Text("Remove key") }
+    }
     if (checking) CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
   }
   status?.let {
     Spacer(Modifier.height(6.dp))
     Text(it, style = MaterialTheme.typography.bodySmall)
+  }
+  Spacer(Modifier.height(8.dp))
+  Row(verticalAlignment = Alignment.Top) {
+    Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(14.dp).padding(top = 2.dp))
+    Spacer(Modifier.width(6.dp))
+    Text(
+      "Your key is kept only on this device. It isn't part of the app, isn't backed up or synced to your other devices, " +
+        "and is sent only to ${provider.label}. Anyone you share the app with has to add their own key.",
+      style = MaterialTheme.typography.bodySmall,
+      color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
   }
 }
 

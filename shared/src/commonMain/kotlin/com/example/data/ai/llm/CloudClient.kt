@@ -15,8 +15,8 @@ import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 
 /**
- * A free cloud model through an OpenAI-compatible API: Groq by default (no card needed), or any
- * provider with the same API, e.g. OpenRouter's ":free" models. The user brings their own key.
+ * A cloud chatbot the user brings their own key for: Groq by default (free, no card), or any of
+ * [CloudProvider] (OpenAI-compatible ones, and Anthropic's own API). No key is built into the app.
  *
  * Free plans cap requests per minute and per day. A rate-limit reply pauses the cloud until the
  * provider says to retry, and background work stops using it once most of the day's budget is spent,
@@ -28,8 +28,23 @@ class CloudClient(
     .readTimeout(120, TimeUnit.SECONDS)
     .build()
 ) {
-  @Volatile var baseUrl: String = DEFAULT_BASE_URL
-    set(value) { field = value.trim().trimEnd('/').ifBlank { DEFAULT_BASE_URL } }
+  @Volatile var provider: CloudProvider = CloudProvider.GROQ
+    set(value) {
+      field = value
+      models = null
+      pausedUntil = 0L
+      dailyBudget = value.dailyBudget
+    }
+  /** Only used for [CloudProvider.CUSTOM]; the others have their own address. */
+  @Volatile var customBaseUrl: String = ""
+  /** Lets tests point the Anthropic adapter at a local fake. */
+  @Volatile internal var anthropicBaseUrlForTests: String? = null
+  val baseUrl: String
+    get() = when {
+      provider == CloudProvider.CUSTOM -> customBaseUrl
+      provider.anthropic && anthropicBaseUrlForTests != null -> anthropicBaseUrlForTests!!
+      else -> provider.baseUrl
+    }.trim().trimEnd('/')
   @Volatile var apiKey: String = ""
   /** Blank picks [DEFAULT_MODELS] in order, or the first one the key can use. */
   @Volatile var model: String = ""
@@ -42,7 +57,7 @@ class CloudClient(
   @Volatile private var usedToday = 0
   @Volatile private var models: List<String>? = null
 
-  val isConfigured: Boolean get() = apiKey.isNotBlank()
+  val isConfigured: Boolean get() = apiKey.isNotBlank() && baseUrl.startsWith("http")
 
   /** Requests sent today (UTC, when the free limits reset). */
   val requestsToday: Int get() = if (usedDay == today()) usedToday else 0
@@ -53,11 +68,11 @@ class CloudClient(
   suspend fun status(): Status = withContext(Dispatchers.IO) {
     if (!isConfigured) return@withContext Status(false, emptyList(), "No API key")
     try {
-      http.newCall(Request.Builder().url("$baseUrl/models").header("Authorization", "Bearer $apiKey").build()).execute().use { resp ->
+      http.newCall(authorized(Request.Builder().url("$baseUrl/models")).build()).execute().use { resp ->
         val body = resp.body?.string().orEmpty()
         if (!resp.isSuccessful) return@withContext Status(false, emptyList(), errorText(resp.code, body))
         val arr = JSONObject(body).optJSONArray("data") ?: JSONArray()
-        val ids = (0 until arr.length()).mapNotNull { arr.optJSONObject(it)?.optString("id")?.takeIf(String::isNotBlank) }
+        val ids = (0 until arr.length()).mapNotNull { arr.optJSONObject(it)?.optString("id")?.takeIf(String::isNotBlank)?.removePrefix("models/") }
           .filterNot { id -> NOT_CHAT.any { id.contains(it, ignoreCase = true) } }
         models = ids
         Status(true, ids)
@@ -69,16 +84,22 @@ class CloudClient(
 
   fun chosenModel(): String {
     model.trim().takeIf { it.isNotBlank() }?.let { return it }
+    val preferred = provider.preferredModels
     val available = models
-    return DEFAULT_MODELS.firstOrNull { available == null || it in available } ?: available?.firstOrNull() ?: DEFAULT_MODELS.first()
+    return preferred.firstOrNull { available == null || it in available } ?: available?.firstOrNull() ?: preferred.firstOrNull().orEmpty()
   }
+
+  /** Anthropic wants its own headers; everyone else takes a bearer token. */
+  private fun authorized(builder: Request.Builder): Request.Builder =
+    if (provider.anthropic) builder.header("x-api-key", apiKey).header("anthropic-version", ANTHROPIC_VERSION)
+    else builder.header("Authorization", "Bearer $apiKey")
 
   /**
    * The cloud model, or null when it isn't set up, is paused after a rate limit, or (for
    * [background] work) most of today's budget is used.
    */
   fun backendOrNull(background: Boolean = false): LlmBackend? {
-    if (!isConfigured) return null
+    if (!isConfigured || chosenModel().isBlank()) return null
     if (System.currentTimeMillis() < pausedUntil) return null
     if (background && requestsToday >= dailyBudget * BACKGROUND_SHARE) return null
     return Backend(chosenModel())
@@ -91,7 +112,30 @@ class CloudClient(
       withContext(Dispatchers.IO) { complete(model, request, onPartial) }
   }
 
-  private fun complete(model: String, request: LlmRequest, onPartial: ((String) -> Unit)?): String {
+  private fun complete(model: String, request: LlmRequest, onPartial: ((String) -> Unit)?): String =
+    if (provider.anthropic) completeAnthropic(model, request, onPartial) else completeOpenAi(model, request, onPartial)
+
+  /** Anthropic's Messages API: the system prompt is separate, and replies stream as typed events. */
+  private fun completeAnthropic(model: String, request: LlmRequest, onPartial: ((String) -> Unit)?): String {
+    val messages = JSONArray().apply {
+      request.turns.forEach { put(JSONObject().put("role", if (it.fromUser) "user" else "assistant").put("content", it.text)) }
+    }
+    val body = JSONObject().apply {
+      put("model", model)
+      put("max_tokens", request.maxOutputTokens)
+      put("temperature", request.temperature)
+      if (request.system.isNotBlank()) put("system", request.system + if (request.json) "\nReply with JSON only." else "")
+      else if (request.json) put("system", "Reply with JSON only.")
+      put("messages", messages)
+      put("stream", onPartial != null)
+    }.toString()
+    return send("$baseUrl/messages", body, onPartial) { event ->
+      val json = JSONObject(event)
+      if (json.optString("type") == "content_block_delta") json.optJSONObject("delta")?.optString("text").orEmpty() else ""
+    }.ifEmpty { "" }
+  }
+
+  private fun completeOpenAi(model: String, request: LlmRequest, onPartial: ((String) -> Unit)?): String {
     val messages = JSONArray().apply {
       if (request.system.isNotBlank()) put(JSONObject().put("role", "system").put("content", request.system))
       request.turns.forEach { put(JSONObject().put("role", if (it.fromUser) "user" else "assistant").put("content", it.text)) }
@@ -104,13 +148,18 @@ class CloudClient(
       put("stream", onPartial != null)
       if (request.json) put("response_format", JSONObject().put("type", "json_object"))
     }.toString()
+    return send("$baseUrl/chat/completions", body, onPartial) { event ->
+      JSONObject(event).optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("delta")?.optString("content").orEmpty()
+    }
+  }
+
+  /**
+   * Posts [body]; returns the whole reply, or with [onPartial] reads server-sent events, taking the
+   * text of each with [deltaOf].
+   */
+  private fun send(url: String, body: String, onPartial: ((String) -> Unit)?, deltaOf: (String) -> String): String {
     countRequest()
-    val call = http.newCall(
-      Request.Builder().url("$baseUrl/chat/completions")
-        .header("Authorization", "Bearer $apiKey")
-        .post(body.toRequestBody(JSON))
-        .build()
-    )
+    val call = http.newCall(authorized(Request.Builder().url(url)).post(body.toRequestBody(JSON)).build())
     call.execute().use { resp ->
       if (!resp.isSuccessful) {
         val text = resp.body?.string().orEmpty()
@@ -123,7 +172,13 @@ class CloudClient(
       val source = resp.body ?: throw LlmException("Empty reply")
       if (onPartial == null) {
         val json = JSONObject(source.string())
-        return stripThinking(json.optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("message")?.optString("content").orEmpty())
+        val text = if (provider.anthropic) {
+          val parts = json.optJSONArray("content") ?: JSONArray()
+          (0 until parts.length()).joinToString("") { parts.optJSONObject(it)?.optString("text").orEmpty() }
+        } else {
+          json.optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("message")?.optString("content").orEmpty()
+        }
+        return stripThinking(text)
       }
       // Server-sent events: "data: {...}" lines, then "data: [DONE]".
       val out = StringBuilder()
@@ -133,9 +188,7 @@ class CloudClient(
         if (!line.startsWith("data:")) continue
         val data = line.removePrefix("data:").trim()
         if (data == "[DONE]") break
-        val delta = runCatching {
-          JSONObject(data).optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("delta")?.optString("content").orEmpty()
-        }.getOrDefault("")
+        val delta = runCatching { deltaOf(data) }.getOrDefault("")
         if (delta.isNotEmpty()) {
           out.append(delta)
           onPartial(stripThinking(out.toString()))
@@ -157,7 +210,7 @@ class CloudClient(
   private fun errorText(code: Int, body: String): String {
     val message = runCatching { JSONObject(body).optJSONObject("error")?.optString("message") }.getOrNull()?.takeIf { it.isNotBlank() }
     return when (code) {
-      401 -> "The API key was rejected"
+      401, 403 -> "The API key was rejected"
       429 -> "The free limit is used up for now"
       else -> message ?: "HTTP $code"
     }
@@ -166,9 +219,7 @@ class CloudClient(
   private fun today() = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(Date())
 
   companion object {
-    const val DEFAULT_BASE_URL = "https://api.groq.com/openai/v1"
-    /** Tried in order when no model is chosen: large, fast, on Groq's free plan. */
-    val DEFAULT_MODELS = listOf("llama-3.3-70b-versatile", "openai/gpt-oss-120b", "openai/gpt-oss-20b", "llama-3.1-8b-instant")
+    private const val ANTHROPIC_VERSION = "2023-06-01"
     private const val BACKGROUND_SHARE = 0.7
     private val NOT_CHAT = listOf("whisper", "tts", "guard", "embed", "orpheus", "playai")
     private val JSON = "application/json; charset=utf-8".toMediaType()
