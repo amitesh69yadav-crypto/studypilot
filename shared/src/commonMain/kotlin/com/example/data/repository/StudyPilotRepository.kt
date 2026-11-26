@@ -1,5 +1,6 @@
 package com.example.data.repository
 
+import com.example.data.ai.LocalAiEngine
 import com.example.data.ai.ChatKnowledgeExtractor
 import com.example.data.local.StudyPilotDao
 import com.example.data.model.ExtractedConcept
@@ -37,8 +38,13 @@ class StudyPilotRepository(
   private val prefs: KeyValueStore? = null,
   /** Cloud backup for Google-signed-in users; [CloudStore.None] when unavailable. */
   private val cloud: CloudStore = CloudStore.None,
-  val ai: StudyAi = StudyAi()
+  val ai: StudyAi = StudyAi(),
+  /** Sync ids of study_topics rows; see [QuizSources]. */
+  stableTopicIds: suspend (List<Long>) -> Map<Long, String> = { emptyMap() }
 ) {
+
+  /** Turns tutor conversations, imported chats and concepts into quiz topics. */
+  val quizSources = QuizSources(dao, prefs, stableTopicIds)
 
   fun markSampleDataDeleted(userId: String) {
     val targetUserId = userId.ifBlank { "guest_user" }
@@ -321,6 +327,7 @@ class StudyPilotRepository(
   }
 
   suspend fun deleteTopic(id: Long, userId: String = "") {
+    dao.getTopicById(id)?.let { quizSources.onTopicDeleted(it) }
     dao.deleteTopicById(id)
     if (userId.isNotBlank()) {
       deleteFromFirestore("users/$userId/topics/$id")
@@ -677,6 +684,8 @@ class StudyPilotRepository(
     forceWeakOnly: Boolean = false,
     userId: String = ""
   ): GeneratedQuiz {
+    // Everything stored (tutor conversations, imported chats, concepts) becomes quiz material.
+    if (userId.isNotBlank()) runCatching { quizSources.refresh(userId) }
     val allTopicsList = if (userId.isNotBlank()) {
       dao.getTopicsForUser(userId).first()
     } else {
@@ -696,6 +705,7 @@ class StudyPilotRepository(
     eligibleTopics = when (config.questionSource) {
       "MANUAL" -> eligibleTopics.filter { it.sourceType == "MANUAL" || it.sourceType == "PASTED" }
       "IMPORTED_CHAT" -> eligibleTopics.filter { it.sourceType == "IMPORTED_CHAT" }
+      QuizSources.TUTOR_CHAT -> eligibleTopics.filter { it.sourceType == QuizSources.TUTOR_CHAT }
       "UPLOAD" -> eligibleTopics.filter { it.sourceType == "UPLOAD" }
       else -> eligibleTopics
     }
@@ -728,18 +738,24 @@ class StudyPilotRepository(
 
     val maxQuestions = config.questionCount.coerceAtLeast(1)
     val questionsPerTopic = if (targetTopicList.size >= maxQuestions) 1 else (maxQuestions / targetTopicList.size).coerceAtLeast(1)
+    // 10 questions over 6 topics is 2,2,2,2,1,1, not 1 each.
+    val oneMoreFor = if (targetTopicList.size >= maxQuestions) 0 else maxQuestions % targetTopicList.size
 
     val targetIds = targetTopicList.map { it.id }
     val cachedByTopicId = if (targetIds.isNotEmpty()) {
-      dao.getQuestionsForTopicIds(targetIds).groupBy { it.topicId }
+      // Placeholder questions saved when no model was reachable are dropped, so a model can do better now.
+      val (placeholders, usable) = dao.getQuestionsForTopicIds(targetIds).partition { LocalAiEngine.isGenericTemplate(it) }
+      if (placeholders.isNotEmpty()) dao.deleteQuestionsByIds(placeholders.map { it.id })
+      usable.groupBy { it.topicId }
     } else emptyMap()
 
     val importedTitles = targetTopicList
       .filter { it.sourceType == "IMPORTED_CHAT" }
       .map { it.title }
       .distinct()
+    // Topics made from a chat are named after the concept, so match on the concept's name.
     val conceptsByTopicTitle = if (importedTitles.isNotEmpty()) {
-      dao.getConceptsByTopics(userId, importedTitles).associateBy { it.topic }
+      dao.getConceptsByNames(userId, importedTitles).associateBy { it.conceptName }
     } else emptyMap()
 
     // Plan slots greedily up front so missing topics can be generated in parallel
@@ -762,7 +778,7 @@ class StudyPilotRepository(
         (config.difficulty == "MIXED" || q.difficulty.equals(config.difficulty, ignoreCase = true)) &&
           (config.questionTypes.isEmpty() || config.questionTypes.contains(q.questionType))
       }
-      val needed = (maxQuestions - plannedCount).coerceAtMost(questionsPerTopic)
+      val needed = (maxQuestions - plannedCount).coerceAtMost(questionsPerTopic + if (index < oneMoreFor) 1 else 0)
       val takeCached = usableCached.take(needed)
       val stillNeeded = needed - takeCached.size
       plans.add(TopicPlan(topic, takeCached, stillNeeded))
@@ -778,7 +794,8 @@ class StudyPilotRepository(
             conceptsByTopicTitle[plan.topic.title]
           } else null
           val generated = if (matchingConcept != null) {
-            ai.generateQuestionsForConcept(matchingConcept, plan.stillNeeded, config.difficulty)
+            // Filed under the topic so they're reused next time and count towards its mastery.
+            ai.generateQuestionsForConcept(matchingConcept, plan.stillNeeded, config.difficulty).map { it.copy(topicId = plan.topic.id) }
           } else {
             ai.generateQuestionsForTopic(plan.topic, plan.stillNeeded, config.difficulty)
           }
@@ -816,7 +833,7 @@ class StudyPilotRepository(
           conceptsByTopicTitle[topic.title]
         } else null
         val generated = if (matchingConcept != null) {
-          ai.generateQuestionsForConcept(matchingConcept, stillNeeded, config.difficulty)
+          ai.generateQuestionsForConcept(matchingConcept, stillNeeded, config.difficulty).map { it.copy(topicId = topic.id) }
         } else {
           ai.generateQuestionsForTopic(topic, stillNeeded, config.difficulty)
         }

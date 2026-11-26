@@ -93,7 +93,8 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
     dao = platform.database.studyPilotDao(),
     prefs = platform.prefs("studypilot_seeding_prefs"),
     cloud = platform.cloud,
-    ai = StudyAi(platform.onDeviceModels)
+    ai = StudyAi(platform.onDeviceModels),
+    stableTopicIds = { ids -> platform.syncEngine.stableIds("study_topics", ids) }
   )
 
   private val alarms get() = platform.alarms
@@ -564,11 +565,13 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
 
     // Start tracking changes for phone-PC sync before anything is edited.
     viewModelScope.launch { runCatching { platform.syncEngine.prepare() } }
+    refreshQuizSources()
 
     // Data from the other device: new profiles, and on the first sync open the same account as there.
     viewModelScope.launch {
       SyncEvents.results.collect { result ->
         if (result.accountsChanged) _savedAccounts.value = loadRegisteredAccounts()
+        if (result.applied > 0) refreshQuizSources()
         val peerUser = result.peerActiveUserId?.let { id -> _savedAccounts.value.find { it.id == id } }
         if (result.firstSync && peerUser != null && _currentUser.value.id == GUEST_USER_ID) {
           activateUser(peerUser.copy(isLoggedIn = true, lastLoginTime = System.currentTimeMillis()), "Showing ${peerUser.name}'s data from ${result.peerName}")
@@ -990,6 +993,13 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
 
   fun navigateTo(screen: Screen) {
     _currentScreen.value = screen
+    // Keep quiz material current: tutor chats and imports since last time become topics.
+    if (screen == Screen.WeekendQuizzes || screen == Screen.MyTopics || screen == Screen.Dashboard) refreshQuizSources()
+  }
+
+  private fun refreshQuizSources() {
+    val userId = _currentUser.value.id
+    viewModelScope.launch { runCatching { repository.quizSources.refresh(userId) } }
   }
 
   // Quiz Settings

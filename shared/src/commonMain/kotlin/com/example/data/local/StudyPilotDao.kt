@@ -313,6 +313,15 @@ interface StudyPilotDao {
   @Query("SELECT * FROM extracted_concepts WHERE userId = :userId AND topic = :topic LIMIT 1")
   suspend fun getConceptByTopic(userId: String, topic: String): ExtractedConcept?
 
+  @Query("DELETE FROM quiz_questions WHERE id IN (:ids)")
+  suspend fun deleteQuestionsByIds(ids: List<Long>)
+
+  @Query("DELETE FROM quiz_questions WHERE topicId = :topicId")
+  suspend fun deleteQuestionsForTopic(topicId: Long)
+
+  @Query("SELECT * FROM extracted_concepts WHERE userId = :userId AND conceptName IN (:names)")
+  suspend fun getConceptsByNames(userId: String, names: List<String>): List<ExtractedConcept>
+
   @Query("SELECT * FROM extracted_concepts WHERE userId = :userId AND topic IN (:topics)")
   suspend fun getConceptsByTopics(userId: String, topics: List<String>): List<ExtractedConcept>
 

@@ -144,7 +144,7 @@ class StudyAi(
   // --- Quiz generation ---
 
   private fun questionFormatSpec(difficulty: String) = """
-    Reply with a JSON array only. Each item has:
+    Reply with JSON only, in the form {"questions": [ ... ]}. Each question has:
     - "questionType": "MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER" or "CODING"
     - "difficulty": "$difficulty"
     - "questionText": string
@@ -159,8 +159,8 @@ class StudyAi(
   suspend fun generateQuestionsForTopic(topic: StudyTopic, desiredCount: Int = 3, difficulty: String = "MEDIUM"): List<QuizQuestion> {
     val prompt = """
       Write exactly $desiredCount revision questions on "${topic.title}" (${topic.subjectName}), difficulty $difficulty.
-      Base them on these student notes:
-      "${topic.descriptionNotes.take(1500)}"
+      Base them only on this material (the student's notes, or a conversation they had while studying):
+      "${topic.descriptionNotes.take(3000)}"
 
       ${questionFormatSpec(difficulty)}
     """.trimIndent()
@@ -168,6 +168,7 @@ class StudyAi(
       ?.let { parseQuestions(it, difficulty) { q -> q.copy(topicId = topic.id, subjectName = topic.subjectName, topicTitle = topic.title) } }
       ?.takeIf { it.isNotEmpty() }
       ?.take(desiredCount)
+      ?: LocalAiEngine.questionsFromNotes(topic, desiredCount, difficulty).takeIf { it.isNotEmpty() }
       ?: LocalAiEngine.generateLocalQuizQuestions(topic, desiredCount, difficulty)
   }
 
@@ -207,9 +208,14 @@ class StudyAi(
 
   fun parseQuestions(raw: String, difficulty: String, attach: (QuizQuestion) -> QuizQuestion): List<QuizQuestion> = try {
     val json = extractJson(raw) ?: "[]"
-    // Small models sometimes wrap the array: {"questions": [...]}
+    // Replies come as {"questions": [...]}, a bare array, or (from Ollama's JSON mode, which only
+    // allows objects) a single question object. Only a list of objects is a list of questions;
+    // "optionsJson" is a list too, but of strings.
     val array = if (json.startsWith("{")) {
-      JSONObject(json).let { obj -> obj.keys().asSequence().mapNotNull { obj.optJSONArray(it) }.firstOrNull() ?: JSONArray().put(obj) }
+      JSONObject(json).let { obj ->
+        obj.keys().asSequence().mapNotNull { obj.optJSONArray(it) }.firstOrNull { it.length() > 0 && it.optJSONObject(0) != null }
+          ?: JSONArray().put(obj)
+      }
     } else JSONArray(json)
     (0 until array.length()).mapNotNull { i -> array.optJSONObject(i)?.let { toQuestion(it, difficulty) }?.let(attach) }
   } catch (e: Exception) {

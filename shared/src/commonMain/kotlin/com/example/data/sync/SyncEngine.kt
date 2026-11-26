@@ -104,6 +104,15 @@ class SyncEngine(private val db: AppDatabase, private val authPrefs: KeyValueSto
     prepared = true
   }
 
+  /** Global ids of [localIds] in [table] (rows not tracked yet are left out). */
+  suspend fun stableIds(table: String, localIds: Collection<Long>): Map<Long, String> {
+    prepare()
+    val wanted = localIds.toHashSet()
+    return db.useReaderConnection { conn ->
+      conn.query("SELECT local_id, uid FROM sync_ids WHERE tbl = ?", { bindText(1, table) }) { it.getLong(0) to it.getText(1) }
+    }.filter { it.first in wanted }.toMap()
+  }
+
   /** Latest local change number. */
   suspend fun currentSeq(): Long {
     prepare()

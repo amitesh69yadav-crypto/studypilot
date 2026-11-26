@@ -321,6 +321,63 @@ object LocalAiEngine {
   // -------------------------------------------------------------
   // 4. LOCAL QUIZ GENERATOR
   // -------------------------------------------------------------
+
+  /**
+   * Questions taken straight from the topic's material when no model is available: the student's own
+   * questions from a tutor conversation ("Q: ... / A: ..."), then "explain" prompts on the notes'
+   * key sentences. Short answers, so they are graded on what the material says.
+   */
+  fun questionsFromNotes(topic: StudyTopic, desiredCount: Int, difficulty: String): List<QuizQuestion> {
+    val notes = topic.descriptionNotes
+    val pairs = Regex("""Q: (.+?)\nA: (.+?)(?=\n+Q: |$)""", RegexOption.DOT_MATCHES_ALL).findAll(notes)
+      .map { it.groupValues[1].trim() to it.groupValues[2].trim() }
+      .filter { (q, a) -> q.length >= 8 && a.length >= 40 }
+      .toList()
+    val fromPairs = pairs.map { (q, a) ->
+      val question = q.trimEnd('?', '.', ' ').replaceFirstChar { it.uppercase() } + "?"
+      question to firstSentences(a, 2)
+    }
+    // Then the material's own statements (only the answers, for a conversation).
+    val sentences = notes.replace(Regex("```.*?```", RegexOption.DOT_MATCHES_ALL), " ")
+      .lines()
+      .filterNot { it.startsWith("Q: ") }
+      .joinToString(" ") { it.removePrefix("A: ") }
+      .replace(Regex("[#*_`>]"), "")
+      .split(Regex("""(?<=[.!?])\s+"""))
+      .map { it.trim() }
+      .filter { it.length in 50..300 }
+    val fromNotes = sentences.map { sentence ->
+      val quote = if (sentence.length > 120) sentence.take(120) + "..." else sentence
+      "In your own words, explain this point from ${topic.title}: what does it mean and why does it matter?\n\n\"$quote\"" to sentence
+    }
+    return (fromPairs + fromNotes).take(desiredCount.coerceAtLeast(1)).map { (question, answer) ->
+      QuizQuestion(
+        topicId = topic.id,
+        subjectName = topic.subjectName,
+        topicTitle = topic.title,
+        questionType = "SHORT_ANSWER",
+        difficulty = difficulty,
+        questionText = question,
+        correctAnswer = answer,
+        explanation = "From your ${if (topic.sourceType == "TUTOR_CHAT") "tutor conversation" else "notes"} on ${topic.title}."
+      )
+    }
+  }
+
+  private fun firstSentences(text: String, count: Int): String {
+    val clean = text.replace(Regex("[#*_`>]"), "").replace(Regex("""\s+"""), " ").trim()
+    val parts = clean.split(Regex("""(?<=[.!?])\s+"""))
+    return parts.take(count).joinToString(" ").take(400)
+  }
+
+  /** The three placeholder questions [generateLocalQuizQuestions] writes when nothing better is possible. */
+  fun isGenericTemplate(q: QuizQuestion): Boolean {
+    val t = q.questionText
+    return t.startsWith("Which of the following correctly describes a fundamental property of ") ||
+      t.startsWith("True or False: In ") && t.endsWith("fundamental conservation principles and invariants hold across all valid states.") ||
+      t.startsWith("What core technique is used to analyze asymptotic performance and efficiency in ")
+  }
+
   fun generateLocalQuizQuestions(
     topic: StudyTopic,
     desiredCount: Int,

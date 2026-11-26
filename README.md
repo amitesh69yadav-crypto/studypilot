@@ -66,6 +66,15 @@ Settings > AI chooses where answers come from. **Auto** tries them in this order
 
 Replies stream in as they're generated. Multiple-choice and true/false answers are graded without a model.
 
+### What quizzes are made from
+
+Quizzes draw on everything stored, not only topics typed in by hand. Each AI Tutor conversation, each
+imported chat that nothing was extracted from, and each extracted concept gets a quiz topic of its own
+(`QuizSources`). These topics refresh when the conversation or chat changes and disappear when it is
+deleted. A topic you delete stays deleted. Under **Question Source** in the quiz settings, "Tutor Chats"
+picks only conversations. With no model available, questions come from the material itself: your own
+questions to the tutor, and the key points of its answers.
+
 ## Desktop app and phone sync
 
 The desktop app is the full app with the same screens, using Ollama on the same PC for the tutor.

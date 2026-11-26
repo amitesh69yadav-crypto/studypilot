@@ -270,6 +270,7 @@ fun QuizScreen(
               val sources = listOf(
                 "ALL" to "All Combined",
                 "IMPORTED_CHAT" to "Imported AI Chats",
+                "TUTOR_CHAT" to "Tutor Chats",
                 "MANUAL" to "Recorded Topics",
                 "UPLOAD" to "Study Materials"
               )
