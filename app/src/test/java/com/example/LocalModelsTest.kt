@@ -188,4 +188,23 @@ class LocalModelsTest {
     // Seen from Gemma on a real phone: a Greek letter run into the variable name.
     assertEquals("Av = λv.", PlainMath.convert("Av = \\lambdav."))
   }
+
+  @Test
+  fun brevityIsRequestedOnlyForTheMessageThatAsksForIt() {
+    val ai = StudyAi(null)
+    assertTrue(ai.wantsBrief("explain recursion in short"))
+    assertTrue(ai.wantsBrief("Briefly, what is a stack?"))
+    assertTrue(ai.wantsBrief("tl;dr of TCP"))
+    assertFalse(ai.wantsBrief("data structures"))
+    assertFalse(ai.wantsBrief("what is a shortest path algorithm"))
+
+    val turns = listOf(
+      LlmTurn(true, "explain recursion in short"),
+      LlmTurn(false, "Recursion is ..."),
+      LlmTurn(true, "what is a stack")
+    )
+    assertEquals(turns, ai.withLengthHint(turns))
+    val briefTurns = turns.take(1)
+    assertTrue(ai.withLengthHint(briefTurns).last().text.contains("Answer briefly"))
+  }
 }

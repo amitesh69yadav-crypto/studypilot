@@ -85,7 +85,7 @@ class StudyAi(context: Context?) {
     val system = "$systemInstruction $PLAIN_MATH_RULE"
     val text = try {
       backend.generate(
-        LlmRequest(system, toTurns(history), temperature = 0.6, maxOutputTokens = 1200),
+        LlmRequest(system, withLengthHint(toTurns(history)), temperature = 0.6, maxOutputTokens = 2048),
         onPartial?.let { show -> { partial: String -> show(PlainMath.convert(partial)) } }
       ).let(PlainMath::convert)
     } catch (e: Exception) {
@@ -97,6 +97,18 @@ class StudyAi(context: Context?) {
     val (cleanText, topics) = AcademicPedagogySynthesizer.extractAndCleanRelatedTopics(rawContent = text, fallbackQuery = lastUserMsg)
     return ChatResponse(text = cleanText, modelName = backend.label, relatedTopics = topics)
   }
+
+  /**
+   * Answers are full explanations by default. When the latest message asks for brevity, tell the
+   * model explicitly on that message only, so the next question gets a full answer again.
+   */
+  internal fun withLengthHint(turns: List<LlmTurn>): List<LlmTurn> {
+    val last = turns.lastOrNull() ?: return turns
+    if (!last.fromUser || !wantsBrief(last.text)) return turns
+    return turns.dropLast(1) + last.copy(text = last.text + "\n\n(Answer briefly: 2 to 4 sentences or a few bullet points, no headings.)")
+  }
+
+  internal fun wantsBrief(text: String): Boolean = BRIEF.containsMatchIn(text.lowercase())
 
   /**
    * Models expect the conversation to start with the user and alternate. Drops greetings and
@@ -273,6 +285,9 @@ class StudyAi(context: Context?) {
 
   companion object {
     private const val TAG = "StudyAi"
+    private val BRIEF = Regex(
+      """\b(in short|short answer|keep it short|briefly|in brief|brief|in a nutshell|one sentence|two sentences|one line|one-liner|tl;?dr|quick(ly)? summary|summari[sz]e|summary)\b"""
+    )
     private val OPTION_LINE = Regex("""(?m)^\s*([A-Da-d])[).:]\s+(.+)$""")
     const val DEFAULT_SYSTEM_PROMPT = "You are StudyPilot, a tutor for university students. Be accurate and direct."
     private const val PLAIN_MATH_RULE = "Write maths as plain text with Unicode symbols (for example Av = λv, x², √2, ≤), never LaTeX."
