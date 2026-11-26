@@ -66,6 +66,14 @@ Settings > AI chooses where answers come from. **Auto** tries them in this order
 
 Replies stream in as they're generated. Multiple-choice and true/false answers are graded without a model.
 
+### Subjects
+
+Topics are filed under subjects (courses). **Topics** opens on **Subjects**: one card per subject with
+its topic count, mastery and a **Quiz** button, plus **General** for topics without a subject. Open a
+subject to see its topics, add one to it, or quiz on just that subject. A topic's subject can be changed
+from its details, and deleting a subject moves its topics to General. The quiz card on **Quizzes** also
+has a subject picker.
+
 ### What quizzes are made from
 
 Quizzes draw on everything stored, not only topics typed in by hand. Each AI Tutor conversation, each

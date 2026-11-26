@@ -222,6 +222,10 @@ class StudyPilotRepository(
   }
 
   suspend fun deleteSubject(subject: Subject) {
+    // Its topics stay, under General.
+    val owned = if (subject.userId.isNotBlank()) dao.getTopicsForUser(subject.userId).first() else dao.getAllTopics().first()
+    val moved = owned.filter { it.subjectId == subject.id }.map { it.copy(subjectId = 0L, subjectName = "General") }
+    if (moved.isNotEmpty()) dao.updateTopics(moved)
     dao.deleteSubject(subject)
     if (subject.userId.isNotBlank()) {
       deleteFromFirestore("users/${subject.userId}/subjects/${subject.id}")
@@ -695,10 +699,14 @@ class StudyPilotRepository(
       return GeneratedQuiz(emptyList(), emptyList(), emptyList(), isAllCovered = true)
     }
 
-    var eligibleTopics = if (filterSubjectId != null) {
-      allTopicsList.filter { it.subjectId == filterSubjectId }
-    } else {
-      allTopicsList
+    var eligibleTopics = when (filterSubjectId) {
+      null -> allTopicsList
+      // "General": topics whose subject doesn't exist (none chosen, or since deleted).
+      0L -> {
+        val known = (if (userId.isNotBlank()) dao.getSubjectsForUser(userId) else dao.getAllSubjects()).first().mapTo(HashSet()) { it.id }
+        allTopicsList.filter { it.subjectId !in known }
+      }
+      else -> allTopicsList.filter { it.subjectId == filterSubjectId }
     }
 
     // Filter by questionSource: ALL, MANUAL, IMPORTED_CHAT, UPLOAD
@@ -810,7 +818,8 @@ class StudyPilotRepository(
     for (plan in plans) {
       val gen = generatedByTopicId[plan.topic.id].orEmpty()
       if (gen.isNotEmpty()) allNewlyGenerated.addAll(gen)
-      val chosen = plan.cachedUsable + gen.take(plan.stillNeeded)
+      // Saved questions are labelled with the topic as it is now (it may have moved subject or been renamed).
+      val chosen = (plan.cachedUsable + gen.take(plan.stillNeeded)).map { it.copy(subjectName = plan.topic.subjectName, topicTitle = plan.topic.title) }
       if (chosen.isNotEmpty()) {
         selectedTopics.add(plan.topic)
         assembledQuestions.addAll(chosen)
@@ -826,7 +835,7 @@ class StudyPilotRepository(
           (config.questionTypes.isEmpty() || config.questionTypes.contains(q.questionType))
       }
       val needed = (maxQuestions - assembledQuestions.size).coerceAtMost(questionsPerTopic)
-      val chosenForTopic = usableCached.take(needed).toMutableList()
+      val chosenForTopic = usableCached.take(needed).map { it.copy(subjectName = topic.subjectName, topicTitle = topic.title) }.toMutableList()
       val stillNeeded = needed - chosenForTopic.size
       if (stillNeeded > 0) {
         val matchingConcept = if (topic.sourceType == "IMPORTED_CHAT") {

@@ -1780,6 +1780,14 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
     }
   }
 
+  /** Files [topic] under [subject], or under "General" when null. */
+  fun moveTopicToSubject(topic: StudyTopic, subject: Subject?) {
+    viewModelScope.launch {
+      repository.updateTopic(topic.copy(subjectId = subject?.id ?: 0L, subjectName = subject?.name ?: "General"))
+      _snackbarMessage.emit("Moved \"${topic.title}\" to ${subject?.name ?: "General"}")
+    }
+  }
+
   fun updateTopicMastery(topic: StudyTopic, newMastery: String) {
     viewModelScope.launch {
       val newInterval = when (newMastery) {
@@ -1848,23 +1856,38 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
   }
 
   // --- Quiz Execution & Interactive Experience ---
-  fun startWeekendQuiz(forceWeakOnly: Boolean = false, filterSubjectId: Long? = null) {
+  /** A quiz on one subject's topics; [subjectId] 0 is topics without a subject. */
+  fun startSubjectQuiz(subjectId: Long, subjectName: String) =
+    startWeekendQuiz(filterSubjectId = subjectId, title = "$subjectName quiz")
+
+  fun startWeekendQuiz(forceWeakOnly: Boolean = false, filterSubjectId: Long? = null, title: String? = null) {
     viewModelScope.launch {
       _isAiLoading.value = true
       try {
+        // The quiz card's subject choice applies unless a subject was picked directly.
+        val subjectId = filterSubjectId ?: _quizConfig.value.subjectId
         val generated = repository.assembleWeekendQuiz(
           config = _quizConfig.value,
-          filterSubjectId = filterSubjectId,
+          filterSubjectId = subjectId,
           forceWeakOnly = forceWeakOnly,
           userId = _currentUser.value.id
         )
 
         if (generated.questions.isEmpty()) {
-          _snackbarMessage.emit("No topics match these quiz settings. Add a topic or change the filters.")
+          _snackbarMessage.emit(
+            if (subjectId != null) "No topics in this subject match the quiz settings. Add a topic or change the filters."
+            else "No topics match these quiz settings. Add a topic or change the filters."
+          )
           return@launch
         }
 
-        val quizTitle = if (forceWeakOnly) "Quick Revision: Struggling Topics" else "Weekend Revision Quiz"
+        val subjectName = subjectId?.let { id -> subjects.value.firstOrNull { it.id == id }?.name ?: "General" }
+        val quizTitle = title ?: when {
+          forceWeakOnly && subjectName != null -> "$subjectName: struggling topics"
+          forceWeakOnly -> "Quick Revision: Struggling Topics"
+          subjectName != null -> "$subjectName quiz"
+          else -> "Weekend Revision Quiz"
+        }
 
         _activeQuizState.value = ActiveQuizState(
           isActive = true,

@@ -65,8 +65,9 @@ class QuizSources(
       val target = wanted[key]
       when {
         target == null -> remove(keep.id) // the conversation, chat or concept is gone
-        target.descriptionNotes != keep.descriptionNotes || target.title != keep.title || target.subjectName != keep.subjectName -> {
-          dao.updateTopic(keep.copy(title = target.title, subjectId = target.subjectId, subjectName = target.subjectName, descriptionNotes = target.descriptionNotes))
+        // The subject isn't compared: the student may have moved the topic to another one.
+        target.descriptionNotes != keep.descriptionNotes || target.title != keep.title -> {
+          dao.updateTopic(keep.copy(title = target.title, descriptionNotes = target.descriptionNotes))
           dao.deleteQuestionsForTopic(keep.id) // questions about the old content
         }
       }

@@ -104,7 +104,9 @@ data class QuizConfig(
   val difficulty: String = "MIXED", // EASY, MEDIUM, HARD, MIXED
   val questionTypes: Set<String> = setOf("MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "CODING"),
   val prioritizeWeakTopics: Boolean = true,
-  val questionSource: String = "ALL" // ALL, MANUAL, IMPORTED_CHAT, UPLOAD
+  val questionSource: String = "ALL", // ALL, MANUAL, IMPORTED_CHAT, TUTOR_CHAT, UPLOAD
+  /** Only this subject's topics; null for all subjects, 0 for topics without a subject. */
+  val subjectId: Long? = null
 )
 
 @Entity(tableName = "imported_chats")

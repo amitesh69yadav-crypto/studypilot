@@ -81,12 +81,18 @@ fun QuizScreen(
   val quizAttempts by viewModel.quizAttempts.collectAsState()
   val quizConfig by viewModel.quizConfig.collectAsState()
   val isAiLoading by viewModel.isAiLoading.collectAsState()
+  val subjects by viewModel.subjects.collectAsState()
 
   var showConfigSection by remember { mutableStateOf(false) }
 
+  // The subject the quiz is limited to (null: all subjects).
+  val subjectGroups = remember(subjects, topics) { groupTopicsBySubject(subjects, topics) }
+  val chosenGroup = quizConfig.subjectId?.let { id -> subjectGroups.firstOrNull { it.id == id } }
+  val quizTopics = chosenGroup?.topics ?: topics
+
   val testedTopics = topics.filter { it.timesTested > 0 }
   val untestedTopics = topics.filter { it.timesTested == 0 }
-  val strugglingTopics = topics.filter { it.masteryLevel == "STRUGGLING" }
+  val strugglingTopics = quizTopics.filter { it.masteryLevel == "STRUGGLING" }
 
   val coveragePercent = if (topics.isNotEmpty()) (testedTopics.size * 100 / topics.size) else 0
 
@@ -123,7 +129,8 @@ fun QuizScreen(
                   color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                  text = "${quizConfig.questionCount} questions · ${quizConfig.difficulty.lowercase()}",
+                  text = "${quizConfig.questionCount} questions · ${quizConfig.difficulty.lowercase()}" +
+                    (chosenGroup?.let { " · ${it.name}" } ?: ""),
                   style = MaterialTheme.typography.bodySmall,
                   color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -141,10 +148,34 @@ fun QuizScreen(
 
           Spacer(modifier = Modifier.height(12.dp))
           Text(
-            text = "Questions from your topics, weakest first.",
+            text = if (chosenGroup != null) "Questions from ${chosenGroup.name}, weakest topics first." else "Questions from all your topics, weakest first.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
           )
+
+          if (subjectGroups.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(
+              modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+              horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+              FilterChip(
+                selected = chosenGroup == null,
+                onClick = { viewModel.updateQuizConfig(quizConfig.copy(subjectId = null)) },
+                label = { Text("All subjects", maxLines = 1, softWrap = false) },
+                shape = RoundedCornerShape(10.dp)
+              )
+              subjectGroups.forEach { group ->
+                FilterChip(
+                  selected = chosenGroup?.id == group.id,
+                  onClick = { viewModel.updateQuizConfig(quizConfig.copy(subjectId = if (chosenGroup?.id == group.id) null else group.id)) },
+                  label = { Text("${group.name} (${group.topics.size})", maxLines = 1, softWrap = false) },
+                  enabled = group.topics.isNotEmpty(),
+                  shape = RoundedCornerShape(10.dp)
+                )
+              }
+            }
+          }
 
           Spacer(modifier = Modifier.height(16.dp))
           Row(
@@ -153,7 +184,7 @@ fun QuizScreen(
           ) {
             Button(
               onClick = { viewModel.startWeekendQuiz(forceWeakOnly = false) },
-              enabled = !isAiLoading && topics.isNotEmpty(),
+              enabled = !isAiLoading && quizTopics.isNotEmpty(),
               shape = RoundedCornerShape(12.dp),
               contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 6.dp),
               modifier = Modifier

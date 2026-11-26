@@ -1,5 +1,9 @@
 package com.example.ui.screens
 
+import com.example.platform.PlatformBackHandler
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SegmentedButton
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -93,6 +97,10 @@ fun TopicsScreen(
   var searchQuery by remember { mutableStateOf("") }
   var selectedSubjectFilter by remember { mutableStateOf<Long?>(null) }
   var selectedMasteryFilter by remember { mutableStateOf<String?>(null) }
+  // Subjects (the default) or every topic in one list; a subject opens to show its topics.
+  var showAllTopics by remember { mutableStateOf(false) }
+  var openSubjectId by remember { mutableStateOf<Long?>(null) }
+  var showAddSubjectDialog by remember { mutableStateOf(false) }
 
   var showAddDialog by remember { mutableStateOf(showAddDialogOnInit) }
   var detailTopic by remember { mutableStateOf<StudyTopic?>(null) }
@@ -130,79 +138,136 @@ fun TopicsScreen(
         .fillMaxSize()
         .padding(padding)
     ) {
-      // Search Bar
-      OutlinedTextField(
-        value = searchQuery,
-        onValueChange = { searchQuery = it },
-        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-        trailingIcon = {
-          if (searchQuery.isNotBlank()) {
-            IconButton(onClick = { searchQuery = "" }) {
-              Icon(Icons.Default.Clear, contentDescription = "Clear")
-            }
-          }
-        },
-        placeholder = { Text("Search topics, keywords, notes...") },
-        shape = RoundedCornerShape(14.dp),
-        modifier = Modifier
-          .fillMaxWidth()
-          .padding(horizontal = 16.dp, vertical = 8.dp),
-        singleLine = true
-      )
+      val groups = remember(subjects, topics) { groupTopicsBySubject(subjects, topics) }
+      val openGroup = openSubjectId?.let { id ->
+        groups.firstOrNull { it.id == id } ?: if (id == SubjectGroup.GENERAL_ID) SubjectGroup.general(emptyList()) else null
+      }
+      PlatformBackHandler(enabled = openGroup != null) { openSubjectId = null }
 
-      // Smooth horizontal scrolling Subject Filter Chips
-      LazyRow(
-        modifier = Modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-      ) {
-        item {
-          FilterChip(
-            selected = selectedSubjectFilter == null,
-            onClick = { selectedSubjectFilter = null },
-            label = { Text("All (${topics.size})") },
-            shape = RoundedCornerShape(10.dp)
-          )
-        }
-        items(subjects, key = { it.id }) { sub ->
-          val count = topics.count { it.subjectId == sub.id }
-          FilterChip(
-            selected = selectedSubjectFilter == sub.id,
-            onClick = {
-              selectedSubjectFilter = if (selectedSubjectFilter == sub.id) null else sub.id
-            },
-            label = { Text("${sub.code} ($count)") },
-            shape = RoundedCornerShape(10.dp)
-          )
+      if (openGroup == null) {
+        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+          listOf(false to "Subjects", true to "All topics").forEachIndexed { index, (all, label) ->
+            SegmentedButton(
+              selected = showAllTopics == all,
+              onClick = { showAllTopics = all },
+              shape = SegmentedButtonDefaults.itemShape(index, 2)
+            ) { Text(label) }
+          }
         }
       }
 
-      Spacer(modifier = Modifier.height(8.dp))
-
-      if (filteredTopics.isEmpty()) {
-        EmptyState(
-          icon = Icons.Default.Book,
-          title = "No topics found",
-          description = "Add what you studied after each lecture.",
-          actionButton = {
-            Button(onClick = { showAddDialog = true }, shape = RoundedCornerShape(12.dp)) {
-              Text("Add topic")
+      when {
+        openGroup != null -> {
+          SubjectHeader(
+            group = openGroup,
+            quizBusy = isAiLoading,
+            onBack = { openSubjectId = null },
+            onQuiz = { viewModel.startSubjectQuiz(openGroup.id, openGroup.name) },
+            onAddTopic = { showAddDialog = true }
+          )
+          if (openGroup.topics.isEmpty()) {
+            EmptyState(
+              icon = Icons.Default.Book,
+              title = "No topics in ${openGroup.name} yet",
+              description = "Add what you covered in this course, or move topics here from their details.",
+              actionButton = {
+                Button(onClick = { showAddDialog = true }, shape = RoundedCornerShape(12.dp)) { Text("Add topic") }
+              }
+            )
+          } else {
+            LazyColumn(
+              modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp),
+              verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+              items(openGroup.topics, key = { it.id }) { topic ->
+                TopicCard(topic = topic, onClick = { detailTopic = topic }, onDelete = { viewModel.deleteTopic(topic.id) })
+              }
             }
           }
+        }
+        !showAllTopics -> SubjectsGrid(
+          groups = groups,
+          quizBusy = isAiLoading,
+          onOpen = { openSubjectId = it.id },
+          onQuiz = { viewModel.startSubjectQuiz(it.id, it.name) },
+          onAddSubject = { showAddSubjectDialog = true }
         )
-      } else {
-        LazyColumn(
-          modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-          verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-          items(filteredTopics, key = { it.id }) { topic ->
-            TopicCard(
-              topic = topic,
-              onClick = { detailTopic = topic },
-              onDelete = { viewModel.deleteTopic(topic.id) }
+        else -> {
+          // Search Bar
+          OutlinedTextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+            trailingIcon = {
+              if (searchQuery.isNotBlank()) {
+                IconButton(onClick = { searchQuery = "" }) {
+                  Icon(Icons.Default.Clear, contentDescription = "Clear")
+                }
+              }
+            },
+            placeholder = { Text("Search topics, keywords, notes...") },
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier
+              .fillMaxWidth()
+              .padding(horizontal = 16.dp, vertical = 8.dp),
+            singleLine = true
+          )
+
+          // Smooth horizontal scrolling Subject Filter Chips
+          LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+          ) {
+            item {
+              FilterChip(
+                selected = selectedSubjectFilter == null,
+                onClick = { selectedSubjectFilter = null },
+                label = { Text("All (${topics.size})") },
+                shape = RoundedCornerShape(10.dp)
+              )
+            }
+            items(subjects, key = { it.id }) { sub ->
+              val count = topics.count { it.subjectId == sub.id }
+              FilterChip(
+                selected = selectedSubjectFilter == sub.id,
+                onClick = {
+                  selectedSubjectFilter = if (selectedSubjectFilter == sub.id) null else sub.id
+                },
+                label = { Text("${sub.code} ($count)") },
+                shape = RoundedCornerShape(10.dp)
+              )
+            }
+          }
+
+          Spacer(modifier = Modifier.height(8.dp))
+
+          if (filteredTopics.isEmpty()) {
+            EmptyState(
+              icon = Icons.Default.Book,
+              title = "No topics found",
+              description = "Add what you studied after each lecture.",
+              actionButton = {
+                Button(onClick = { showAddDialog = true }, shape = RoundedCornerShape(12.dp)) {
+                  Text("Add topic")
+                }
+              }
             )
+          } else {
+            LazyColumn(
+              modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+              verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+              items(filteredTopics, key = { it.id }) { topic ->
+                TopicCard(
+                  topic = topic,
+                  onClick = { detailTopic = topic },
+                  onDelete = { viewModel.deleteTopic(topic.id) }
+                )
+              }
+            }
           }
         }
       }
@@ -210,9 +275,20 @@ fun TopicsScreen(
   }
 
   // Add Topic Dialog (3 input methods: Manual, Upload, Paste)
+  if (showAddSubjectDialog) {
+    AddSubjectDialog(
+      onDismiss = { showAddSubjectDialog = false },
+      onConfirm = { name, code ->
+        viewModel.addSubject(name, code, SUBJECT_COLORS[subjects.size % SUBJECT_COLORS.size])
+        showAddSubjectDialog = false
+      }
+    )
+  }
+
   if (showAddDialog) {
     AddTopicDialog(
       subjects = subjects,
+      initialSubjectId = openSubjectId,
       onDismiss = { showAddDialog = false },
       onConfirm = { subjectId, subjectName, title, notes, sourceType, fileName, generateQuestions ->
         viewModel.addTopic(
@@ -233,6 +309,11 @@ fun TopicsScreen(
   detailTopic?.let { topic ->
     TopicDetailDialog(
       topic = topic,
+      subjects = subjects,
+      onMoveToSubject = { subject ->
+        viewModel.moveTopicToSubject(topic, subject)
+        detailTopic = topic.copy(subjectId = subject?.id ?: SubjectGroup.GENERAL_ID, subjectName = subject?.name ?: "General")
+      },
       isAiLoading = isAiLoading,
       onDismiss = { detailTopic = null },
       onSummarizeAi = {
@@ -351,11 +432,15 @@ fun TopicCard(
 @Composable
 fun AddTopicDialog(
   subjects: List<Subject>,
+  /** Subject to start with: an opened subject, [SubjectGroup.GENERAL_ID] for none, or null for the first. */
+  initialSubjectId: Long? = null,
   onDismiss: () -> Unit,
   onConfirm: (Long, String, String, String, String, String?, Boolean) -> Unit
 ) {
   var selectedTab by remember { mutableIntStateOf(0) } // 0: Manual, 1: Upload Materials, 2: Paste Lecture Notes
-  var selectedSubject by remember { mutableStateOf(subjects.firstOrNull()) }
+  var selectedSubject by remember {
+    mutableStateOf(if (initialSubjectId == null) subjects.firstOrNull() else subjects.firstOrNull { it.id == initialSubjectId })
+  }
   var title by remember { mutableStateOf("") }
   var manualNotes by remember { mutableStateOf("") }
   var pastedNotes by remember { mutableStateOf("") }
@@ -402,7 +487,7 @@ fun AddTopicDialog(
           onExpandedChange = { expandedDropdown = !expandedDropdown }
         ) {
           OutlinedTextField(
-            value = selectedSubject?.name ?: "Select Subject",
+            value = selectedSubject?.name ?: "General (no subject)",
             onValueChange = {},
             readOnly = true,
             label = { Text("Subject") },
@@ -425,6 +510,13 @@ fun AddTopicDialog(
                 }
               )
             }
+            DropdownMenuItem(
+              text = { Text("General (no subject)") },
+              onClick = {
+                selectedSubject = null
+                expandedDropdown = false
+              }
+            )
           }
         }
 
@@ -494,8 +586,8 @@ fun AddTopicDialog(
       Button(
         onClick = {
           if (title.isNotBlank()) {
-            val subName = selectedSubject?.name ?: "General Study"
-            val subId = selectedSubject?.id ?: 1L
+            val subName = selectedSubject?.name ?: "General"
+            val subId = selectedSubject?.id ?: SubjectGroup.GENERAL_ID
             val (notes, type, fileName) = when (selectedTab) {
               0 -> Triple(manualNotes.ifBlank { "Studied core concepts of $title." }, "MANUAL", null)
               1 -> Triple(uploadedFileContent.ifBlank { "Uploaded slides on $title." }, "UPLOAD", uploadedFileName)
@@ -517,9 +609,12 @@ fun AddTopicDialog(
   )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TopicDetailDialog(
   topic: StudyTopic,
+  subjects: List<Subject> = emptyList(),
+  onMoveToSubject: (Subject?) -> Unit = {},
   isAiLoading: Boolean,
   onDismiss: () -> Unit,
   onSummarizeAi: () -> Unit,
@@ -545,10 +640,44 @@ fun TopicDetailDialog(
       ) {
         item {
           Text(
-            text = "${topic.subjectName} • Recorded ${topic.dateStudied}",
+            text = "Recorded ${topic.dateStudied}",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
           )
+        }
+
+        item {
+          var expanded by remember { mutableStateOf(false) }
+          val current = subjects.firstOrNull { it.id == topic.subjectId }
+          ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
+            OutlinedTextField(
+              value = current?.name ?: "General (no subject)",
+              onValueChange = {},
+              readOnly = true,
+              label = { Text("Subject") },
+              trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+              shape = RoundedCornerShape(12.dp),
+              modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable)
+            )
+            ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+              subjects.forEach { sub ->
+                DropdownMenuItem(
+                  text = { Text(sub.name) },
+                  onClick = {
+                    expanded = false
+                    if (sub.id != topic.subjectId) onMoveToSubject(sub)
+                  }
+                )
+              }
+              DropdownMenuItem(
+                text = { Text("General (no subject)") },
+                onClick = {
+                  expanded = false
+                  if (current != null) onMoveToSubject(null)
+                }
+              )
+            }
+          }
         }
 
         item {
