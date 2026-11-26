@@ -22,7 +22,10 @@ object PlainMath {
     "in" to "∈", "notin" to "∉", "subset" to "⊂", "subseteq" to "⊆", "supset" to "⊃", "cup" to "∪",
     "cap" to "∩", "emptyset" to "∅", "forall" to "∀", "exists" to "∃", "neg" to "¬", "land" to "∧",
     "lor" to "∨", "circ" to "∘", "degree" to "°", "ldots" to "…", "cdots" to "⋯", "dots" to "…",
-    "langle" to "⟨", "rangle" to "⟩", "quad" to " ", "qquad" to "  ", "," to " ", ";" to " ", "!" to ""
+    "langle" to "⟨", "rangle" to "⟩", "quad" to " ", "qquad" to "  ", "," to " ", ";" to " ", "!" to "",
+    // Function names are written as plain words.
+    "log" to "log", "ln" to "ln", "lg" to "lg", "exp" to "exp", "sin" to "sin", "cos" to "cos", "tan" to "tan",
+    "lim" to "lim", "max" to "max", "min" to "min", "det" to "det", "gcd" to "gcd", "mod" to "mod", "bmod" to "mod"
   )
   private val SUPERSCRIPTS = mapOf(
     '0' to '⁰', '1' to '¹', '2' to '²', '3' to '³', '4' to '⁴', '5' to '⁵', '6' to '⁶', '7' to '⁷',
@@ -73,5 +76,10 @@ object PlainMath {
   }
 
   private fun looksLikeMath(inner: String) =
-    inner.length <= 3 || inner.any { it == '\\' || it == '^' || it == '_' || it == '=' || it == '{' }
+    inner.length <= 3 ||
+      inner.any { it == '\\' || it == '^' || it == '_' || it == '=' || it == '{' } ||
+      BIG_O.matches(inner)
+
+  /** "O(1)", "O(n log n)", "Θ(n²)" and similar. */
+  private val BIG_O = Regex("""[OΘΩoθω]\([^()$]{1,20}\)""")
 }

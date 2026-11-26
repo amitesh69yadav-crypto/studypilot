@@ -183,6 +183,8 @@ class LocalModelsTest {
     // Prices and ordinary text are untouched.
     assertEquals("It costs \$5 and \$10.", PlainMath.convert("It costs \$5 and \$10."))
     assertEquals("No maths here.", PlainMath.convert("No maths here."))
+    // Seen from Gemma on a real phone: big-O notation and \log.
+    assertEquals("O(log n) inserts and O(1) peeks", PlainMath.convert("O(\\log n) inserts and \$O(1)\$ peeks"))
     // Seen from Gemma on a real phone: a Greek letter run into the variable name.
     assertEquals("Av = λv.", PlainMath.convert("Av = \\lambdav."))
   }

@@ -540,6 +540,19 @@ private fun ChatTabContent(
 ) {
   val context = LocalContext.current
 
+  val questionForAnswer = remember(messages) {
+    buildMap {
+      var question: String? = null
+      for (m in messages) {
+        if (m.role == "user") {
+          if (!m.text.contains(FOLLOW_UP_MARKER)) question = m.text
+        } else if (question != null) {
+          put(m.id, question)
+        }
+      }
+    }
+  }
+
   Column(modifier = Modifier.fillMaxSize()) {
     // Subject Active Banner (if a subject is selected)
     if (selectedSubject != null) {
@@ -742,6 +755,7 @@ private fun ChatTabContent(
       items(messages, key = { it.id }) { msg ->
         ChatMessageBubble(
           message = msg,
+          sourceQuestion = questionForAnswer[msg.id],
           importedChats = importedChats,
           extractedConcepts = extractedConcepts,
           selectedSubject = selectedSubject,
@@ -760,6 +774,10 @@ private fun ChatTabContent(
           },
           onTopicClick = { topic ->
             viewModel.sendChatMessage(topic)
+          },
+          onFollowUp = { request ->
+            // Answer about this message's question, not whatever was asked last.
+            viewModel.sendChatMessage(request, replyingTo = msg.id)
           }
         )
       }
@@ -1176,7 +1194,9 @@ private fun ChatMessageBubble(
   selectedSubject: Subject?,
   onCopy: () -> Unit,
   onOpenUrl: (String) -> Unit,
-  onTopicClick: (String) -> Unit
+  onTopicClick: (String) -> Unit,
+  sourceQuestion: String? = null,
+  onFollowUp: (String) -> Unit = onTopicClick
 ) {
   val isUser = message.role == "user"
   val timeStr = remember(message.timestamp) {
@@ -1376,9 +1396,10 @@ private fun ChatMessageBubble(
                 chat.sourceUrl.isNotBlank() && urls.any { it.equals(chat.sourceUrl.trim(), ignoreCase = true) }
               }?.title
             }
-            val detectedTopic = remember(message.text, linkedChatTitle, linkScopedTopics) {
+            val detectedTopic = remember(message.text, linkedChatTitle, linkScopedTopics, sourceQuestion) {
               linkedChatTitle?.takeIf { it.isNotBlank() }
                 ?: com.example.data.ai.LocalAiEngine.extractTopicFromMessage(message.text)
+                ?: sourceQuestion?.let { "\"${questionLabel(it)}\"" }
                 ?: linkScopedTopics.firstOrNull()
             }
 
@@ -1394,7 +1415,7 @@ private fun ChatMessageBubble(
                 modifier = Modifier.clickable {
                   val query = if (detectedTopic != null) "Give another example of $detectedTopic. Answer only with the alternative example and its walkthrough."
                               else "Give another example. Answer only with the new example and walkthrough."
-                  onTopicClick(query)
+                  onFollowUp(query)
                 }
               ) {
                 Row(
@@ -1417,7 +1438,7 @@ private fun ChatMessageBubble(
                 modifier = Modifier.clickable {
                   val query = if (detectedTopic != null) "Show an example in code for $detectedTopic. Answer only with the code implementation and explanation."
                               else "Show an example in code. Answer only with the code and explanation."
-                  onTopicClick(query)
+                  onFollowUp(query)
                 }
               ) {
                 Row(
@@ -1440,7 +1461,7 @@ private fun ChatMessageBubble(
                 modifier = Modifier.clickable {
                   val query = if (detectedTopic != null) "Show another example in code for $detectedTopic. Answer only with the alternative code implementation and explanation."
                               else "Show another example in code. Answer only with the alternative code and explanation."
-                  onTopicClick(query)
+                  onFollowUp(query)
                 }
               ) {
                 Row(
@@ -1463,7 +1484,7 @@ private fun ChatMessageBubble(
                 modifier = Modifier.clickable {
                   val query = if (detectedTopic != null) "Summarize $detectedTopic. Answer only with a concise summary and key takeaways."
                               else "Summarize this. Answer only with a concise summary."
-                  onTopicClick(query)
+                  onFollowUp(query)
                 }
               ) {
                 Row(
@@ -1486,7 +1507,7 @@ private fun ChatMessageBubble(
                 modifier = Modifier.clickable {
                   val query = if (detectedTopic != null) "Explain the example of $detectedTopic. Answer only with a step-by-step walkthrough of the example."
                               else "Explain the example. Answer only with a step-by-step walkthrough."
-                  onTopicClick(query)
+                  onFollowUp(query)
                 }
               ) {
                 Row(
@@ -1660,4 +1681,15 @@ private fun extractRelatedTopics(content: String): List<String> {
     }
   }
   return topics.distinct().take(6)
+}
+
+/** Every follow-up button request ends with this phrase; used to find the question it refers to. */
+private const val FOLLOW_UP_MARKER = "Answer only with"
+
+/** The question part of a message: up to the first "?" and at most 80 characters. */
+private fun questionLabel(text: String): String {
+  val trimmed = text.trim()
+  val end = trimmed.indexOf('?')
+  val question = if (end in 1..79) trimmed.substring(0, end) else trimmed.take(80)
+  return question.trim().trimEnd('.', '!', '?')
 }

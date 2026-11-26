@@ -1171,12 +1171,18 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
     startNewTutorChat(_selectedTutorSubject.value)
   }
 
-  fun sendChatMessage(text: String) {
+  /**
+   * Sends a message to the tutor. [replyingTo] is the id of an earlier answer when the user tapped a
+   * follow-up button on it ("Explain example", "Summarize", ...): the reply is then generated from the
+   * conversation up to that answer only, so it is about that question rather than the latest one.
+   */
+  fun sendChatMessage(text: String, replyingTo: String? = null) {
     val trimmed = text.trim()
     if (trimmed.isBlank() || _isChatLoading.value) return
 
-    val currentHistory = _chatMessages.value + ChatMessage(role = "user", text = trimmed)
-    _chatMessages.value = currentHistory
+    val userMessage = ChatMessage(role = "user", text = trimmed)
+    _chatMessages.value = _chatMessages.value + userMessage
+    val currentHistory = followUpContext(_chatMessages.value.dropLast(1), replyingTo) + userMessage
 
     viewModelScope.launch {
       _isChatLoading.value = true
@@ -1285,6 +1291,13 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
         refreshActiveAi()
       }
     }
+  }
+
+  /** The conversation up to and including [answerId], or all of it when there's no such answer. */
+  internal fun followUpContext(history: List<ChatMessage>, answerId: String?): List<ChatMessage> {
+    if (answerId == null) return history
+    val index = history.indexOfFirst { it.id == answerId }
+    return if (index < 0) history else history.subList(0, index + 1)
   }
 
   /** Adds the reply bubble, or updates it in place while it streams. */
