@@ -1,5 +1,6 @@
 package com.example.ui.viewmodel
 
+import kotlinx.coroutines.Job
 import com.example.data.sync.SyncEvents
 import androidx.lifecycle.ViewModel
 import com.example.data.ai.StudyAi
@@ -1860,7 +1861,11 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
   fun startSubjectQuiz(subjectId: Long, subjectName: String) =
     startWeekendQuiz(filterSubjectId = subjectId, title = "$subjectName quiz")
 
+  /** Writing the next quiz's questions in the background, after a quiz is submitted. */
+  private var lookAhead: Job? = null
+
   fun startWeekendQuiz(forceWeakOnly: Boolean = false, filterSubjectId: Long? = null, title: String? = null) {
+    lookAhead?.cancel() // the quiz being made now writes what it needs
     viewModelScope.launch {
       _isAiLoading.value = true
       try {
@@ -1985,6 +1990,15 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
           isEvaluating = false
         )
         _snackbarMessage.emit("Score: ${attempt.scorePercentage}%")
+
+        // Next time these topics should have new questions waiting.
+        val perTopic = current.questions.groupingBy { it.topicId }.eachCount().values.maxOrNull()?.coerceIn(1, 5) ?: 2
+        val config = _quizConfig.value
+        val userId = _currentUser.value.id
+        lookAhead?.cancel()
+        lookAhead = viewModelScope.launch {
+          runCatching { repository.prepareNextQuestions(current.testedTopics, perTopic, config, userId) }
+        }
       } catch (e: Exception) {
         _activeQuizState.value = _activeQuizState.value.copy(isEvaluating = false)
         _snackbarMessage.emit("Couldn't score the quiz. Try submitting again.")

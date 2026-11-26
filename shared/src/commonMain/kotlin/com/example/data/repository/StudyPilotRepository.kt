@@ -1,5 +1,8 @@
 package com.example.data.repository
 
+import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.currentCoroutineContext
 import com.example.data.ai.LocalAiEngine
 import com.example.data.ai.ChatKnowledgeExtractor
 import com.example.data.local.StudyPilotDao
@@ -749,117 +752,38 @@ class StudyPilotRepository(
     // 10 questions over 6 topics is 2,2,2,2,1,1, not 1 each.
     val oneMoreFor = if (targetTopicList.size >= maxQuestions) 0 else maxQuestions % targetTopicList.size
 
-    val targetIds = targetTopicList.map { it.id }
-    val cachedByTopicId = if (targetIds.isNotEmpty()) {
-      // Placeholder questions saved when no model was reachable are dropped, so a model can do better now.
-      val (placeholders, usable) = dao.getQuestionsForTopicIds(targetIds).partition { LocalAiEngine.isGenericTemplate(it) }
-      if (placeholders.isNotEmpty()) dao.deleteQuestionsByIds(placeholders.map { it.id })
-      usable.groupBy { it.topicId }
-    } else emptyMap()
+    val history = askedHistory(userId)
+    val distractors = LocalAiEngine.distractorPool(allTopicsList)
+    val concepts = conceptsFor(userId, targetTopicList)
 
-    val importedTitles = targetTopicList
-      .filter { it.sourceType == "IMPORTED_CHAT" }
-      .map { it.title }
-      .distinct()
-    // Topics made from a chat are named after the concept, so match on the concept's name.
-    val conceptsByTopicTitle = if (importedTitles.isNotEmpty()) {
-      dao.getConceptsByNames(userId, importedTitles).associateBy { it.conceptName }
-    } else emptyMap()
-
-    // Plan slots greedily up front so missing topics can be generated in parallel
-    data class TopicPlan(
-      val topic: StudyTopic,
-      val cachedUsable: List<QuizQuestion>,
-      val stillNeeded: Int
-    )
-
-    val plans = mutableListOf<TopicPlan>()
-    var plannedCount = 0
-    var firstUnplannedIndex = 0
+    // How many questions each topic gives: the count is spread, weakest topics first.
+    val needs = LinkedHashMap<StudyTopic, Int>()
+    var planned = 0
     for ((index, topic) in targetTopicList.withIndex()) {
-      if (plannedCount >= maxQuestions) {
-        firstUnplannedIndex = index
-        break
-      }
-      val cached = cachedByTopicId[topic.id].orEmpty()
-      val usableCached = cached.filter { q ->
-        (config.difficulty == "MIXED" || q.difficulty.equals(config.difficulty, ignoreCase = true)) &&
-          (config.questionTypes.isEmpty() || config.questionTypes.contains(q.questionType))
-      }
-      val needed = (maxQuestions - plannedCount).coerceAtMost(questionsPerTopic + if (index < oneMoreFor) 1 else 0)
-      val takeCached = usableCached.take(needed)
-      val stillNeeded = needed - takeCached.size
-      plans.add(TopicPlan(topic, takeCached, stillNeeded))
-      plannedCount += takeCached.size + stillNeeded
-      firstUnplannedIndex = index + 1
+      if (planned >= maxQuestions) break
+      val n = (maxQuestions - planned).coerceAtMost(questionsPerTopic + if (index < oneMoreFor) 1 else 0)
+      needs[topic] = n
+      planned += n
     }
 
-    val allNewlyGenerated = mutableListOf<QuizQuestion>()
-    val generatedByTopicId: Map<Long, List<QuizQuestion>> = coroutineScope {
-      plans.filter { it.stillNeeded > 0 }.map { plan ->
-        async {
-          val matchingConcept = if (plan.topic.sourceType == "IMPORTED_CHAT") {
-            conceptsByTopicTitle[plan.topic.title]
-          } else null
-          val generated = if (matchingConcept != null) {
-            // Filed under the topic so they're reused next time and count towards its mastery.
-            ai.generateQuestionsForConcept(matchingConcept, plan.stillNeeded, config.difficulty).map { it.copy(topicId = plan.topic.id) }
-          } else {
-            ai.generateQuestionsForTopic(plan.topic, plan.stillNeeded, config.difficulty)
-          }
-          plan.topic.id to generated
-        }
-      }.awaitAll().toMap()
-    }
-
-    val selectedTopics = mutableListOf<StudyTopic>()
-    val assembledQuestions = mutableListOf<QuizQuestion>()
-
-    for (plan in plans) {
-      val gen = generatedByTopicId[plan.topic.id].orEmpty()
-      if (gen.isNotEmpty()) allNewlyGenerated.addAll(gen)
-      // Saved questions are labelled with the topic as it is now (it may have moved subject or been renamed).
-      val chosen = (plan.cachedUsable + gen.take(plan.stillNeeded)).map { it.copy(subjectName = plan.topic.subjectName, topicTitle = plan.topic.title) }
-      if (chosen.isNotEmpty()) {
-        selectedTopics.add(plan.topic)
-        assembledQuestions.addAll(chosen)
-      }
-    }
-
-    // Backfill if any planned topic returned fewer questions than requested
-    var idx = firstUnplannedIndex
-    while (assembledQuestions.size < maxQuestions && idx < targetTopicList.size) {
-      val topic = targetTopicList[idx++]
-      val usableCached = cachedByTopicId[topic.id].orEmpty().filter { q ->
-        (config.difficulty == "MIXED" || q.difficulty.equals(config.difficulty, ignoreCase = true)) &&
-          (config.questionTypes.isEmpty() || config.questionTypes.contains(q.questionType))
-      }
-      val needed = (maxQuestions - assembledQuestions.size).coerceAtMost(questionsPerTopic)
-      val chosenForTopic = usableCached.take(needed).map { it.copy(subjectName = topic.subjectName, topicTitle = topic.title) }.toMutableList()
-      val stillNeeded = needed - chosenForTopic.size
-      if (stillNeeded > 0) {
-        val matchingConcept = if (topic.sourceType == "IMPORTED_CHAT") {
-          conceptsByTopicTitle[topic.title]
-        } else null
-        val generated = if (matchingConcept != null) {
-          ai.generateQuestionsForConcept(matchingConcept, stillNeeded, config.difficulty).map { it.copy(topicId = topic.id) }
-        } else {
-          ai.generateQuestionsForTopic(topic, stillNeeded, config.difficulty)
-        }
-        if (generated.isNotEmpty()) {
-          allNewlyGenerated.addAll(generated)
-          chosenForTopic.addAll(generated.take(stillNeeded))
+    val picked: List<Pair<StudyTopic, List<QuizQuestion>>> = coroutineScope {
+      needs.map { (topic, n) -> async { topic to pickQuestions(topic, n, config, history, concepts[topic.title], distractors) } }.awaitAll()
+    }.toMutableList().also { list ->
+      // A topic that came up short: take more from the topics that weren't needed.
+      var total = list.sumOf { it.second.size }
+      for (topic in targetTopicList.drop(needs.size)) {
+        if (total >= maxQuestions) break
+        val more = pickQuestions(topic, (maxQuestions - total).coerceAtMost(questionsPerTopic), config, history, concepts[topic.title], distractors)
+        if (more.isNotEmpty()) {
+          list.add(topic to more)
+          total += more.size
         }
       }
-      if (chosenForTopic.isNotEmpty()) {
-        selectedTopics.add(topic)
-        assembledQuestions.addAll(chosenForTopic)
-      }
     }
 
-    if (allNewlyGenerated.isNotEmpty()) {
-      dao.insertQuestions(allNewlyGenerated)
-    }
+    val selectedTopics = picked.filter { it.second.isNotEmpty() }.map { it.first }
+    val assembledQuestions = picked.flatMap { it.second }.shuffled()
+    rememberServed(assembledQuestions)
 
     val selectedIds = selectedTopics.map { it.id }.toSet()
     val queuedUntested = eligibleTopics.filter { !selectedIds.contains(it.id) }
@@ -871,6 +795,171 @@ class StudyPilotRepository(
       queuedUntestedTopics = queuedUntested,
       isAllCovered = isAllCovered
     )
+  }
+
+  // --- Which questions a quiz gets ---
+
+  /**
+   * A model works through requests one at a time; sending a quiz's worth at once leaves the last ones
+   * waiting past the timeout. Two at a time keeps the model busy without that.
+   */
+  private val modelSlots = kotlinx.coroutines.sync.Semaphore(2)
+
+  /** Questions served this session (newest last), so leaving a quiz early still moves on to new ones. */
+  private val recentlyServed = LinkedHashSet<String>()
+
+  private fun rememberServed(questions: List<QuizQuestion>) = synchronized(recentlyServed) {
+    questions.forEach { q ->
+      val key = LocalAiEngine.questionKey(q)
+      recentlyServed.remove(key)
+      recentlyServed.add(key)
+    }
+  }
+
+  /**
+   * When each question was last asked, as a rank (higher is more recent): from finished quizzes,
+   * which sync between devices, then this session's quizzes.
+   */
+  private suspend fun askedHistory(userId: String): Map<String, Int> {
+    val attempts = (if (userId.isNotBlank()) dao.getQuizAttemptsForUser(userId) else dao.getAllQuizAttempts()).first()
+    val rank = HashMap<String, Int>()
+    var n = 0
+    for (attempt in attempts.sortedBy { it.id }) {
+      n++
+      runCatching { org.json.JSONArray(attempt.detailsJson.ifBlank { "[]" }) }.getOrNull()?.let { arr ->
+        for (i in 0 until arr.length()) {
+          val k = arr.optJSONObject(i)?.optString("k")?.takeIf { it.isNotBlank() } ?: continue
+          // Early records kept "question|answer" for every question.
+          rank[if (k.startsWith("which of these is from your")) k else k.substringBefore("|")] = n
+        }
+      }
+    }
+    synchronized(recentlyServed) { recentlyServed.forEach { rank[it] = ++n } }
+    return rank
+  }
+
+  private suspend fun conceptsFor(userId: String, topics: List<StudyTopic>): Map<String, ExtractedConcept> {
+    // Topics made from a chat are named after the concept, so match on the concept's name.
+    val titles = topics.filter { it.sourceType == "IMPORTED_CHAT" }.map { it.title }.distinct()
+    return if (titles.isEmpty()) emptyMap() else dao.getConceptsByNames(userId, titles).associateBy { it.conceptName }
+  }
+
+  private fun fits(q: QuizQuestion, config: QuizConfig) =
+    (config.difficulty == "MIXED" || q.difficulty.equals(config.difficulty, ignoreCase = true)) &&
+      (config.questionTypes.isEmpty() || q.questionType in config.questionTypes)
+
+  /** The topic's saved questions that fit [config]; placeholders from a time without a model are deleted. */
+  private suspend fun savedQuestions(topic: StudyTopic, config: QuizConfig): List<QuizQuestion> {
+    val (placeholders, real) = dao.getQuestionsForTopicIds(listOf(topic.id)).partition { LocalAiEngine.isGenericTemplate(it) }
+    if (placeholders.isNotEmpty()) dao.deleteQuestionsByIds(placeholders.map { it.id })
+    return real.filter { fits(it, config) }
+  }
+
+  /**
+   * [n] questions on [topic]: ones never asked first, then newly written ones (the model is told
+   * what already exists), then the ones asked longest ago.
+   */
+  private suspend fun pickQuestions(
+    topic: StudyTopic,
+    n: Int,
+    config: QuizConfig,
+    history: Map<String, Int>,
+    concept: ExtractedConcept?,
+    distractors: List<Pair<Long, String>>
+  ): List<QuizQuestion> {
+    if (n <= 0) return emptyList()
+    val saved = savedQuestions(topic, config)
+    // Not asked before, not even reworded.
+    val askedWords = history.keys.map { LocalAiEngine.keyWords(it.substringBefore("|")) }
+    val chosen = saved
+      .filter { LocalAiEngine.questionKey(it) !in history && !LocalAiEngine.isNearDuplicate(it.questionText, askedWords) }
+      .shuffled().take(n).toMutableList()
+    if (chosen.size < n) chosen += writeNewQuestions(topic, n - chosen.size, config, saved, history.keys, concept, distractors)
+    if (chosen.size < n) {
+      val chosenIds = chosen.mapTo(HashSet()) { it.id }
+      chosen += saved.filter { it.id !in chosenIds }.sortedBy { history[LocalAiEngine.questionKey(it)] ?: 0 }.take(n - chosen.size)
+    }
+    // Labelled with the topic as it is now (it may have moved subject or been renamed).
+    return chosen.map { it.copy(subjectName = topic.subjectName, topicTitle = topic.title) }
+  }
+
+  /**
+   * Writes and saves up to [count] questions on [topic] that differ from [existing]. Uses the model,
+   * else multiple choice built from the material. Saved questions get their ids, which the quiz
+   * screen keys answers by.
+   */
+  private suspend fun writeNewQuestions(
+    topic: StudyTopic,
+    count: Int,
+    config: QuizConfig,
+    existing: List<QuizQuestion>,
+    asked: Set<String>,
+    concept: ExtractedConcept?,
+    distractors: List<Pair<Long, String>>
+  ): List<QuizQuestion> {
+    val known = existing.mapTo(HashSet()) { LocalAiEngine.questionKey(it) } + asked
+    val avoid = existing.map { it.questionText }
+    val fromModel = modelSlots.withPermit {
+      // A few spare, since some come back as repeats of what the student already had.
+      val ask = if (avoid.isEmpty()) count else (count + 2).coerceAtMost(6)
+      if (concept != null) {
+        ai.modelQuestionsForConcept(concept, ask, config.difficulty, config.questionTypes, avoid).map { it.copy(topicId = topic.id) }
+      } else {
+        ai.modelQuestionsForTopic(topic, ask, config.difficulty, config.questionTypes, avoid)
+      }
+    }
+    // Drop the model's repeats, reworded ones included, and repeats within its own reply.
+    val knownWords = (existing.map { LocalAiEngine.keyWords(it.questionText) } + asked.map { LocalAiEngine.keyWords(it.substringBefore("|")) }).toMutableList()
+    var fresh = fromModel.filter { q ->
+      val isNew = LocalAiEngine.questionKey(q) !in known && !LocalAiEngine.isNearDuplicate(q.questionText, knownWords)
+      if (isNew) knownWords.add(LocalAiEngine.keyWords(q.questionText))
+      isNew
+    }
+    if (fresh.size < count) {
+      val local = buildList {
+        if (concept != null) {
+          // It cycles through question types; ask for extra and keep the allowed ones.
+          addAll(LocalAiEngine.generateLocalQuizQuestionsForConcept(concept, count * 4, config.difficulty).filter { fits(it, config) })
+        }
+        if (config.questionTypes.isEmpty() || StudyAi.MCQ in config.questionTypes) {
+          addAll(LocalAiEngine.mcqFromNotes(topic, count, config.difficulty, distractors, known))
+        }
+        if (config.questionTypes.isEmpty() || "SHORT_ANSWER" in config.questionTypes) {
+          addAll(LocalAiEngine.questionsFromNotes(topic, count, config.difficulty))
+        }
+      }
+      val taken = fresh.mapTo(HashSet()) { LocalAiEngine.questionKey(it) }
+      fresh = fresh + local.filter { val k = LocalAiEngine.questionKey(it); k !in known && taken.add(k) }
+    }
+    // Too little material for multiple choice (it needs three wrong options) and no model: a typed-answer
+    // question from the notes beats an empty quiz.
+    if (fresh.isEmpty() && existing.isEmpty()) {
+      fresh = LocalAiEngine.questionsFromNotes(topic, count, config.difficulty).filter { LocalAiEngine.questionKey(it) !in known }
+    }
+    fresh = fresh.take(count).map { it.copy(topicId = topic.id) }
+    if (fresh.isEmpty()) return emptyList()
+    currentCoroutineContext().ensureActive() // a cancelled look-ahead saves nothing
+    val ids = dao.insertQuestions(fresh)
+    return fresh.zip(ids) { q, id -> q.copy(id = id) }
+  }
+
+  /**
+   * Writes new questions ahead of time for [topics] (up to [perTopic] each), so the next quiz is ready
+   * sooner and different. Topics that already have enough unasked questions are skipped.
+   */
+  suspend fun prepareNextQuestions(topics: List<StudyTopic>, perTopic: Int, config: QuizConfig, userId: String) {
+    val history = askedHistory(userId)
+    val all = if (userId.isNotBlank()) dao.getTopicsForUser(userId).first() else dao.getAllTopics().first()
+    val distractors = LocalAiEngine.distractorPool(all)
+    val concepts = conceptsFor(userId, topics)
+    val askedWords = history.keys.map { LocalAiEngine.keyWords(it.substringBefore("|")) }
+    for (topic in topics) {
+      currentCoroutineContext().ensureActive()
+      val saved = savedQuestions(topic, config)
+      val unasked = saved.count { LocalAiEngine.questionKey(it) !in history && !LocalAiEngine.isNearDuplicate(it.questionText, askedWords) }
+      if (unasked >= perTopic) continue
+      writeNewQuestions(topic, perTopic - unasked, config, saved, history.keys, concepts[topic.title], distractors)
+    }
   }
 
   suspend fun evaluateUserAnswer(
@@ -982,7 +1071,12 @@ class StudyPilotRepository(
       scorePercentage = scorePercentage,
       topicsCoveredCount = topicsCoveredCount,
       topicsSkippedCount = topicsSkippedCount,
-      detailsJson = ""
+      // Which questions were asked (synced with the attempt), so later quizzes can ask new ones.
+      detailsJson = org.json.JSONArray().also { arr ->
+        questions.forEach { q ->
+          arr.put(org.json.JSONObject().put("k", LocalAiEngine.questionKey(q)).put("t", q.topicTitle).put("ok", evaluations[q.id]?.isCorrect == true))
+        }
+      }.toString()
     )
     val id = dao.insertQuizAttempt(attempt)
     if (userId.isNotBlank()) {

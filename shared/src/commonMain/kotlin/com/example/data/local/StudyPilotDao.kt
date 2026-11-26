@@ -108,7 +108,7 @@ interface StudyPilotDao {
   suspend fun getQuestionsForTopicIds(topicIds: List<Long>): List<QuizQuestion>
 
   @Insert(onConflict = OnConflictStrategy.REPLACE)
-  suspend fun insertQuestions(questions: List<QuizQuestion>)
+  suspend fun insertQuestions(questions: List<QuizQuestion>): List<Long>
 
   @Insert(onConflict = OnConflictStrategy.REPLACE)
   suspend fun insertQuestion(question: QuizQuestion): Long

@@ -143,36 +143,78 @@ class StudyAi(
 
   // --- Quiz generation ---
 
-  private fun questionFormatSpec(difficulty: String) = """
-    Reply with JSON only, in the form {"questions": [ ... ]}. Each question has:
-    - "questionType": "MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER" or "CODING"
-    - "difficulty": "$difficulty"
-    - "questionText": string
-    - "optionsJson": for MULTIPLE_CHOICE a JSON array of the 4 option texts (the full text, not letters);
-      ["True", "False"] for TRUE_FALSE; otherwise []
-    - "correctAnswer": for choice questions, the full text of the correct option; otherwise a short model answer
-    Write maths as plain text (λ, x², ≤), not LaTeX.
-    - "explanation": why the answer is correct
-    - "codeStarter": starter code for CODING, otherwise null
-  """.trimIndent()
+  private fun questionFormatSpec(difficulty: String, types: Set<String>): String {
+    if (types == setOf(MCQ)) {
+      return """
+        Reply with JSON only, in the form {"questions": [ ... ]}. Every question is multiple choice. Each has:
+        - "questionType": "MULTIPLE_CHOICE"
+        - "difficulty": "$difficulty"
+        - "questionText": the question
+        - "optionsJson": a JSON array of exactly 4 option texts (the full text, not letters). One is correct;
+          the other three are plausible to someone who half-knows the topic and about as long. No "all of the above".
+        - "correctAnswer": the full text of the correct option, exactly as written in optionsJson
+        - "explanation": why it is correct and the others aren't
+        Write maths as plain text (λ, x², ≤), not LaTeX.
+      """.trimIndent()
+    }
+    val allowed = types.ifEmpty { setOf(MCQ, "TRUE_FALSE", "SHORT_ANSWER", "CODING") }
+    return """
+      Reply with JSON only, in the form {"questions": [ ... ]}. Each question has:
+      - "questionType": one of ${allowed.joinToString { "\"$it\"" }}
+      - "difficulty": "$difficulty"
+      - "questionText": string
+      - "optionsJson": for MULTIPLE_CHOICE a JSON array of the 4 option texts (the full text, not letters);
+        ["True", "False"] for TRUE_FALSE; otherwise []
+      - "correctAnswer": for choice questions, the full text of the correct option; otherwise a short model answer
+      Write maths as plain text (λ, x², ≤), not LaTeX.
+      - "explanation": why the answer is correct
+      - "codeStarter": starter code for CODING, otherwise null
+    """.trimIndent()
+  }
 
-  suspend fun generateQuestionsForTopic(topic: StudyTopic, desiredCount: Int = 3, difficulty: String = "MEDIUM"): List<QuizQuestion> {
+  /** Tells the model what the student already has, and points it at a different angle each time. */
+  private fun freshnessNote(avoid: List<String>): String = buildString {
+    if (avoid.isNotEmpty()) {
+      append("The student has already been asked these; write new questions on other facts or from other angles, not rewordings:\n")
+      avoid.take(25).forEach { append("- ").append(it.replace('\n', ' ').take(140)).append('\n') }
+    }
+    append("This time focus on ${QUESTION_ANGLES.shuffled().take(2).joinToString(" and ")}.")
+  }
+
+  /**
+   * New questions on [topic] from the model, or empty when no model answered. Only [types] are kept;
+   * [avoid] lists questions the student already has.
+   */
+  suspend fun modelQuestionsForTopic(
+    topic: StudyTopic,
+    count: Int,
+    difficulty: String,
+    types: Set<String> = setOf(MCQ),
+    avoid: List<String> = emptyList()
+  ): List<QuizQuestion> {
     val prompt = """
-      Write exactly $desiredCount revision questions on "${topic.title}" (${topic.subjectName}), difficulty $difficulty.
+      Write exactly $count revision questions on "${topic.title}" (${topic.subjectName}), difficulty $difficulty.
       Base them only on this material (the student's notes, or a conversation they had while studying):
       "${topic.descriptionNotes.take(3000)}"
 
-      ${questionFormatSpec(difficulty)}
+      ${freshnessNote(avoid)}
+
+      ${questionFormatSpec(difficulty, types)}
     """.trimIndent()
-    return prompt(prompt, QUIZ_SYSTEM_PROMPT, 0.3, json = true)
-      ?.let { parseQuestions(it, difficulty) { q -> q.copy(topicId = topic.id, subjectName = topic.subjectName, topicTitle = topic.title) } }
-      ?.takeIf { it.isNotEmpty() }
-      ?.take(desiredCount)
-      ?: LocalAiEngine.questionsFromNotes(topic, desiredCount, difficulty).takeIf { it.isNotEmpty() }
-      ?: LocalAiEngine.generateLocalQuizQuestions(topic, desiredCount, difficulty)
+    val raw = prompt(prompt, QUIZ_SYSTEM_PROMPT, if (avoid.isEmpty()) 0.4 else 0.7, json = true) ?: return emptyList()
+    return parseQuestions(raw, difficulty) { q -> q.copy(topicId = topic.id, subjectName = topic.subjectName, topicTitle = topic.title) }
+      .filter { types.isEmpty() || it.questionType in types }
+      .take(count)
   }
 
-  suspend fun generateQuestionsForConcept(concept: ExtractedConcept, desiredCount: Int = 2, difficulty: String = "MEDIUM"): List<QuizQuestion> {
+  /** Like [modelQuestionsForTopic], from an extracted concept's details. */
+  suspend fun modelQuestionsForConcept(
+    concept: ExtractedConcept,
+    count: Int,
+    difficulty: String,
+    types: Set<String> = setOf(MCQ),
+    avoid: List<String> = emptyList()
+  ): List<QuizQuestion> {
     val context = buildString {
       append("Concept: ${concept.conceptName} (topic: ${concept.topic}, subtopic: ${concept.subtopic})\n")
       append("Definition: ${concept.definition}\n")
@@ -183,28 +225,34 @@ class StudyAi(
       if (concept.keyFacts.isNotBlank()) append("Key facts: ${concept.keyFacts}\n")
     }
     val prompt = """
-      Write exactly $desiredCount exam questions that test understanding and application of this concept,
+      Write exactly $count exam questions that test understanding and application of this concept,
       not recall of its name.
 
       $context
-      ${questionFormatSpec(difficulty)}
+      ${freshnessNote(avoid)}
+
+      ${questionFormatSpec(difficulty, types)}
     """.trimIndent()
-    return prompt(prompt, QUIZ_SYSTEM_PROMPT, 0.3, json = true)
-      ?.let {
-        parseQuestions(it, difficulty) { q ->
-          q.copy(
-            topicId = concept.id,
-            subjectName = concept.subjectName,
-            topicTitle = concept.conceptName,
-            sourceConversationId = concept.sourceChatId,
-            sourceConversationTitle = concept.sourceChatTitle
-          )
-        }
-      }
-      ?.takeIf { it.isNotEmpty() }
-      ?.take(desiredCount)
-      ?: LocalAiEngine.generateLocalQuizQuestionsForConcept(concept, desiredCount, difficulty)
+    val raw = prompt(prompt, QUIZ_SYSTEM_PROMPT, if (avoid.isEmpty()) 0.4 else 0.7, json = true) ?: return emptyList()
+    return parseQuestions(raw, difficulty) { q ->
+      q.copy(
+        topicId = concept.id,
+        subjectName = concept.subjectName,
+        topicTitle = concept.conceptName,
+        sourceConversationId = concept.sourceChatId,
+        sourceConversationTitle = concept.sourceChatTitle
+      )
+    }.filter { types.isEmpty() || it.questionType in types }.take(count)
   }
+
+  suspend fun generateQuestionsForTopic(topic: StudyTopic, desiredCount: Int = 3, difficulty: String = "MEDIUM"): List<QuizQuestion> =
+    modelQuestionsForTopic(topic, desiredCount, difficulty, types = emptySet()).takeIf { it.isNotEmpty() }
+      ?: LocalAiEngine.questionsFromNotes(topic, desiredCount, difficulty).takeIf { it.isNotEmpty() }
+      ?: LocalAiEngine.generateLocalQuizQuestions(topic, desiredCount, difficulty)
+
+  suspend fun generateQuestionsForConcept(concept: ExtractedConcept, desiredCount: Int = 2, difficulty: String = "MEDIUM"): List<QuizQuestion> =
+    modelQuestionsForConcept(concept, desiredCount, difficulty, types = emptySet()).takeIf { it.isNotEmpty() }
+      ?: LocalAiEngine.generateLocalQuizQuestionsForConcept(concept, desiredCount, difficulty)
 
   fun parseQuestions(raw: String, difficulty: String, attach: (QuizQuestion) -> QuizQuestion): List<QuizQuestion> = try {
     val json = extractJson(raw) ?: "[]"
@@ -248,6 +296,8 @@ class StudyAi(
     // A choice question whose answer isn't one of its options can't be graded; keep it as short answer.
     if (type == "MULTIPLE_CHOICE" && options.none { it.equals(answer, ignoreCase = true) }) type = "SHORT_ANSWER"
     if (type == "SHORT_ANSWER" || type == "CODING") options = emptyList()
+    // Models tend to put the right answer first; mix the choices once, when the question is made.
+    if (type == "MULTIPLE_CHOICE") options = options.shuffled()
     return QuizQuestion(
       topicId = 0L,
       subjectName = "",
@@ -256,7 +306,7 @@ class StudyAi(
       difficulty = obj.optString("difficulty", difficulty),
       questionText = text,
       // "|" when an option contains a comma; the quiz screen accepts either separator.
-      optionsJson = options.joinToString(if (options.any { ',' in it }) "|" else ","),
+      optionsJson = encodeOptions(options),
       correctAnswer = answer,
       explanation = PlainMath.convert(obj.optString("explanation")),
       codeStarter = obj.optString("codeStarter").takeIf { !obj.isNull("codeStarter") && it.isNotBlank() }
@@ -291,6 +341,22 @@ class StudyAi(
 
   companion object {
     private const val TAG = "StudyAi"
+    const val MCQ = "MULTIPLE_CHOICE"
+
+    /** Different things to ask about, so repeated quizzes on one topic don't converge on the same questions. */
+    private val QUESTION_ANGLES = listOf(
+      "definitions and key terms",
+      "how it works step by step",
+      "applying it to a new example",
+      "comparisons and differences",
+      "common mistakes and misconceptions",
+      "trade-offs, cost or complexity",
+      "why it matters and when to use it",
+      "predicting what happens in a specific case"
+    )
+
+    /** Options are stored joined by "," (or "|" when an option has a comma); the quiz screen reads either. */
+    fun encodeOptions(options: List<String>): String = options.joinToString(if (options.any { ',' in it }) "|" else ",")
     private val BRIEF = Regex(
       """\b(in short|short answer|keep it short|briefly|in brief|brief|in a nutshell|one sentence|two sentences|one line|one-liner|tl;?dr|quick(ly)? summary|summari[sz]e|summary)\b"""
     )

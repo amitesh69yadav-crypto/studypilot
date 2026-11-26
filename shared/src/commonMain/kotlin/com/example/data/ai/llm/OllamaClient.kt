@@ -22,7 +22,7 @@ import java.util.concurrent.TimeUnit
 class OllamaClient(
   private val http: OkHttpClient = OkHttpClient.Builder()
     .connectTimeout(3, TimeUnit.SECONDS)
-    .readTimeout(180, TimeUnit.SECONDS) // a big model on a busy PC can pause between tokens
+    .readTimeout(300, TimeUnit.SECONDS) // a whole quiz batch from a big model on a busy PC, not streamed
     .build(),
   private val probeHttp: OkHttpClient = OkHttpClient.Builder()
     .connectTimeout(1500, TimeUnit.MILLISECONDS)

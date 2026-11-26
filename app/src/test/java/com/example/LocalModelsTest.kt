@@ -146,7 +146,8 @@ class LocalModelsTest {
     """.trimIndent()
     val parsed = StudyAi(null).parseQuestions(raw, "EASY") { it }
     assertEquals(2, parsed.size)
-    assertEquals("3,4,5,6", parsed[0].optionsJson)
+    // Same options, in shuffled order (models tend to put the right answer first).
+    assertEquals(setOf("3", "4", "5", "6"), parsed[0].optionsJson.split(",").toSet())
     // An answer that isn't one of the options can't be graded as multiple choice.
     assertEquals("SHORT_ANSWER", parsed[1].questionType)
     assertTrue(parsed[1].optionsJson.isEmpty())
@@ -173,7 +174,8 @@ class LocalModelsTest {
   fun optionsContainingCommasUseAPipeSeparator() {
     val raw = """[{"questionType":"MULTIPLE_CHOICE","questionText":"Pick one","optionsJson":["a, b","c","d","e"],"correctAnswer":"c"}]"""
     val q = StudyAi(null).parseQuestions(raw, "EASY") { it }.single()
-    assertEquals("a, b|c|d|e", q.optionsJson)
+    assertTrue('|' in q.optionsJson)
+    assertEquals(setOf("a, b", "c", "d", "e"), q.optionsJson.split("|").toSet())
   }
 
   @Test

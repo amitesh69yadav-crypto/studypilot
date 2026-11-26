@@ -102,7 +102,8 @@ data class QuizConfig(
   val quizTime: String = "10:00 AM",
   val questionCount: Int = 10,
   val difficulty: String = "MIXED", // EASY, MEDIUM, HARD, MIXED
-  val questionTypes: Set<String> = setOf("MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "CODING"),
+  // Multiple choice by default; the quiz settings can add the other types.
+  val questionTypes: Set<String> = setOf("MULTIPLE_CHOICE"),
   val prioritizeWeakTopics: Boolean = true,
   val questionSource: String = "ALL", // ALL, MANUAL, IMPORTED_CHAT, TUTOR_CHAT, UPLOAD
   /** Only this subject's topics; null for all subjects, 0 for topics without a subject. */

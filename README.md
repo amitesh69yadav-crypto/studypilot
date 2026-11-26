@@ -66,6 +66,18 @@ Settings > AI chooses where answers come from. **Auto** tries them in this order
 
 Replies stream in as they're generated. Multiple-choice and true/false answers are graded without a model.
 
+### Taking quiz after quiz
+
+Quizzes are multiple choice (other question types can be switched on in the quiz settings), with the
+options shuffled. Every finished quiz records which questions it asked, and that record syncs. The
+next quiz first uses questions never asked, then has new ones written. The model is shown what was
+already asked and pointed at a different angle each time; rewordings of an earlier question count as
+repeats. Only when a topic's material is exhausted do the questions asked longest ago come back.
+After you submit a quiz, the next questions for those topics are written in the background, so the
+following quiz starts quickly. Without a model, multiple-choice questions are built from the material
+itself (your questions to the tutor, and statements from your notes), with wrong options taken from
+your other topics.
+
 ### Subjects
 
 Topics are filed under subjects (courses). **Topics** opens on **Subjects**: one card per subject with

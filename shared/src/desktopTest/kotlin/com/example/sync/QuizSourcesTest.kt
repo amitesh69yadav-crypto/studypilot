@@ -150,7 +150,11 @@ class QuizSourcesTest {
 
   @Test
   fun quizUsesTutorChatsAndFilesConceptQuestionsUnderTheirTopic() = runBlocking {
-    tutorChat("Heaps", 1_000L)
+    val heaps = tutorChat("Heaps", 1_000L)
+    dao.insertTutorMessage(TutorMessageEntity(sessionId = heaps, role = "user", text = "How fast is extract min?"))
+    dao.insertTutorMessage(
+      TutorMessageEntity(sessionId = heaps, role = "model", text = "Extract-min takes O(log n) because the last element moves to the root and is sifted down level by level.")
+    )
     val chat = dao.insertImportedChat(ImportedChat(userId = "u", title = "Graphs chat", rawConversation = "x".repeat(200), importedAt = 6_000L))
     dao.insertExtractedConcept(
       ExtractedConcept(userId = "u", sourceChatId = chat, sourceChatTitle = "Graphs chat", topic = "Graphs", conceptName = "Dijkstra", definition = "Shortest paths with non-negative weights.", extractedAt = 7_000L)

@@ -328,24 +328,9 @@ object LocalAiEngine {
    * key sentences. Short answers, so they are graded on what the material says.
    */
   fun questionsFromNotes(topic: StudyTopic, desiredCount: Int, difficulty: String): List<QuizQuestion> {
-    val notes = topic.descriptionNotes
-    val pairs = Regex("""Q: (.+?)\nA: (.+?)(?=\n+Q: |$)""", RegexOption.DOT_MATCHES_ALL).findAll(notes)
-      .map { it.groupValues[1].trim() to it.groupValues[2].trim() }
-      .filter { (q, a) -> q.length >= 8 && a.length >= 40 }
-      .toList()
-    val fromPairs = pairs.map { (q, a) ->
-      val question = q.trimEnd('?', '.', ' ').replaceFirstChar { it.uppercase() } + "?"
-      question to firstSentences(a, 2)
-    }
-    // Then the material's own statements (only the answers, for a conversation).
-    val sentences = notes.replace(Regex("```.*?```", RegexOption.DOT_MATCHES_ALL), " ")
-      .lines()
-      .filterNot { it.startsWith("Q: ") }
-      .joinToString(" ") { it.removePrefix("A: ") }
-      .replace(Regex("[#*_`>]"), "")
-      .split(Regex("""(?<=[.!?])\s+"""))
-      .map { it.trim() }
-      .filter { it.length in 50..300 }
+    val pairs = notePairs(topic.descriptionNotes)
+    val fromPairs = pairs.mapNotNull { (q, a) -> asQuiz(q)?.let { it to firstSentences(a, 2) } }
+    val sentences = noteSentences(topic.descriptionNotes)
     val fromNotes = sentences.map { sentence ->
       val quote = if (sentence.length > 120) sentence.take(120) + "..." else sentence
       "In your own words, explain this point from ${topic.title}: what does it mean and why does it matter?\n\n\"$quote\"" to sentence
@@ -362,6 +347,141 @@ object LocalAiEngine {
         explanation = "From your ${if (topic.sourceType == "TUTOR_CHAT") "tutor conversation" else "notes"} on ${topic.title}."
       )
     }
+  }
+
+  /**
+   * Multiple-choice questions from the topic's own material, for when no model is available. A
+   * question the student asked the tutor gets the tutor's answer as the right option; a statement from
+   * the notes becomes "which of these is from your notes on X". Wrong options come from [distractors]
+   * (other answers and other topics' statements, paired with their topic id). Questions whose
+   * question-and-answer is in [skip] (from [questionKey]) are left out, so repeated quizzes differ.
+   */
+  fun mcqFromNotes(
+    topic: StudyTopic,
+    desiredCount: Int,
+    difficulty: String,
+    distractors: List<Pair<Long, String>>,
+    skip: Set<String> = emptySet()
+  ): List<QuizQuestion> {
+    val source = if (topic.sourceType == "TUTOR_CHAT") "tutor conversation" else "notes"
+    fun mcq(question: String, correct: String, pool: List<String>, explanation: String): QuizQuestion? {
+      val wrong = pool.filter { it.isNotBlank() && !it.equals(correct, ignoreCase = true) }.distinct().shuffled().take(3)
+      if (wrong.size < 3) return null
+      return QuizQuestion(
+        topicId = topic.id,
+        subjectName = topic.subjectName,
+        topicTitle = topic.title,
+        questionType = "MULTIPLE_CHOICE",
+        difficulty = difficulty,
+        questionText = question,
+        optionsJson = StudyAi.encodeOptions((wrong + correct).shuffled()),
+        correctAnswer = correct,
+        explanation = explanation
+      )
+    }
+    val anyOther = distractors.map { it.second }
+    val otherTopics = distractors.filter { it.first != topic.id }.map { it.second }
+    val fromPairs = notePairs(topic.descriptionNotes).shuffled().mapNotNull { (q, a) ->
+      val question = asQuiz(q) ?: return@mapNotNull null
+      val correct = optionText(firstSentences(a, 1))
+      mcq(question, correct, anyOther, "From your $source on ${topic.title}: ${firstSentences(a, 2)}")
+    }
+    val fromSentences = noteSentences(topic.descriptionNotes).shuffled().mapNotNull { sentence ->
+      mcq("Which of these is from your $source on ${topic.title}?", optionText(sentence), otherTopics, "This is what your $source on ${topic.title} say.")
+    }
+    return (fromPairs + fromSentences)
+      .filter { questionKey(it) !in skip }
+      .distinctBy { questionKey(it) }
+      .take(desiredCount.coerceAtLeast(1))
+  }
+
+  /** Material from every topic that can serve as a wrong option elsewhere: answers and statements. */
+  fun distractorPool(topics: List<StudyTopic>): List<Pair<Long, String>> = topics.flatMap { t ->
+    notePairs(t.descriptionNotes).map { t.id to optionText(firstSentences(it.second, 1)) } +
+      noteSentences(t.descriptionNotes).map { t.id to optionText(it) }
+  }.filter { it.second.length >= 20 }
+
+  /**
+   * Identity of a question across quizzes and devices: its normalised text. Models re-ask a question
+   * with a reworded answer, so the answer doesn't count, except for "Which of these is from your
+   * notes on X?", which is the same text for every statement.
+   */
+  fun questionKey(q: QuizQuestion): String {
+    fun norm(s: String) = s.lowercase().replace(Regex("[^a-z0-9]+"), " ").trim()
+    val text = norm(q.questionText)
+    return if (text.startsWith("which of these is from your")) text + "|" + norm(q.correctAnswer) else text
+  }
+
+  private val QUESTION_FILLER = setOf(
+    "the", "and", "for", "with", "its", "this", "that", "into", "from", "are", "was", "what", "which", "following",
+    "best", "describes", "describe", "correctly", "correct", "why", "how", "does", "when", "where", "you", "your",
+    "one", "two", "sentence", "sentences", "answer", "short", "explain", "true", "about", "statement", "would",
+    "most", "these", "those", "there", "they", "them", "can", "will", "should", "consider"
+  )
+
+  /** The words that say what a question is about. */
+  fun keyWords(text: String): Set<String> =
+    text.lowercase().replace(Regex("[^a-z0-9]+"), " ").split(' ').filter { it.length >= 3 && it !in QUESTION_FILLER }.toSet()
+
+  /**
+   * Whether [text] asks what one of [others] (as [keyWords]) already asks, reworded: half or more of
+   * their key words shared. The built-in "Which of these is from your notes" form is always the same
+   * text, so it isn't compared this way.
+   */
+  fun isNearDuplicate(text: String, others: Collection<Set<String>>): Boolean {
+    if (text.trim().lowercase().startsWith("which of these is from your")) return false
+    val words = keyWords(text)
+    if (words.size < 3) return false
+    return others.any { other -> other.size >= 3 && (words intersect other).size.toDouble() / (words union other).size >= 0.5 }
+  }
+
+  /** "Q: ... / A: ..." pairs in a tutor conversation's notes. */
+  private fun notePairs(notes: String): List<Pair<String, String>> =
+    Regex("""Q: (.+?)\nA: (.+?)(?=\n+Q: |$)""", RegexOption.DOT_MATCHES_ALL).findAll(notes)
+      .map { it.groupValues[1].trim() to it.groupValues[2].trim() }
+      .filter { (q, a) -> q.length >= 8 && a.length >= 40 }
+      .toList()
+
+  /** The material's own statements (only the answers, for a conversation). */
+  private fun noteSentences(notes: String): List<String> =
+    notes.replace(Regex("```.*?```", RegexOption.DOT_MATCHES_ALL), " ")
+      .lines()
+      .filterNot { it.startsWith("Q: ") }
+      .joinToString(" ") { it.removePrefix("A: ") }
+      .replace(Regex("[#*_`>]"), "")
+      .split(Regex("""(?<=[.!?])\s+"""))
+      .map { it.trim() }
+      .filter { it.length in 50..300 }
+
+  /**
+   * What the student typed to the tutor, as a quiz question: instructions like "Answer in two
+   * sentences." are dropped, "can you explain X" becomes "Which of these explains X?", and a bare
+   * keyword becomes "Which of these is true about X?". Null for follow-ups like "Explain the example".
+   */
+  private fun asQuiz(raw: String): String? {
+    var q = raw.trim()
+    if (isConversationalFollowUp(q)) return null
+    q = q.replace(INSTRUCTION_TAIL, "").trim().trimEnd('?', '.', ' ', ':')
+    q = q.replace(Regex("""^(can|could) you (please )?(explain|tell)( me)?( about)?\s+""", RegexOption.IGNORE_CASE), "explain ")
+    if (q.length < 3) return null
+    val lower = q.lowercase()
+    return when {
+      lower.startsWith("explain ") || lower.startsWith("describe ") -> "Which of these explains ${q.substringAfter(' ').trim()}?"
+      QUESTION_START.containsMatchIn(lower) -> q.replaceFirstChar { it.uppercase() } + "?"
+      else -> "Which of these is true about ${q.replaceFirstChar { it.lowercase() }}?"
+    }
+  }
+
+  private val INSTRUCTION_TAIL = Regex(
+    """[.?!]?\s*(answer (only )?(in|with)[^.?!]*|(in )?(one|two|three|a few) (sentence|sentences|lines?|words?)|in short|briefly|keep it short)[.?!]?\s*$""",
+    RegexOption.IGNORE_CASE
+  )
+  private val QUESTION_START = Regex("""^(what|why|how|which|when|where|who|whom|whose|is|are|was|were|do|does|did|can|could|should|would|will)\b""")
+
+  /** Short enough to read as an option; "|" is the option separator, so it can't appear inside one. */
+  private fun optionText(s: String): String {
+    val clean = s.replace('|', '/').replace(Regex("""\s+"""), " ").trim()
+    return if (clean.length > 160) clean.take(157).trimEnd() + "..." else clean
   }
 
   private fun firstSentences(text: String, count: Int): String {
