@@ -141,7 +141,7 @@ fun TopicsScreen(
         shape = RoundedCornerShape(14.dp),
         modifier = Modifier
           .fillMaxWidth()
-          .padding(horizontal = 16.dp, vertical = 6.dp),
+          .padding(horizontal = 16.dp, vertical = 8.dp),
         singleLine = true
       )
 
@@ -155,7 +155,7 @@ fun TopicsScreen(
           FilterChip(
             selected = selectedSubjectFilter == null,
             onClick = { selectedSubjectFilter = null },
-            label = { Text("All Subjects (${topics.size})") },
+            label = { Text("All (${topics.size})") },
             shape = RoundedCornerShape(10.dp)
           )
         }
@@ -172,16 +172,16 @@ fun TopicsScreen(
         }
       }
 
-      Spacer(modifier = Modifier.height(4.dp))
+      Spacer(modifier = Modifier.height(8.dp))
 
       if (filteredTopics.isEmpty()) {
         EmptyState(
           icon = Icons.Default.Book,
-          title = "No Topics Found",
-          description = "Record topics after your lectures using manual entry, pasting lecture notes, or uploading materials.",
+          title = "No topics found",
+          description = "Add what you studied after each lecture.",
           actionButton = {
             Button(onClick = { showAddDialog = true }, shape = RoundedCornerShape(12.dp)) {
-              Text("Record Study Topic")
+              Text("Add topic")
             }
           }
         )
@@ -190,7 +190,7 @@ fun TopicsScreen(
           modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp, vertical = 8.dp),
-          verticalArrangement = Arrangement.spacedBy(10.dp)
+          verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
           items(filteredTopics, key = { it.id }) { topic ->
             TopicCard(
@@ -259,30 +259,14 @@ fun TopicCard(
       .clickable { onClick() },
     shape = RoundedCornerShape(16.dp),
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
   ) {
     Row(
       modifier = Modifier
         .fillMaxWidth()
-        .padding(14.dp),
+        .padding(16.dp),
       verticalAlignment = Alignment.Top
     ) {
-      Box(
-        modifier = Modifier
-          .size(40.dp)
-          .clip(RoundedCornerShape(10.dp))
-          .background(CyanAccent.copy(alpha = 0.15f)),
-        contentAlignment = Alignment.Center
-      ) {
-        Icon(
-          imageVector = Icons.Default.Book,
-          contentDescription = null,
-          tint = CyanAccent,
-          modifier = Modifier.size(20.dp)
-        )
-      }
-
-      Spacer(modifier = Modifier.width(12.dp))
 
       Column(modifier = Modifier.weight(1f)) {
         Row(
@@ -310,7 +294,7 @@ fun TopicCard(
           Row(verticalAlignment = Alignment.CenterVertically) {
             MasteryBadge(level = topic.masteryLevel)
             IconButton(onClick = onDelete, modifier = Modifier.size(44.dp)) {
-              Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+              Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
             }
           }
         }
@@ -378,7 +362,7 @@ fun AddTopicDialog(
 
   AlertDialog(
     onDismissRequest = onDismiss,
-    title = { Text("Record Study Topic", fontWeight = FontWeight.Bold) },
+    title = { Text("Add topic", fontWeight = FontWeight.Bold) },
     text = {
       Column(
         modifier = Modifier.fillMaxWidth(),
@@ -453,7 +437,7 @@ fun AddTopicDialog(
             OutlinedTextField(
               value = manualNotes,
               onValueChange = { manualNotes = it },
-              label = { Text("Key Takeaways & Lecture Notes") },
+              label = { Text("Notes") },
               shape = RoundedCornerShape(12.dp),
               modifier = Modifier.fillMaxWidth(),
               minLines = 3,
@@ -517,7 +501,7 @@ fun AddTopicDialog(
         },
         shape = RoundedCornerShape(10.dp)
       ) {
-        Text("Save & Add to Revision")
+        Text("Save")
       }
     },
     dismissButton = {
@@ -568,7 +552,7 @@ fun TopicDetailDialog(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
           ) {
             Column(modifier = Modifier.padding(12.dp)) {
-              Text("Lecture Notes", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge)
+              Text("Lecture notes", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge)
               Spacer(modifier = Modifier.height(4.dp))
               Text(topic.descriptionNotes, style = MaterialTheme.typography.bodyMedium)
             }
@@ -582,7 +566,7 @@ fun TopicDetailDialog(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
           ) {
             Column(modifier = Modifier.padding(12.dp)) {
-              Text("Spaced Repetition Schedule", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+              Text("Spaced repetition schedule", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
               Spacer(modifier = Modifier.height(4.dp))
               Text("• Current Interval: ${topic.repetitionIntervalDays} days", style = MaterialTheme.typography.bodySmall)
               Text("• Next Revision Due: ${topic.nextRevisionDate}", style = MaterialTheme.typography.bodySmall)
@@ -626,7 +610,7 @@ fun TopicDetailDialog(
             } else {
               Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
               Spacer(modifier = Modifier.width(8.dp))
-              Text("Generate AI Study Summary")
+              Text("Summarize with AI")
             }
           }
         }
@@ -667,7 +651,7 @@ fun TopicDetailDialog(
                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                 modifier = Modifier.weight(1f).heightIn(min = 44.dp)
               ) {
-                Text("Needs Review", fontSize = 11.sp, color = RoseError, maxLines = 1, softWrap = false)
+                Text("Needs review", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, softWrap = false)
               }
             }
           }

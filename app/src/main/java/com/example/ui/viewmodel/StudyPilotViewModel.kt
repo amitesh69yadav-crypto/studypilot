@@ -125,9 +125,18 @@ class StudyPilotViewModel(application: Application) : AndroidViewModel(applicati
 
   fun deviceRamGb(): Int = repository.ai.phone?.deviceRamGb() ?: 0
 
-  // --- UI notifications ---
+  // --- UI notifications & Theme ---
   private val _snackbarMessage = MutableSharedFlow<String>()
   val snackbarMessage: SharedFlow<String> = _snackbarMessage.asSharedFlow()
+
+  private val uiPrefs = application.getSharedPreferences("studypilot_ui_prefs", Context.MODE_PRIVATE)
+  private val _themeMode = MutableStateFlow(uiPrefs.getString("theme_mode", "system") ?: "system")
+  val themeMode: StateFlow<String> = _themeMode.asStateFlow()
+
+  fun setThemeMode(mode: String) {
+    _themeMode.value = mode
+    uiPrefs.edit().putString("theme_mode", mode).apply()
+  }
 
   val alarmAndCalendarService = AlarmAndCalendarService(application)
 

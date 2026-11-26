@@ -68,7 +68,7 @@ fun AiSettingsCard(viewModel: StudyPilotViewModel) {
       .testTag("ai_settings_card"),
     shape = RoundedCornerShape(16.dp),
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
   ) {
     Column(modifier = Modifier.padding(18.dp)) {
       Row(verticalAlignment = Alignment.CenterVertically) {
@@ -81,7 +81,7 @@ fun AiSettingsCard(viewModel: StudyPilotViewModel) {
         Spacer(Modifier.width(12.dp))
         Column {
           Text("AI", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-          Text("Answering with: $activeLabel", style = MaterialTheme.typography.bodySmall, color = PaletteDeepSage, fontWeight = FontWeight.SemiBold)
+          Text("Answering with: $activeLabel", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
         }
       }
 
@@ -233,7 +233,10 @@ private fun PcSection(viewModel: StudyPilotViewModel) {
     Button(
       onClick = { viewModel.setPcConfig(urlInput, modelInput) },
       enabled = !checking,
-      colors = ButtonDefaults.buttonColors(containerColor = PaletteDeepSage)
+      colors = ButtonDefaults.buttonColors(
+        containerColor = MaterialTheme.colorScheme.primary,
+        contentColor = MaterialTheme.colorScheme.onPrimary
+      )
     ) { Text("Save and test") }
     OutlinedButton(onClick = { viewModel.findPc() }, enabled = !checking) { Text("Find") }
     if (checking) CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
@@ -247,7 +250,7 @@ private fun PcSection(viewModel: StudyPilotViewModel) {
 @Composable
 private fun SectionTitle(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, subtitle: String) {
   Row(verticalAlignment = Alignment.CenterVertically) {
-    Icon(icon, contentDescription = null, tint = PaletteDeepSage, modifier = Modifier.size(18.dp))
+    Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
     Spacer(Modifier.width(8.dp))
     Text(title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
   }

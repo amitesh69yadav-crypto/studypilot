@@ -66,6 +66,9 @@ import androidx.compose.ui.unit.sp
 import com.example.ui.components.MasteryBadge
 import com.example.ui.components.SectionHeader
 import com.example.ui.components.StatCard
+import com.example.ui.theme.PaletteDeepSage
+import com.example.ui.theme.PalettePaleCeladon
+import com.example.ui.theme.PaletteDarkText
 import com.example.ui.theme.AmberAccent
 import com.example.ui.theme.CyanAccent
 import com.example.ui.theme.EmeraldSuccess
@@ -181,14 +184,14 @@ fun ProgressScreen(
             .padding(end = 12.dp)
         ) {
           Text(
-            text = "Learning Metrics",
+            text = "Overview",
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
             color = MaterialTheme.colorScheme.onBackground,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
           )
           Text(
-            text = "Spaced repetition & performance analytics",
+            text = "This week",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
@@ -222,17 +225,17 @@ fun ProgressScreen(
           horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
           StatCard(
-            title = "Topics Studied",
+            title = "Topics studied",
             value = topics.size.toString(),
-            subtitle = "$masteredCount Mastered",
+            subtitle = "$masteredCount mastered",
             icon = Icons.Default.Book,
             iconTint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.weight(1f)
           )
           StatCard(
-            title = "Quizzes Completed",
+            title = "Quizzes completed",
             value = attempts.size.toString(),
-            subtitle = if (attempts.isEmpty()) "0% Average" else "Avg $averageScore%",
+            subtitle = if (attempts.isEmpty()) null else "Average $averageScore%",
             icon = Icons.Default.Quiz,
             iconTint = EmeraldSuccess,
             modifier = Modifier.weight(1f)
@@ -244,19 +247,19 @@ fun ProgressScreen(
           horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
           StatCard(
-            title = "Study Streak",
-            value = "$studyStreak Days",
-            subtitle = if (studyStreak > 0) "Active Consistency" else "0 Days Streak",
+            title = "Study streak",
+            value = studyStreak.toString(),
+            subtitle = if (studyStreak == 1) "day in a row" else "days in a row",
             icon = Icons.Default.LocalFireDepartment,
             iconTint = AmberAccent,
             modifier = Modifier.weight(1f)
           )
           StatCard(
-            title = "Needs Review",
+            title = "Needs review",
             value = strugglingTopics.size.toString(),
-            subtitle = "${untestedTopics.size} Untested",
+            subtitle = "${untestedTopics.size} untested",
             icon = Icons.Default.Warning,
-            iconTint = if (strugglingTopics.isNotEmpty()) RoseError else EmeraldSuccess,
+            iconTint = RoseError,
             modifier = Modifier.weight(1f)
           )
         }
@@ -271,7 +274,7 @@ fun ProgressScreen(
           .padding(horizontal = 16.dp, vertical = 8.dp),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
       ) {
         Column(modifier = Modifier.padding(18.dp)) {
           Row(
@@ -285,12 +288,12 @@ fun ProgressScreen(
                 .padding(end = 8.dp)
             ) {
               Text(
-                text = "Weekly Study Hours Logged",
+                text = "Study hours this week",
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.onSurface
               )
               Text(
-                text = "Tracked from timetable sessions and lectures",
+                text = "From your timetable",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
               )
@@ -324,7 +327,7 @@ fun ProgressScreen(
             verticalAlignment = Alignment.CenterVertically
           ) {
             Text(
-              text = "Total Productive Time:",
+              text = "Total",
               fontSize = 12.sp,
               fontWeight = FontWeight.Medium,
               color = MaterialTheme.colorScheme.onSurface
@@ -332,7 +335,7 @@ fun ProgressScreen(
             Text(
               text = String.format(Locale.getDefault(), "%.1f Hours logged", totalWeeklyHours),
               fontSize = 12.sp,
-              fontWeight = FontWeight.ExtraBold,
+              fontWeight = FontWeight.Bold,
               color = MaterialTheme.colorScheme.primary
             )
           }
@@ -423,7 +426,7 @@ fun ProgressScreen(
           .padding(horizontal = 16.dp, vertical = 8.dp),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
       ) {
         Column(modifier = Modifier.padding(18.dp)) {
           Row(
@@ -437,7 +440,7 @@ fun ProgressScreen(
                 .padding(end = 8.dp)
             ) {
               Text(
-                text = "Score Improvement Trajectory",
+                text = "Score trend",
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.onSurface
               )
@@ -591,7 +594,7 @@ fun ProgressScreen(
           .padding(horizontal = 16.dp, vertical = 6.dp),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
       ) {
         Column(modifier = Modifier.padding(18.dp)) {
           Row(
@@ -654,7 +657,7 @@ fun ProgressScreen(
           .fillMaxWidth()
           .padding(vertical = 4.dp)
       ) {
-        SectionHeader(title = "Priority Revision: Weak Topics (${strugglingTopics.size})")
+        SectionHeader(title = "Weak topics (${strugglingTopics.size})")
 
         if (strugglingTopics.isEmpty()) {
           Card(
@@ -663,7 +666,7 @@ fun ProgressScreen(
               .padding(horizontal = 16.dp),
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
           ) {
             Row(
               modifier = Modifier
@@ -671,21 +674,6 @@ fun ProgressScreen(
                 .padding(16.dp),
               verticalAlignment = Alignment.CenterVertically
             ) {
-              Box(
-                modifier = Modifier
-                  .size(36.dp)
-                  .clip(CircleShape)
-                  .background(EmeraldSuccess.copy(alpha = 0.12f)),
-                contentAlignment = Alignment.Center
-              ) {
-                Icon(
-                  imageVector = Icons.Default.CheckCircle,
-                  contentDescription = null,
-                  tint = EmeraldSuccess,
-                  modifier = Modifier.size(20.dp)
-                )
-              }
-              Spacer(modifier = Modifier.width(12.dp))
               Column(modifier = Modifier.weight(1f)) {
                 Text(
                   text = "No weak topics requiring revision (0)",
@@ -710,7 +698,7 @@ fun ProgressScreen(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.5.dp)
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
               ) {
                 Row(
                   modifier = Modifier
@@ -718,21 +706,6 @@ fun ProgressScreen(
                     .padding(14.dp),
                   verticalAlignment = Alignment.CenterVertically
                 ) {
-                  Box(
-                    modifier = Modifier
-                      .size(40.dp)
-                      .clip(RoundedCornerShape(10.dp))
-                      .background(RoseError.copy(alpha = 0.15f)),
-                    contentAlignment = Alignment.Center
-                  ) {
-                    Icon(
-                      imageVector = Icons.Default.Warning,
-                      contentDescription = null,
-                      tint = RoseError,
-                      modifier = Modifier.size(20.dp)
-                    )
-                  }
-                  Spacer(modifier = Modifier.width(12.dp))
                   Column(modifier = Modifier.weight(1f)) {
                     Text(
                       topic.title,
@@ -761,7 +734,7 @@ fun ProgressScreen(
           .fillMaxWidth()
           .padding(vertical = 4.dp)
       ) {
-        SectionHeader(title = "Topics Not Yet Tested (${untestedTopics.size})")
+        SectionHeader(title = "Not tested yet (${untestedTopics.size})")
 
         if (untestedTopics.isEmpty()) {
           Card(
@@ -770,7 +743,7 @@ fun ProgressScreen(
               .padding(horizontal = 16.dp),
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
           ) {
             Row(
               modifier = Modifier
@@ -778,21 +751,6 @@ fun ProgressScreen(
                 .padding(16.dp),
               verticalAlignment = Alignment.CenterVertically
             ) {
-              Box(
-                modifier = Modifier
-                  .size(36.dp)
-                  .clip(CircleShape)
-                  .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
-                contentAlignment = Alignment.Center
-              ) {
-                Icon(
-                  imageVector = Icons.Default.CheckCircle,
-                  contentDescription = null,
-                  tint = MaterialTheme.colorScheme.primary,
-                  modifier = Modifier.size(20.dp)
-                )
-              }
-              Spacer(modifier = Modifier.width(12.dp))
               Column(modifier = Modifier.weight(1f)) {
                 Text(
                   text = "All recorded syllabus topics tested (0 queued)",
@@ -817,7 +775,7 @@ fun ProgressScreen(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.5.dp)
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
               ) {
                 Row(
                   modifier = Modifier
@@ -825,21 +783,6 @@ fun ProgressScreen(
                     .padding(14.dp),
                   verticalAlignment = Alignment.CenterVertically
                 ) {
-                  Box(
-                    modifier = Modifier
-                      .size(40.dp)
-                      .clip(RoundedCornerShape(10.dp))
-                      .background(AmberAccent.copy(alpha = 0.15f)),
-                    contentAlignment = Alignment.Center
-                  ) {
-                    Icon(
-                      imageVector = Icons.Default.HourglassEmpty,
-                      contentDescription = null,
-                      tint = AmberAccent,
-                      modifier = Modifier.size(20.dp)
-                    )
-                  }
-                  Spacer(modifier = Modifier.width(12.dp))
                   Column(modifier = Modifier.weight(1f)) {
                     Text(
                       topic.title,
@@ -881,7 +824,7 @@ fun ProgressScreen(
 
     AlertDialog(
       onDismissRequest = { showExportDialog = false },
-      title = { Text("Export Academic Report", fontWeight = FontWeight.Bold) },
+      title = { Text("Export report", fontWeight = FontWeight.Bold) },
       text = {
         Column {
           Text(
@@ -907,7 +850,7 @@ fun ProgressScreen(
           },
           shape = RoundedCornerShape(10.dp)
         ) {
-          Text("Copy to Clipboard")
+          Text("Copy to clipboard")
         }
       },
       dismissButton = {

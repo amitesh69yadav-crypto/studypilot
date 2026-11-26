@@ -121,17 +121,29 @@ import com.example.ui.components.QuickMobileAlarmDialog
 import com.example.ui.components.ActiveAlarmAlertDialog
 import com.example.ui.components.EmptyState
 import com.example.ui.components.WhatShouldIDoNowCard
-import com.example.ui.theme.PaletteCreamIvory
-import com.example.ui.theme.PaletteDarkText
-import com.example.ui.theme.PaletteDeepSage
-import com.example.ui.theme.PaletteMediumSage
-import com.example.ui.theme.PaletteMintFoam
-import com.example.ui.theme.PalettePaleCeladon
 import com.example.ui.viewmodel.StudyPilotViewModel
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+
+private val PaletteCreamIvory: Color
+  @Composable get() = MaterialTheme.colorScheme.surface
+
+private val PaletteDarkText: Color
+  @Composable get() = MaterialTheme.colorScheme.onSurface
+
+private val PaletteDeepSage: Color
+  @Composable get() = MaterialTheme.colorScheme.primary
+
+private val PaletteMediumSage: Color
+  @Composable get() = MaterialTheme.colorScheme.outlineVariant
+
+private val PaletteMintFoam: Color
+  @Composable get() = MaterialTheme.colorScheme.surfaceVariant
+
+private val PalettePaleCeladon: Color
+  @Composable get() = MaterialTheme.colorScheme.primaryContainer
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -256,18 +268,8 @@ fun TimetableScreen(
                 .padding(end = 10.dp)
             ) {
               Text(
-                text = "CALENDAR SCHEDULE & ALARMS",
-                style = MaterialTheme.typography.labelSmall.copy(
-                  fontWeight = FontWeight.Bold,
-                  letterSpacing = 1.sp
-                ),
-                color = PaletteDarkText,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-              )
-              Text(
-                text = if (isSelectedDateToday) "Today: $selectedDateTitle" else selectedDateTitle,
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+                text = if (isSelectedDateToday) "Today · $selectedDateTitle" else selectedDateTitle,
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                 color = PaletteDarkText,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -333,7 +335,7 @@ fun TimetableScreen(
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
-                  text = if (showHeaderCards) "Hide Tools" else "Show Tools",
+                  text = if (showHeaderCards) "Hide calendar" else "Show calendar",
                   fontSize = 11.sp,
                   fontWeight = FontWeight.Bold,
                   color = PaletteDarkText,
@@ -414,7 +416,7 @@ fun TimetableScreen(
                 ) {
                   Text(
                     text = monthYearStr,
-                    fontWeight = FontWeight.ExtraBold,
+                    fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
                     color = PaletteDarkText
                   )
@@ -428,9 +430,9 @@ fun TimetableScreen(
                     ) {
                       Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 6.dp)) {
                         Text(
-                          text = "TODAY",
+                          text = "Today",
                           fontSize = 9.sp,
-                          fontWeight = FontWeight.ExtraBold,
+                          fontWeight = FontWeight.Bold,
                           color = PaletteCreamIvory
                         )
                       }
@@ -519,17 +521,9 @@ fun TimetableScreen(
                     Spacer(modifier = Modifier.width(8.dp))
                     Column(modifier = Modifier.weight(1f)) {
                       Text(
-                        text = "Active Selected Date",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = PaletteDarkText.copy(alpha = 0.8f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                      )
-                      Text(
                         text = selectedDateTitle,
                         fontSize = 13.sp,
-                        fontWeight = FontWeight.ExtraBold,
+                        fontWeight = FontWeight.Bold,
                         color = PaletteDarkText,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -544,8 +538,8 @@ fun TimetableScreen(
                         shape = RoundedCornerShape(4.dp)
                       ) {
                         Text(
-                          text = "TODAY",
-                          fontWeight = FontWeight.ExtraBold,
+                          text = "Today",
+                          fontWeight = FontWeight.Bold,
                           fontSize = 10.sp,
                           color = PaletteCreamIvory,
                           modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
@@ -656,7 +650,7 @@ fun TimetableScreen(
                         Text(
                           text = dayNum,
                           fontSize = 13.sp,
-                          fontWeight = FontWeight.ExtraBold,
+                          fontWeight = FontWeight.Bold,
                           color = if (isSelected) PaletteCreamIvory else PaletteDarkText,
                           maxLines = 1
                         )
@@ -708,8 +702,8 @@ fun TimetableScreen(
               onClick = { selectedTab = 0 },
               text = {
                 Text(
-                  "Day Schedule (${selectedDaySessions.size})",
-                  fontWeight = if (selectedTab == 0) FontWeight.ExtraBold else FontWeight.Medium,
+                  "Day (${selectedDaySessions.size})",
+                  fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Medium,
                   fontSize = 11.sp,
                   color = PaletteDarkText,
                   maxLines = 1,
@@ -722,8 +716,8 @@ fun TimetableScreen(
               onClick = { selectedTab = 1 },
               text = {
                 Text(
-                  "Formats (${scheduleFormats.size})",
-                  fontWeight = if (selectedTab == 1) FontWeight.ExtraBold else FontWeight.Medium,
+                  "Templates (${scheduleFormats.size})",
+                  fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Medium,
                   fontSize = 11.sp,
                   color = PaletteDarkText,
                   maxLines = 1,
@@ -736,8 +730,8 @@ fun TimetableScreen(
               onClick = { selectedTab = 2 },
               text = {
                 Text(
-                  "All Events (${sessions.size})",
-                  fontWeight = if (selectedTab == 2) FontWeight.ExtraBold else FontWeight.Medium,
+                  "All (${sessions.size})",
+                  fontWeight = if (selectedTab == 2) FontWeight.Bold else FontWeight.Medium,
                   fontSize = 11.sp,
                   color = PaletteDarkText,
                   maxLines = 1,
@@ -820,7 +814,7 @@ fun TimetableScreen(
                 ) {
                   Column(modifier = Modifier.padding(10.dp)) {
                     Text(
-                      text = "Manage Schedule for $selectedDateTitle",
+                      text = "$selectedDateTitle",
                       fontWeight = FontWeight.Bold,
                       fontSize = 12.sp,
                       color = PaletteDarkText
@@ -843,7 +837,7 @@ fun TimetableScreen(
                         ) {
                           Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = PaletteDarkText, modifier = Modifier.size(14.dp))
                           Spacer(modifier = Modifier.width(4.dp))
-                          Text("Apply Format", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+                          Text("Apply format", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
                         }
                       }
                       item {
@@ -857,7 +851,7 @@ fun TimetableScreen(
                         ) {
                           Icon(Icons.Default.ContentCopy, contentDescription = null, tint = PaletteDarkText, modifier = Modifier.size(14.dp))
                           Spacer(modifier = Modifier.width(4.dp))
-                          Text("Copy Day", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+                          Text("Copy day", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
                         }
                       }
                       item {
@@ -870,7 +864,7 @@ fun TimetableScreen(
                         ) {
                           Icon(Icons.Default.Bookmark, contentDescription = null, modifier = Modifier.size(14.dp))
                           Spacer(modifier = Modifier.width(4.dp))
-                          Text("Save Format", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+                          Text("Save format", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
                         }
                       }
                       item {
@@ -922,7 +916,7 @@ fun TimetableScreen(
                 ) {
                   Text(
                     text = "Time-Slots",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = PaletteDarkText
                   )
                   Text(
@@ -942,7 +936,7 @@ fun TimetableScreen(
                       onClick = { viewModel.clearDaySchedule(selectedDate) },
                       contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                     ) {
-                      Text("Clear Day", fontSize = 12.sp, color = PaletteDarkText, fontWeight = FontWeight.Bold)
+                      Text("Clear day", fontSize = 12.sp, color = PaletteDarkText, fontWeight = FontWeight.Bold)
                     }
                   }
                   Surface(
@@ -966,8 +960,8 @@ fun TimetableScreen(
               item {
                 EmptyState(
                   icon = Icons.Default.CalendarMonth,
-                  title = "No Schedule for $selectedDateTitle",
-                  description = "Create a new schedule from scratch, copy from another day, or apply one of your pre-made formats.",
+                  title = "Nothing on $selectedDateTitle",
+                  description = "Add a session, copy another day, or apply a template.",
                   actionButton = {
                     Row(
                       horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -982,7 +976,7 @@ fun TimetableScreen(
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.weight(1f).heightIn(min = 48.dp)
                       ) {
-                        Text("Apply Template", fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+                        Text("Apply template", fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
                       }
                       OutlinedButton(
                         onClick = { showAddDialog = true },
@@ -990,7 +984,7 @@ fun TimetableScreen(
                         border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage),
                         modifier = Modifier.weight(1f).heightIn(min = 48.dp)
                       ) {
-                        Text("Add Slot", color = PaletteDarkText, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+                        Text("Add slot", color = PaletteDarkText, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
                       }
                     }
                   }
@@ -1050,8 +1044,8 @@ fun TimetableScreen(
                       .padding(end = 12.dp)
                   ) {
                     Text(
-                      text = "Saved Schedule Formats",
-                      style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+                      text = "Templates",
+                      style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                       color = PaletteDarkText
                     )
                     Spacer(modifier = Modifier.height(2.dp))
@@ -1075,7 +1069,7 @@ fun TimetableScreen(
                     Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                      text = "New Format",
+                      text = "New format",
                       fontSize = 12.sp,
                       fontWeight = FontWeight.Bold,
                       maxLines = 1,
@@ -1090,7 +1084,7 @@ fun TimetableScreen(
               item {
                 EmptyState(
                   icon = Icons.AutoMirrored.Filled.FormatListBulleted,
-                  title = "No Custom Formats Yet",
+                  title = "No custom formats yet",
                   description = "Create formats for your academic routines, exam deep work days, or weekend revisions.",
                   actionButton = {
                     Button(
@@ -1101,7 +1095,7 @@ fun TimetableScreen(
                       ),
                       shape = RoundedCornerShape(10.dp)
                     ) {
-                      Text("Create Format", fontWeight = FontWeight.Bold)
+                      Text("Create format", fontWeight = FontWeight.Bold)
                     }
                   }
                 )
@@ -1136,7 +1130,7 @@ fun TimetableScreen(
                 verticalAlignment = Alignment.CenterVertically
               ) {
                 Text(
-                  text = "Full Academic Agenda",
+                  text = "Full agenda",
                   style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                   color = PaletteDarkText,
                   modifier = Modifier
@@ -1155,7 +1149,7 @@ fun TimetableScreen(
               item {
                 EmptyState(
                   icon = Icons.Default.CalendarMonth,
-                  title = "No Events Scheduled",
+                  title = "No events scheduled",
                   description = "Your schedule agenda is currently empty.",
                   actionButton = {
                     Button(
@@ -1166,7 +1160,7 @@ fun TimetableScreen(
                       ),
                       shape = RoundedCornerShape(10.dp)
                     ) {
-                      Text("Add First Session", fontWeight = FontWeight.Bold)
+                      Text("Add first session", fontWeight = FontWeight.Bold)
                     }
                   }
                 )
@@ -1362,7 +1356,7 @@ fun ScheduleFormatCard(
           Column(modifier = Modifier.weight(1f)) {
             Text(
               text = format.name,
-              style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+              style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
               color = PaletteDarkText,
               maxLines = 1,
               overflow = TextOverflow.Ellipsis
@@ -1407,7 +1401,7 @@ fun ScheduleFormatCard(
           horizontalArrangement = Arrangement.SpaceBetween
         ) {
           Text(
-            text = "Total Scheduled Blocks",
+            text = "Sessions",
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
             color = PaletteDarkText
@@ -1415,7 +1409,7 @@ fun ScheduleFormatCard(
           Text(
             text = "$sessionCount Sessions",
             fontSize = 11.sp,
-            fontWeight = FontWeight.ExtraBold,
+            fontWeight = FontWeight.Bold,
             color = PaletteDarkText
           )
         }
@@ -1508,7 +1502,7 @@ fun ScheduleFormatCard(
             .heightIn(min = 44.dp)
         ) {
           Text(
-            text = "Replace Day Schedule",
+            text = "Replace day schedule",
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
             maxLines = 1,
@@ -1548,7 +1542,7 @@ fun CopyDayScheduleDialog(
   AlertDialog(
     onDismissRequest = onDismiss,
     title = {
-      Text("Copy Schedule to Another Day", fontWeight = FontWeight.Bold, color = PaletteDarkText)
+      Text("Copy to another day", fontWeight = FontWeight.Bold, color = PaletteDarkText)
     },
     text = {
       Column(
@@ -1629,7 +1623,7 @@ fun CopyDayScheduleDialog(
         ),
         shape = RoundedCornerShape(10.dp)
       ) {
-        Text("Copy Schedule", fontWeight = FontWeight.Bold)
+        Text("Copy schedule", fontWeight = FontWeight.Bold)
       }
     },
     dismissButton = {
@@ -1659,7 +1653,7 @@ fun ApplyFormatDialog(
   AlertDialog(
     onDismissRequest = onDismiss,
     title = {
-      Text("Apply Schedule Format to $targetDate", fontWeight = FontWeight.Bold, color = PaletteDarkText)
+      Text("Apply a template to $targetDate", fontWeight = FontWeight.Bold, color = PaletteDarkText)
     },
     text = {
       Column(
@@ -1757,7 +1751,7 @@ fun SaveDayAsFormatDialog(
         verticalArrangement = Arrangement.spacedBy(10.dp)
       ) {
         Text(
-          text = "Save all ${daySessions.size} sessions from $dayDate as a format template so you can apply it to any day later.",
+          text = "Save the ${daySessions.size} sessions on $dayDate as a template you can apply to any day.",
           fontSize = 12.sp,
           color = PaletteDarkText
         )
@@ -1765,7 +1759,7 @@ fun SaveDayAsFormatDialog(
         OutlinedTextField(
           value = name,
           onValueChange = { name = it },
-          label = { Text("Format Name", color = PaletteDarkText) },
+          label = { Text("Format name", color = PaletteDarkText) },
           placeholder = { Text("e.g. Wednesday Heavy Lectures") },
           shape = RoundedCornerShape(10.dp),
           modifier = Modifier.fillMaxWidth()
@@ -1794,7 +1788,7 @@ fun SaveDayAsFormatDialog(
         ),
         shape = RoundedCornerShape(10.dp)
       ) {
-        Text("Save Format", fontWeight = FontWeight.Bold)
+        Text("Save format", fontWeight = FontWeight.Bold)
       }
     },
     dismissButton = {
@@ -1825,7 +1819,7 @@ fun CreateNewFormatDialog(
   AlertDialog(
     onDismissRequest = onDismiss,
     title = {
-      Text("Create New Schedule Format", fontWeight = FontWeight.Bold, color = PaletteDarkText)
+      Text("New template", fontWeight = FontWeight.Bold, color = PaletteDarkText)
     },
     text = {
       Column(
@@ -1835,7 +1829,7 @@ fun CreateNewFormatDialog(
         OutlinedTextField(
           value = formatName,
           onValueChange = { formatName = it },
-          label = { Text("Format Name", color = PaletteDarkText) },
+          label = { Text("Format name", color = PaletteDarkText) },
           placeholder = { Text("e.g. Friday Lab & Review") },
           shape = RoundedCornerShape(10.dp),
           modifier = Modifier.fillMaxWidth()
@@ -1865,7 +1859,7 @@ fun CreateNewFormatDialog(
             }
         ) {
           Column(modifier = Modifier.padding(8.dp)) {
-            Text("📚 Standard 3-Session Day", fontWeight = FontWeight.Bold, color = PaletteDarkText, fontSize = 12.sp)
+            Text("Standard 3-Session Day", fontWeight = FontWeight.Bold, color = PaletteDarkText, fontSize = 12.sp)
             Text("09:00 Lecture, 11:30 Tutorial, 14:00 Lab", fontSize = 11.sp, color = PaletteDarkText)
           }
         }
@@ -1883,7 +1877,7 @@ fun CreateNewFormatDialog(
             }
         ) {
           Column(modifier = Modifier.padding(8.dp)) {
-            Text("⚡ Intensive 4-Sprint Revision", fontWeight = FontWeight.Bold, color = PaletteDarkText, fontSize = 12.sp)
+            Text("Intensive 4-Sprint Revision", fontWeight = FontWeight.Bold, color = PaletteDarkText, fontSize = 12.sp)
             Text("09:00 Sprint 1, 11:00 Sprint 2, 14:00 Sprint 3, 16:30 Sprint 4", fontSize = 11.sp, color = PaletteDarkText)
           }
         }
@@ -1901,7 +1895,7 @@ fun CreateNewFormatDialog(
             }
         ) {
           Column(modifier = Modifier.padding(8.dp)) {
-            Text("☕ Morning-Only Half Day (2 Sessions)", fontWeight = FontWeight.Bold, color = PaletteDarkText, fontSize = 12.sp)
+            Text("Morning-Only Half Day (2 Sessions)", fontWeight = FontWeight.Bold, color = PaletteDarkText, fontSize = 12.sp)
             Text("09:30 Deep Lecture, 11:30 Problem Set", fontSize = 11.sp, color = PaletteDarkText)
           }
         }
@@ -2019,7 +2013,7 @@ fun CreateNewFormatDialog(
         ),
         shape = RoundedCornerShape(10.dp)
       ) {
-        Text("Save New Format", fontWeight = FontWeight.Bold)
+        Text("Save new format", fontWeight = FontWeight.Bold)
       }
     },
     dismissButton = {
@@ -2052,10 +2046,10 @@ fun GoogleCalendarEventCard(
 ) {
   val isCompleted = session.status == "COMPLETED"
   val categoryTag = when (session.sessionCategory) {
-    "FOOD" -> "🍲 Food & Meal"
-    "SLEEP" -> "🛌 Sleep & Rest"
-    "EXERCISE" -> "🏋️ Fitness & Exercise"
-    "PERSONAL" -> "☕ Personal Break"
+    "FOOD" -> "Food & Meal"
+    "SLEEP" -> "Sleep & Rest"
+    "EXERCISE" -> "Fitness & Exercise"
+    "PERSONAL" -> "Personal Break"
     else -> session.subjectName.ifBlank { "Alarm" }
   }
   val categoryBarColor = when (session.sessionCategory) {
@@ -2075,7 +2069,7 @@ fun GoogleCalendarEventCard(
       containerColor = if (isCompleted) PalettePaleCeladon.copy(alpha = 0.6f) else PaletteMintFoam
     ),
     border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage),
-    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
   ) {
     Column(
       modifier = Modifier
@@ -2100,7 +2094,7 @@ fun GoogleCalendarEventCard(
           ) {
             Text(
               text = formatTimeRange(session.startTime, session.endTime),
-              style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+              style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
               color = PaletteDarkText,
               maxLines = 1
             )
@@ -2125,7 +2119,7 @@ fun GoogleCalendarEventCard(
               Icon(Icons.Default.Edit, contentDescription = "Edit", tint = PaletteDarkText, modifier = Modifier.size(18.dp))
             }
             IconButton(onClick = onDelete, modifier = Modifier.size(44.dp)) {
-              Icon(Icons.Default.Delete, contentDescription = "Delete", tint = PaletteDarkText, modifier = Modifier.size(18.dp))
+              Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
             }
           }
         }
@@ -2158,7 +2152,7 @@ fun GoogleCalendarEventCard(
             Spacer(modifier = Modifier.width(12.dp))
           }
           Text(
-            text = "📅 ${session.date}",
+            text = "${session.date}",
             style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
             color = PaletteDarkText
           )
@@ -2382,10 +2376,10 @@ fun SessionEditDialog(
           horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
           listOf(
-            "ACADEMIC" to "📚 Study",
-            "FOOD" to "🍲 Food",
-            "SLEEP" to "🛌 Sleep",
-            "PERSONAL" to "☕ Break"
+            "ACADEMIC" to "Study",
+            "FOOD" to "Food",
+            "SLEEP" to "Sleep",
+            "PERSONAL" to "Break"
           ).forEach { (cat, label) ->
             val isSelected = selectedCategory == cat
             Surface(
@@ -2657,7 +2651,7 @@ fun SessionEditDialog(
         shape = RoundedCornerShape(10.dp),
         modifier = Modifier.testTag("save_schedule_button")
       ) {
-        Text("Save Schedule", fontWeight = FontWeight.Bold)
+        Text("Save schedule", fontWeight = FontWeight.Bold)
       }
     },
     dismissButton = {

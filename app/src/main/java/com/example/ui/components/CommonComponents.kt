@@ -116,8 +116,8 @@ fun SectionHeader(
   ) {
     Text(
       text = title,
-      style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-      color = MaterialTheme.colorScheme.onBackground,
+      style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+      color = MaterialTheme.colorScheme.onSurface,
       maxLines = 1,
       overflow = TextOverflow.Ellipsis,
       modifier = Modifier
@@ -127,12 +127,11 @@ fun SectionHeader(
     if (!actionText.isNullOrBlank() && onActionClick != null) {
       Text(
         text = actionText,
-        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
         color = MaterialTheme.colorScheme.primary,
         modifier = Modifier
-          .clip(RoundedCornerShape(8.dp))
           .clickable { onActionClick() }
-          .padding(horizontal = 6.dp, vertical = 2.dp)
+          .padding(vertical = 2.dp)
       )
     }
   }
@@ -143,68 +142,34 @@ fun StatCard(
   title: String,
   value: String,
   subtitle: String? = null,
-  icon: ImageVector,
-  iconTint: Color = MaterialTheme.colorScheme.primary,
+  @Suppress("UNUSED_PARAMETER") icon: ImageVector,
+  @Suppress("UNUSED_PARAMETER") iconTint: Color = MaterialTheme.colorScheme.primary,
   modifier: Modifier = Modifier
 ) {
+  // Number first, then what it counts. Icon and tint are kept in the signature for callers.
   Card(
-    modifier = modifier.defaultMinSize(minHeight = 110.dp),
+    modifier = modifier.defaultMinSize(minHeight = 96.dp),
     shape = RoundedCornerShape(16.dp),
-    colors = CardDefaults.cardColors(
-      containerColor = MaterialTheme.colorScheme.surface
-    ),
-    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
   ) {
-    Column(
-      modifier = Modifier
-        .fillMaxWidth()
-        .padding(horizontal = 12.dp, vertical = 12.dp),
-      horizontalAlignment = Alignment.CenterHorizontally,
-      verticalArrangement = Arrangement.Center
-    ) {
-      Box(
-        modifier = Modifier
-          .size(40.dp)
-          .clip(CircleShape)
-          .background(iconTint.copy(alpha = 0.12f)),
-        contentAlignment = Alignment.Center
-      ) {
-        Icon(
-          imageVector = icon,
-          contentDescription = title,
-          tint = iconTint,
-          modifier = Modifier.size(20.dp)
-        )
-      }
-      Spacer(modifier = Modifier.height(6.dp))
-      Text(
-        text = value,
-        style = MaterialTheme.typography.titleLarge.copy(
-          fontWeight = FontWeight.Bold
-        ),
-        color = MaterialTheme.colorScheme.onSurface,
-        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-      )
+    Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+      Text(text = value, style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurface)
       Text(
         text = title,
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurface,
         maxLines = 1,
-        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
       )
       if (!subtitle.isNullOrBlank()) {
-        Spacer(modifier = Modifier.height(2.dp))
         Text(
           text = subtitle,
-          style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-          color = iconTint,
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
           maxLines = 1,
-          overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-          textAlign = androidx.compose.ui.text.style.TextAlign.Center
+          overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
         )
-      } else {
-        Spacer(modifier = Modifier.height(14.dp))
       }
     }
   }
@@ -216,10 +181,10 @@ fun MasteryBadge(
   modifier: Modifier = Modifier
 ) {
   val (bgColor, textColor, label) = when (level.uppercase()) {
-    "MASTERED" -> Triple(EmeraldSuccess.copy(alpha = 0.15f), EmeraldSuccess, "Mastered")
-    "FAMILIAR" -> Triple(CyanAccent.copy(alpha = 0.15f), CyanAccent, "Familiar")
-    "STRUGGLING" -> Triple(RoseError.copy(alpha = 0.15f), RoseError, "Needs Review")
-    else -> Triple(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f), MaterialTheme.colorScheme.onSurfaceVariant, "Untested")
+    "MASTERED" -> Triple(EmeraldSuccess.copy(alpha = 0.16f), EmeraldSuccess, "Mastered")
+    "FAMILIAR" -> Triple(CyanAccent.copy(alpha = 0.16f), CyanAccent, "Familiar")
+    "STRUGGLING" -> Triple(RoseError.copy(alpha = 0.16f), RoseError, "Needs review")
+    else -> Triple(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.onSurfaceVariant, "Untested")
   }
 
   Surface(
@@ -292,110 +257,25 @@ fun MobileClockAlarmCard(
   onTestAlarmSoundClick: () -> Unit,
   modifier: Modifier = Modifier
 ) {
-  var currentTimeText by remember { mutableStateOf("") }
-  var timeZoneText by remember { mutableStateOf("") }
-
-  LaunchedEffect(Unit) {
-    val timeFormat = java.text.SimpleDateFormat("hh:mm:ss a z", java.util.Locale.getDefault())
-    val tz = java.util.TimeZone.getDefault()
-    timeZoneText = "${tz.id} (${tz.getDisplayName(false, java.util.TimeZone.SHORT)})"
-    while (true) {
-      currentTimeText = timeFormat.format(java.util.Date())
-      kotlinx.coroutines.delay(1000)
-    }
-  }
-
   Card(
     modifier = modifier.fillMaxWidth(),
     shape = RoundedCornerShape(16.dp),
-    colors = CardDefaults.cardColors(
-      containerColor = PaletteCreamIvory
-    ),
-    border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage),
-    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
   ) {
-    Column(modifier = Modifier.padding(14.dp)) {
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-      ) {
-        Row(
-          modifier = Modifier.weight(1f),
-          verticalAlignment = Alignment.CenterVertically
-        ) {
-          Box(
-            modifier = Modifier
-              .size(36.dp)
-              .clip(CircleShape)
-              .background(PaletteDeepSage),
-            contentAlignment = Alignment.Center
-          ) {
-            Icon(
-              imageVector = Icons.Default.AccessTime,
-              contentDescription = "Mobile Clock",
-              tint = PaletteCreamIvory,
-              modifier = Modifier.size(20.dp)
-            )
-          }
-          Spacer(modifier = Modifier.width(10.dp))
-          Column(modifier = Modifier.weight(1f)) {
-            Text(
-              text = "MOBILE DEVICE CLOCK & ALARM",
-              style = MaterialTheme.typography.labelSmall.copy(
-                fontWeight = FontWeight.ExtraBold,
-                letterSpacing = 0.8.sp
-              ),
-              color = PaletteDarkText
-            )
-            Text(
-              text = currentTimeText.ifBlank { "Syncing local time..." },
-              style = MaterialTheme.typography.titleMedium.copy(
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 0.5.sp
-              ),
-              color = PaletteDarkText
-            )
-          }
-        }
-
-        Spacer(modifier = Modifier.width(8.dp))
-
-        Surface(
-          shape = RoundedCornerShape(20.dp),
-          color = PalettePaleCeladon
-        ) {
-          Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-          ) {
-            Icon(
-              imageVector = Icons.Default.AlarmOn,
-              contentDescription = "Active Alarms",
-              tint = PaletteDarkText,
-              modifier = Modifier.size(14.dp)
-            )
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(
-              text = "$activeAlarmsCount Active",
-              fontSize = 11.sp,
-              fontWeight = FontWeight.Bold,
-              color = PaletteDarkText
-            )
-          }
-        }
-      }
-
-      Spacer(modifier = Modifier.height(6.dp))
+    Column(modifier = Modifier.padding(16.dp)) {
+      Text("Alarms", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurface)
       Text(
-        text = "📍 Timezone: $timeZoneText • System Alarm Clock Sync Active",
-        fontSize = 11.sp,
-        fontWeight = FontWeight.Medium,
-        color = PaletteDarkText.copy(alpha = 0.8f)
+        text = when (activeAlarmsCount) {
+          0 -> "None on"
+          1 -> "1 on"
+          else -> "$activeAlarmsCount on"
+        },
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
       )
-
       Spacer(modifier = Modifier.height(12.dp))
-
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -403,58 +283,22 @@ fun MobileClockAlarmCard(
         androidx.compose.material3.Button(
           onClick = onQuickAlarmClick,
           colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-            containerColor = PaletteDeepSage,
-            contentColor = PaletteCreamIvory
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary
           ),
-          shape = RoundedCornerShape(10.dp),
-          modifier = Modifier
-            .weight(1f)
-            .heightIn(min = 44.dp),
-          contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp)
+          shape = RoundedCornerShape(12.dp),
+          modifier = Modifier.weight(1f).heightIn(min = 44.dp)
         ) {
-          Icon(
-            imageVector = Icons.Default.AlarmAdd,
-            contentDescription = null,
-            modifier = Modifier.size(16.dp)
-          )
-          Spacer(modifier = Modifier.width(6.dp))
-          Text(
-            "Set Quick Alarm",
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            softWrap = false,
-            overflow = TextOverflow.Ellipsis
-          )
+          Text("Quick alarm", maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
         }
-
         androidx.compose.material3.OutlinedButton(
           onClick = onTestAlarmSoundClick,
-          colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
-            contentColor = PaletteDarkText
-          ),
-          border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage),
-          shape = RoundedCornerShape(10.dp),
-          modifier = Modifier
-            .weight(1f)
-            .heightIn(min = 44.dp),
-          contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp)
+          colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
+          border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+          shape = RoundedCornerShape(12.dp),
+          modifier = Modifier.weight(1f).heightIn(min = 44.dp)
         ) {
-          Icon(
-            imageVector = Icons.Filled.VolumeUp,
-            contentDescription = null,
-            tint = PaletteDarkText,
-            modifier = Modifier.size(16.dp)
-          )
-          Spacer(modifier = Modifier.width(6.dp))
-          Text(
-            "Test Sound Now",
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            softWrap = false,
-            overflow = TextOverflow.Ellipsis
-          )
+          Text("Test sound", maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
         }
       }
     }
@@ -475,27 +319,29 @@ fun QuickMobileAlarmDialog(
 
   androidx.compose.material3.AlertDialog(
     onDismissRequest = onDismiss,
+    containerColor = MaterialTheme.colorScheme.surface,
+    shape = RoundedCornerShape(20.dp),
     title = {
       Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
           modifier = Modifier
             .size(36.dp)
             .clip(CircleShape)
-            .background(PaletteDeepSage),
+            .background(MaterialTheme.colorScheme.primaryContainer),
           contentAlignment = Alignment.Center
         ) {
           Icon(
             imageVector = Icons.Default.AlarmAdd,
             contentDescription = "Set Quick Alarm",
-            tint = PaletteCreamIvory,
+            tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(20.dp)
           )
         }
         Spacer(modifier = Modifier.width(10.dp))
         Text(
-          text = "Set Mobile Device Alarm",
+          text = "Set alarm",
           style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-          color = PaletteDarkText
+          color = MaterialTheme.colorScheme.onSurface
         )
       }
     },
@@ -507,13 +353,13 @@ fun QuickMobileAlarmDialog(
         Text(
           text = "Select when your alarm should ring based on your mobile device clock.",
           style = MaterialTheme.typography.bodySmall,
-          color = PaletteDarkText
+          color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
         Text(
           text = "Quick Offset Preset:",
           style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-          color = PaletteDarkText
+          color = MaterialTheme.colorScheme.onSurface
         )
 
         FlowRow(
@@ -525,8 +371,8 @@ fun QuickMobileAlarmDialog(
             val selected = !isCustomTime && selectedPresetMinutes == mins
             Surface(
               shape = RoundedCornerShape(8.dp),
-              color = if (selected) PaletteDeepSage else PalettePaleCeladon,
-              border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage),
+              color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+              border = androidx.compose.foundation.BorderStroke(1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
               modifier = Modifier
                 .defaultMinSize(minHeight = 40.dp)
                 .clickable {
@@ -539,7 +385,7 @@ fun QuickMobileAlarmDialog(
                   text = label,
                   fontSize = 11.sp,
                   fontWeight = FontWeight.Bold,
-                  color = if (selected) PaletteCreamIvory else PaletteDarkText,
+                  color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                   maxLines = 1,
                   softWrap = false,
                   textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -562,7 +408,7 @@ fun QuickMobileAlarmDialog(
           Text(
             text = "Or Set Exact Mobile Time (Time Scroller)",
             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-            color = PaletteDarkText
+            color = MaterialTheme.colorScheme.onSurface
           )
         }
 
@@ -604,16 +450,17 @@ fun QuickMobileAlarmDialog(
           onDismiss()
         },
         colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-          containerColor = PaletteDeepSage,
-          contentColor = PaletteCreamIvory
-        )
+          containerColor = MaterialTheme.colorScheme.primary,
+          contentColor = MaterialTheme.colorScheme.onPrimary
+        ),
+        shape = RoundedCornerShape(10.dp)
       ) {
-        Text("Set Alarm Now", fontWeight = FontWeight.Bold)
+        Text("Set alarm now", fontWeight = FontWeight.Bold)
       }
     },
     dismissButton = {
       androidx.compose.material3.TextButton(onClick = onDismiss) {
-        Text("Cancel", color = PaletteDarkText)
+        Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
       }
     }
   )
@@ -670,8 +517,8 @@ fun TimeScrollPickerField(
 
   androidx.compose.material3.Surface(
     shape = RoundedCornerShape(10.dp),
-    color = PaletteMintFoam,
-    border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage),
+    color = MaterialTheme.colorScheme.surfaceVariant,
+    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     modifier = modifier.clickable { showPicker = true }
   ) {
     Column(
@@ -681,7 +528,7 @@ fun TimeScrollPickerField(
         text = label,
         fontSize = 11.sp,
         fontWeight = FontWeight.Bold,
-        color = PaletteDarkText,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis
       )
@@ -694,8 +541,8 @@ fun TimeScrollPickerField(
         Text(
           text = if (timeValue.isNotBlank()) formatTo12Hour(timeValue) else emptyText,
           fontSize = if (timeValue.isNotBlank()) 15.sp else 12.sp,
-          fontWeight = if (timeValue.isNotBlank()) FontWeight.ExtraBold else FontWeight.Medium,
-          color = if (timeValue.isNotBlank()) PaletteDarkText else PaletteDarkText.copy(alpha = 0.65f),
+          fontWeight = if (timeValue.isNotBlank()) FontWeight.Bold else FontWeight.Medium,
+          color = if (timeValue.isNotBlank()) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
           maxLines = 1,
           overflow = TextOverflow.Ellipsis,
           modifier = Modifier.weight(1f)
@@ -712,7 +559,7 @@ fun TimeScrollPickerField(
             Icon(
               imageVector = Icons.Default.Close,
               contentDescription = "Clear $label",
-              tint = PaletteDeepSage,
+              tint = MaterialTheme.colorScheme.primary,
               modifier = Modifier.size(16.dp)
             )
           }
@@ -720,7 +567,7 @@ fun TimeScrollPickerField(
           Icon(
             imageVector = androidx.compose.material.icons.Icons.Default.Schedule,
             contentDescription = "Scroll Time Picker",
-            tint = PaletteDeepSage,
+            tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(18.dp)
           )
         }
@@ -791,7 +638,7 @@ fun TimeWheelScrollerDialog(
         Icon(
           imageVector = androidx.compose.material.icons.Icons.Default.Schedule,
           contentDescription = null,
-          tint = PaletteDeepSage,
+          tint = MaterialTheme.colorScheme.primary,
           modifier = Modifier.size(22.dp)
         )
         Spacer(modifier = Modifier.width(8.dp))
@@ -799,7 +646,7 @@ fun TimeWheelScrollerDialog(
           text = title,
           fontSize = 16.sp,
           fontWeight = FontWeight.Bold,
-          color = PaletteDarkText
+          color = MaterialTheme.colorScheme.onSurface
         )
       }
     },
@@ -810,15 +657,15 @@ fun TimeWheelScrollerDialog(
       ) {
         androidx.compose.material3.Surface(
           shape = RoundedCornerShape(12.dp),
-          color = PalettePaleCeladon,
-          border = androidx.compose.foundation.BorderStroke(1.dp, PaletteDeepSage),
+          color = MaterialTheme.colorScheme.primaryContainer,
+          border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
           modifier = Modifier.padding(vertical = 8.dp)
         ) {
           Text(
             text = "${String.format("%02d", selectedHour)}:${String.format("%02d", selectedMinute)} $selectedPeriod",
             fontSize = 24.sp,
-            fontWeight = FontWeight.Black,
-            color = PaletteDarkText,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onPrimaryContainer,
             modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
           )
         }
@@ -829,7 +676,7 @@ fun TimeWheelScrollerDialog(
           modifier = Modifier
             .fillMaxWidth()
             .height(180.dp)
-            .background(PaletteMintFoam, RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp))
             .padding(8.dp),
           horizontalArrangement = Arrangement.SpaceEvenly,
           verticalAlignment = Alignment.CenterVertically
@@ -838,7 +685,7 @@ fun TimeWheelScrollerDialog(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.weight(1f)
           ) {
-            Text("HOUR", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = PaletteDeepSage)
+            Text("HOUR", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             Spacer(modifier = Modifier.height(4.dp))
             androidx.compose.foundation.lazy.LazyColumn(
               modifier = Modifier.fillMaxSize(),
@@ -849,7 +696,7 @@ fun TimeWheelScrollerDialog(
                 val isSelected = h == selectedHour
                 androidx.compose.material3.Surface(
                   shape = RoundedCornerShape(8.dp),
-                  color = if (isSelected) PaletteDeepSage else androidx.compose.ui.graphics.Color.Transparent,
+                  color = if (isSelected) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.Transparent,
                   modifier = Modifier
                     .fillMaxWidth(0.85f)
                     .padding(vertical = 2.dp)
@@ -858,8 +705,8 @@ fun TimeWheelScrollerDialog(
                   Text(
                     text = String.format("%02d", h),
                     fontSize = 16.sp,
-                    fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
-                    color = if (isSelected) PaletteCreamIvory else PaletteDarkText,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                     modifier = Modifier.padding(vertical = 6.dp)
                   )
@@ -868,13 +715,13 @@ fun TimeWheelScrollerDialog(
             }
           }
 
-          Text(":", fontSize = 20.sp, fontWeight = FontWeight.Black, color = PaletteDeepSage)
+          Text(":", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
 
           Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.weight(1f)
           ) {
-            Text("MINUTE", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = PaletteDeepSage)
+            Text("MINUTE", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             Spacer(modifier = Modifier.height(4.dp))
             androidx.compose.foundation.lazy.LazyColumn(
               modifier = Modifier.fillMaxSize(),
@@ -885,7 +732,7 @@ fun TimeWheelScrollerDialog(
                 val isSelected = m == selectedMinute
                 androidx.compose.material3.Surface(
                   shape = RoundedCornerShape(8.dp),
-                  color = if (isSelected) PaletteDeepSage else androidx.compose.ui.graphics.Color.Transparent,
+                  color = if (isSelected) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.Transparent,
                   modifier = Modifier
                     .fillMaxWidth(0.85f)
                     .padding(vertical = 2.dp)
@@ -894,8 +741,8 @@ fun TimeWheelScrollerDialog(
                   Text(
                     text = String.format("%02d", m),
                     fontSize = 16.sp,
-                    fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
-                    color = if (isSelected) PaletteCreamIvory else PaletteDarkText,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                     modifier = Modifier.padding(vertical = 6.dp)
                   )
@@ -909,13 +756,13 @@ fun TimeWheelScrollerDialog(
             verticalArrangement = Arrangement.Center,
             modifier = Modifier.weight(1f)
           ) {
-            Text("PERIOD", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = PaletteDeepSage)
+            Text("PERIOD", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             Spacer(modifier = Modifier.height(8.dp))
             listOf("AM", "PM").forEach { p ->
               val isSelected = p == selectedPeriod
               androidx.compose.material3.Surface(
                 shape = RoundedCornerShape(8.dp),
-                color = if (isSelected) PaletteDeepSage else PalettePaleCeladon,
+                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
                 modifier = Modifier
                   .fillMaxWidth(0.85f)
                   .padding(vertical = 4.dp)
@@ -925,7 +772,7 @@ fun TimeWheelScrollerDialog(
                   text = p,
                   fontSize = 14.sp,
                   fontWeight = FontWeight.Bold,
-                  color = if (isSelected) PaletteCreamIvory else PaletteDarkText,
+                  color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                   textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                   modifier = Modifier.padding(vertical = 8.dp)
                 )
@@ -944,12 +791,12 @@ fun TimeWheelScrollerDialog(
           onConfirm(formatted)
         },
         colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-          containerColor = PaletteDeepSage,
-          contentColor = PaletteCreamIvory
+          containerColor = MaterialTheme.colorScheme.primary,
+          contentColor = MaterialTheme.colorScheme.onPrimary
         ),
         shape = RoundedCornerShape(10.dp)
       ) {
-        Text("Confirm Time", fontWeight = FontWeight.Bold)
+        Text("Confirm time", fontWeight = FontWeight.Bold)
       }
     },
     dismissButton = {
@@ -960,11 +807,11 @@ fun TimeWheelScrollerDialog(
           }
         }
         androidx.compose.material3.TextButton(onClick = onDismiss) {
-          Text("Cancel", color = PaletteDarkText)
+          Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
       }
     },
-    containerColor = PaletteCreamIvory,
+    containerColor = MaterialTheme.colorScheme.surface,
     shape = RoundedCornerShape(16.dp)
   )
 }

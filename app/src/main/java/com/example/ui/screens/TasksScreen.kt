@@ -60,6 +60,7 @@ import androidx.compose.ui.unit.sp
 import com.example.data.model.StudyTask
 import com.example.data.model.Subject
 import com.example.ui.components.EmptyState
+import com.example.ui.theme.PaletteDarkText
 import com.example.ui.theme.AmberAccent
 import com.example.ui.theme.EmeraldSuccess
 import com.example.ui.theme.RoseError
@@ -127,11 +128,11 @@ fun TasksScreen(
       if (filteredTasks.isEmpty()) {
         EmptyState(
           icon = Icons.AutoMirrored.Filled.EventNote,
-          title = "No Deadlines Scheduled",
+          title = "No deadlines scheduled",
           description = "Keep track of midterm exams, finals, laboratory reports, and assignment submissions.",
           actionButton = {
             Button(onClick = { showAddDialog = true }, shape = RoundedCornerShape(12.dp)) {
-              Text("Add Deadline")
+              Text("Add deadline")
             }
           }
         )
@@ -185,7 +186,7 @@ fun TaskItemCard(
     colors = CardDefaults.cardColors(
       containerColor = if (task.isCompleted) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surface
     ),
-    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
   ) {
     Row(
       modifier = Modifier
@@ -211,12 +212,12 @@ fun TaskItemCard(
         ) {
           Surface(
             shape = RoundedCornerShape(6.dp),
-            color = if (task.type == "EXAM") RoseError.copy(alpha = 0.15f) else MaterialTheme.colorScheme.primaryContainer
+            color = MaterialTheme.colorScheme.primaryContainer
           ) {
             Text(
               text = task.type,
               style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-              color = if (task.type == "EXAM") RoseError else MaterialTheme.colorScheme.primary,
+              color = MaterialTheme.colorScheme.onPrimaryContainer,
               maxLines = 1,
               softWrap = false,
               modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -256,7 +257,7 @@ fun TaskItemCard(
       }
 
       IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {
-        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
       }
     }
   }
@@ -362,7 +363,7 @@ fun AddTaskDialog(
         },
         shape = RoundedCornerShape(10.dp)
       ) {
-        Text("Save Deadline")
+        Text("Save deadline")
       }
     },
     dismissButton = {

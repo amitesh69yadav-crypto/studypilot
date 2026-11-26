@@ -125,7 +125,14 @@ class MainActivity : ComponentActivity() {
     }
 
     setContent {
-      StudyPilotTheme {
+      val themeMode by viewModel.themeMode.collectAsState()
+      val isSystemDark = androidx.compose.foundation.isSystemInDarkTheme()
+      val isDark = when (themeMode) {
+        "dark" -> true
+        "light" -> false
+        else -> isSystemDark
+      }
+      StudyPilotTheme(darkTheme = isDark) {
         StudyPilotApp(viewModel = viewModel)
       }
     }
@@ -212,10 +219,10 @@ fun StudyPilotApp(viewModel: StudyPilotViewModel) {
     Screen.WeekendQuizzes -> "Quizzes"
     Screen.Progress -> "Progress"
     Screen.AiTutor -> "AI Tutor"
-    Screen.Tasks -> "Tasks & deadlines"
+    Screen.Tasks -> "Tasks"
     Screen.Settings -> "Settings"
     Screen.ActiveQuiz -> "Quiz"
-    Screen.AiChatImport -> "Imported chats"
+    Screen.AiChatImport -> "Chats"
   }
 
   BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
@@ -317,44 +324,6 @@ fun StudyPilotApp(viewModel: StudyPilotViewModel) {
           },
           actions = {
             IconButton(
-              onClick = { viewModel.navigateTo(Screen.AiChatImport) }
-            ) {
-              Box(
-                modifier = Modifier
-                  .size(36.dp)
-                  .clip(CircleShape)
-                  .background(if (currentScreen == Screen.AiChatImport) MaterialTheme.colorScheme.primaryContainer else Color.Transparent),
-                contentAlignment = Alignment.Center
-              ) {
-                Icon(
-                  imageVector = Icons.AutoMirrored.Filled.Chat,
-                  contentDescription = "AI Chat Import",
-                  tint = if (currentScreen == Screen.AiChatImport) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                  modifier = Modifier.size(20.dp)
-                )
-              }
-            }
-
-            IconButton(
-              onClick = { viewModel.navigateTo(Screen.AiTutor) }
-            ) {
-              Box(
-                modifier = Modifier
-                  .size(36.dp)
-                  .clip(CircleShape)
-                  .background(if (currentScreen == Screen.AiTutor) MaterialTheme.colorScheme.primaryContainer else Color.Transparent),
-                contentAlignment = Alignment.Center
-              ) {
-                Icon(
-                  imageVector = Icons.Default.Psychology,
-                  contentDescription = "AI Tutor",
-                  tint = if (currentScreen == Screen.AiTutor) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                  modifier = Modifier.size(20.dp)
-                )
-              }
-            }
-
-            IconButton(
               onClick = { viewModel.navigateTo(Screen.Tasks) }
             ) {
               Box(
@@ -368,8 +337,8 @@ fun StudyPilotApp(viewModel: StudyPilotViewModel) {
                   BadgedBox(
                     badge = {
                       Badge(
-                        containerColor = com.example.ui.theme.PaletteDeepSage,
-                        contentColor = MaterialTheme.colorScheme.surface
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
                       ) {
                         Text(pendingTaskCount.toString(), fontSize = 9.sp, fontWeight = FontWeight.Bold)
                       }
@@ -396,19 +365,20 @@ fun StudyPilotApp(viewModel: StudyPilotViewModel) {
             IconButton(
               onClick = { viewModel.navigateTo(Screen.Settings) }
             ) {
-              Box(
-                modifier = Modifier
-                  .size(36.dp)
-                  .clip(CircleShape)
-                  .background(if (currentScreen == Screen.Settings) MaterialTheme.colorScheme.primaryContainer else com.example.ui.theme.PaletteDeepSage),
-                contentAlignment = Alignment.Center
+              Surface(
+                shape = CircleShape,
+                color = if (currentScreen == Screen.Settings) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                border = androidx.compose.foundation.BorderStroke(1.dp, if (currentScreen == Screen.Settings) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
+                modifier = Modifier.size(34.dp)
               ) {
-                Text(
-                  text = currentUser.avatarInitials,
-                  fontWeight = FontWeight.ExtraBold,
-                  color = if (currentScreen == Screen.Settings) MaterialTheme.colorScheme.primary else com.example.ui.theme.PaletteCreamIvory,
-                  fontSize = 12.sp
-                )
+                Box(contentAlignment = Alignment.Center) {
+                  Text(
+                    text = currentUser.avatarInitials,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontSize = 12.sp
+                  )
+                }
               }
             }
           }
@@ -476,7 +446,7 @@ fun StudyPilotApp(viewModel: StudyPilotViewModel) {
                 .padding(horizontal = 12.dp, vertical = 6.dp),
               shape = RoundedCornerShape(14.dp),
               color = MaterialTheme.colorScheme.errorContainer,
-              shadowElevation = 4.dp,
+              shadowElevation = 0.dp,
               border = androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.error)
             ) {
               Row(
@@ -495,7 +465,7 @@ fun StudyPilotApp(viewModel: StudyPilotViewModel) {
                 Column(modifier = Modifier.weight(1f)) {
                   Text(
                     text = "Alarm: ${ringingSession.subjectName}",
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black),
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.error,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis

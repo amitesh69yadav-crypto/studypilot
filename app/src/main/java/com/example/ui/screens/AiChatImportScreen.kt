@@ -45,6 +45,24 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+private val PaletteCreamIvory: Color
+  @Composable get() = MaterialTheme.colorScheme.surface
+
+private val PaletteDarkText: Color
+  @Composable get() = MaterialTheme.colorScheme.onSurface
+
+private val PaletteDeepSage: Color
+  @Composable get() = MaterialTheme.colorScheme.primary
+
+private val PaletteMediumSage: Color
+  @Composable get() = MaterialTheme.colorScheme.outlineVariant
+
+private val PaletteMintFoam: Color
+  @Composable get() = MaterialTheme.colorScheme.surfaceVariant
+
+private val PalettePaleCeladon: Color
+  @Composable get() = MaterialTheme.colorScheme.primaryContainer
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun AiChatImportScreen(
@@ -426,7 +444,7 @@ private fun ChatLibraryTab(
           Spacer(modifier = Modifier.height(8.dp))
           Text(
             text = if (chats.isEmpty())
-              "Paste a shared AI conversation link. StudyPilot automatically groups chats into subjects and anchors AI Chatbot answers in your linked chats first."
+              "Import a shared ChatGPT, Claude, Gemini or DeepSeek link. The tutor checks your imported chats first."
             else
               "Try clearing your search query or choosing another subject filter.",
             style = MaterialTheme.typography.bodyMedium,
@@ -448,7 +466,7 @@ private fun ChatLibraryTab(
             ) {
               Icon(Icons.Default.Link, contentDescription = null, modifier = Modifier.size(18.dp))
               Spacer(modifier = Modifier.width(6.dp))
-              Text("Import First Chat Link", fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+              Text("Import first chat link", fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
             }
           }
         }
@@ -541,7 +559,7 @@ private fun ImportedChatCard(
       .testTag("chat_card_${chat.id}"),
     shape = RoundedCornerShape(16.dp),
     colors = CardDefaults.cardColors(containerColor = PaletteMintFoam),
-    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
   ) {
     Column(
       modifier = Modifier
@@ -617,7 +635,7 @@ private fun ImportedChatCard(
             onDismissRequest = { showMenu = false }
           ) {
             DropdownMenuItem(
-              text = { Text("Inspect Source Log") },
+              text = { Text("Inspect source log") },
               leadingIcon = { Icon(Icons.Default.Visibility, contentDescription = null) },
               onClick = {
                 showMenu = false
@@ -625,7 +643,7 @@ private fun ImportedChatCard(
               }
             )
             DropdownMenuItem(
-              text = { Text("Move to Another Subject") },
+              text = { Text("Move to another subject") },
               leadingIcon = { Icon(Icons.Default.DriveFileMove, contentDescription = null, tint = PaletteDeepSage) },
               onClick = {
                 showMenu = false
@@ -633,7 +651,7 @@ private fun ImportedChatCard(
               }
             )
             DropdownMenuItem(
-              text = { Text("Reprocess Knowledge") },
+              text = { Text("Reprocess knowledge") },
               leadingIcon = { Icon(Icons.Default.Autorenew, contentDescription = null) },
               onClick = {
                 showMenu = false
@@ -641,7 +659,7 @@ private fun ImportedChatCard(
               }
             )
             DropdownMenuItem(
-              text = { Text("Edit Title & Tags") },
+              text = { Text("Edit title & tags") },
               leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
               onClick = {
                 showMenu = false
@@ -650,7 +668,7 @@ private fun ImportedChatCard(
             )
             HorizontalDivider()
             DropdownMenuItem(
-              text = { Text("Delete Conversation", color = MaterialTheme.colorScheme.error) },
+              text = { Text("Delete conversation", color = MaterialTheme.colorScheme.error) },
               leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
               onClick = {
                 showMenu = false
@@ -918,7 +936,7 @@ private fun LearningMemoryTab(
           Spacer(modifier = Modifier.height(8.dp))
           Text(
             text = if (concepts.isEmpty())
-              "Import an AI conversation from the '+ Import' tab. Key definitions, formulas, and misconceptions will be organized here permanently."
+              "Concepts from imported chats appear here."
             else
               "Try adjusting your search keywords or clearing the active filters.",
             style = MaterialTheme.typography.bodyMedium,
@@ -965,7 +983,7 @@ private fun ExtractedConceptCard(
       .testTag("concept_card_${concept.id}"),
     shape = RoundedCornerShape(16.dp),
     colors = CardDefaults.cardColors(containerColor = PaletteMintFoam),
-    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
   ) {
     Column(
       modifier = Modifier
@@ -1005,7 +1023,7 @@ private fun ExtractedConceptCard(
               concept.timesTested == 0 -> Triple("Untested", PalettePaleCeladon, PaletteDarkText.copy(alpha = 0.7f))
               concept.masteryLevel == "STRUGGLING" -> Triple("Needs Revision", Color(0xFFE2B7A8), PaletteDarkText)
               concept.masteryLevel == "MASTERED" -> Triple("Mastered", PaletteDeepSage, PaletteCreamIvory)
-              else -> Triple("In Practice (${concept.timesCorrect}/${concept.timesTested})", PaletteMediumSage, PaletteDarkText)
+              else -> Triple("Practice (${concept.timesCorrect}/${concept.timesTested})", PaletteMediumSage, PaletteDarkText)
             }
 
             Surface(
@@ -1060,7 +1078,7 @@ private fun ExtractedConceptCard(
               }
             )
             DropdownMenuItem(
-              text = { Text("View Source AI Chat") },
+              text = { Text("View source AI chat") },
               leadingIcon = { Icon(Icons.Default.Source, contentDescription = null) },
               onClick = {
                 showMenu = false
@@ -1068,7 +1086,7 @@ private fun ExtractedConceptCard(
               }
             )
             DropdownMenuItem(
-              text = { Text("Edit Concept Details") },
+              text = { Text("Edit concept details") },
               leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
               onClick = {
                 showMenu = false
@@ -1077,7 +1095,7 @@ private fun ExtractedConceptCard(
             )
             Divider()
             DropdownMenuItem(
-              text = { Text("Delete Concept", color = MaterialTheme.colorScheme.error) },
+              text = { Text("Delete concept", color = MaterialTheme.colorScheme.error) },
               leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
               onClick = {
                 showMenu = false
@@ -1097,11 +1115,10 @@ private fun ExtractedConceptCard(
       ) {
         Column(modifier = Modifier.padding(12.dp)) {
           Text(
-            text = "ACADEMIC DEFINITION",
+            text = "Definition",
             fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
-            color = PaletteDeepSage,
-            letterSpacing = 1.sp
+            color = PaletteDeepSage
           )
           Spacer(modifier = Modifier.height(4.dp))
           Text(
@@ -1134,11 +1151,10 @@ private fun ExtractedConceptCard(
         ) {
           Column(modifier = Modifier.padding(12.dp)) {
             Text(
-              text = "ALGORITHM / FORMULA",
+              text = "Formula or algorithm",
               fontSize = 10.sp,
               fontWeight = FontWeight.Bold,
-              color = PalettePaleCeladon,
-              letterSpacing = 1.sp
+              color = PalettePaleCeladon
             )
             Spacer(modifier = Modifier.height(6.dp))
             SelectionContainer {
@@ -1175,7 +1191,7 @@ private fun ExtractedConceptCard(
             )
             Column {
               Text(
-                text = "COMMON EXAM TRAP / MISCONCEPTION",
+                text = "Common mistake",
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Bold,
                 color = PaletteDarkText
@@ -1233,7 +1249,7 @@ private fun ExtractedConceptCard(
         ) {
           Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
           Spacer(modifier = Modifier.width(4.dp))
-          Text("Quiz Drill", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+          Text("Quiz drill", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
         }
       }
     }
@@ -1286,7 +1302,7 @@ private fun KnowledgeCoverageDashboardTab(
       modifier = Modifier.fillMaxWidth(),
       shape = RoundedCornerShape(18.dp),
       colors = CardDefaults.cardColors(containerColor = PaletteDeepSage),
-      elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+      elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
       Column(modifier = Modifier.padding(20.dp)) {
         Row(
@@ -1300,13 +1316,13 @@ private fun KnowledgeCoverageDashboardTab(
               .padding(end = 8.dp)
           ) {
             Text(
-              text = "Academic Knowledge Base",
+              text = "Knowledge base",
               style = MaterialTheme.typography.titleLarge,
               fontWeight = FontWeight.Bold,
               color = PaletteCreamIvory
             )
             Text(
-              text = "Personal Learning Memory & Linked Chat Retention",
+              text = "Imported chats",
               style = MaterialTheme.typography.bodySmall,
               color = PalettePaleCeladon
             )
@@ -1327,7 +1343,7 @@ private fun KnowledgeCoverageDashboardTab(
           verticalAlignment = Alignment.CenterVertically
         ) {
           Text(
-            text = "Tested Mastery Level",
+            text = "Mastery",
             fontSize = 12.sp,
             color = PaletteCreamIvory,
             fontWeight = FontWeight.Medium
@@ -1353,7 +1369,7 @@ private fun KnowledgeCoverageDashboardTab(
     }
 
     Text(
-      text = "Coverage Metrics",
+      text = "Coverage metrics",
       style = MaterialTheme.typography.titleMedium,
       fontWeight = FontWeight.Bold,
       color = PaletteDarkText
@@ -1362,7 +1378,7 @@ private fun KnowledgeCoverageDashboardTab(
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
       DashboardMetricCard(
         modifier = Modifier.weight(1f),
-        title = "Imported Chats",
+        title = "Imported chats",
         value = "$totalChats",
         subtitle = "Across all AI tools",
         icon = Icons.AutoMirrored.Filled.Chat,
@@ -1370,7 +1386,7 @@ private fun KnowledgeCoverageDashboardTab(
       )
       DashboardMetricCard(
         modifier = Modifier.weight(1f),
-        title = "Extracted Concepts",
+        title = "Extracted concepts",
         value = "$totalConcepts",
         subtitle = "Organized & linked",
         icon = Icons.Default.Psychology,
@@ -1381,7 +1397,7 @@ private fun KnowledgeCoverageDashboardTab(
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
       DashboardMetricCard(
         modifier = Modifier.weight(1f),
-        title = "Subjects Active",
+        title = "Subjects active",
         value = "$subjectsCovered",
         subtitle = "Academic courses",
         icon = Icons.Default.MenuBook,
@@ -1389,7 +1405,7 @@ private fun KnowledgeCoverageDashboardTab(
       )
       DashboardMetricCard(
         modifier = Modifier.weight(1f),
-        title = "Topics Discovered",
+        title = "Topics discovered",
         value = "$topicsDiscovered",
         subtitle = "Curriculum units",
         icon = Icons.Default.Category,
@@ -1400,7 +1416,7 @@ private fun KnowledgeCoverageDashboardTab(
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
       DashboardMetricCard(
         modifier = Modifier.weight(1f),
-        title = "Tested in Quizzes",
+        title = "Tested in quizzes",
         value = "${testedConcepts.size}",
         subtitle = "${untestedConcepts.size} untested",
         icon = Icons.Default.FactCheck,
@@ -1408,7 +1424,7 @@ private fun KnowledgeCoverageDashboardTab(
       )
       DashboardMetricCard(
         modifier = Modifier.weight(1f),
-        title = "Needs Revision",
+        title = "Needs revision",
         value = "${revisionRequired.size}",
         subtitle = "Prioritized in quiz",
         icon = Icons.Default.WarningAmber,
@@ -1423,7 +1439,7 @@ private fun KnowledgeCoverageDashboardTab(
     ) {
       Column(modifier = Modifier.padding(16.dp)) {
         Text(
-          text = "Concepts by Subject",
+          text = "Concepts by subject",
           style = MaterialTheme.typography.titleSmall,
           fontWeight = FontWeight.Bold,
           color = PaletteDarkText
@@ -1497,7 +1513,7 @@ private fun DashboardMetricCard(
     modifier = modifier,
     shape = RoundedCornerShape(14.dp),
     colors = CardDefaults.cardColors(containerColor = containerColor),
-    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
   ) {
     Column(modifier = Modifier.padding(14.dp)) {
       Row(
@@ -1594,7 +1610,7 @@ private fun ImportChatTab(
           )
           Spacer(modifier = Modifier.height(4.dp))
           Text(
-            text = "Paste only the shared conversation link from ChatGPT, Claude, Gemini, or DeepSeek. StudyPilot automatically groups the chat into the right academic subject (or lets you pick/create a subject manually) and indexes it for AI Tutor & quizzes.",
+            text = "Paste a public share link. The chat is filed under a subject automatically, or pick one.",
             style = MaterialTheme.typography.bodySmall,
             color = PaletteDarkText.copy(alpha = 0.8f),
             lineHeight = 18.sp
@@ -1606,7 +1622,7 @@ private fun ImportChatTab(
     // URL Input Field
     Column(modifier = Modifier.fillMaxWidth()) {
       Text(
-        text = "Shared AI Chat URL",
+        text = "Shared AI chat URL",
         style = MaterialTheme.typography.titleSmall,
         fontWeight = FontWeight.Bold,
         color = PaletteDarkText
@@ -1690,7 +1706,7 @@ private fun ImportChatTab(
         OutlinedButton(
           onClick = {
             chatUrl = "https://chatgpt.com/share/sample-dijkstra-shortest-path"
-            if (title.isBlank()) title = "Dijkstra Algorithm Session"
+            if (title.isBlank()) title = "Dijkstra algorithm session"
           },
           shape = RoundedCornerShape(8.dp),
           contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
@@ -1703,14 +1719,14 @@ private fun ImportChatTab(
         OutlinedButton(
           onClick = {
             chatUrl = "https://claude.ai/share/sample-matrix-svd-pca"
-            if (title.isBlank()) title = "Matrix SVD & PCA Session"
+            if (title.isBlank()) title = "Matrix SVD & PCA session"
           },
           shape = RoundedCornerShape(8.dp),
           contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
           border = BorderStroke(1.dp, PaletteMediumSage),
           modifier = Modifier.heightIn(min = 44.dp)
         ) {
-          Text("Sample Claude Link", fontSize = 12.sp, color = PaletteDarkText, maxLines = 1, softWrap = false)
+          Text("Sample Claude link", fontSize = 12.sp, color = PaletteDarkText, maxLines = 1, softWrap = false)
         }
       }
     }
@@ -1735,10 +1751,10 @@ private fun ImportChatTab(
           verticalAlignment = Alignment.CenterVertically
         ) {
           Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-            Text("Subject Grouping", fontSize = 11.sp, color = PaletteDarkText.copy(alpha = 0.65f))
+            Text("Subject grouping", fontSize = 11.sp, color = PaletteDarkText.copy(alpha = 0.65f))
             Text(
               text = when (subjectMode) {
-                "CREATE_NEW" -> if (newSubjectName.isNotBlank()) "New Subject: $newSubjectName" else "Create New Subject Manually"
+                "CREATE_NEW" -> if (newSubjectName.isNotBlank()) "New subject: $newSubjectName" else "Create New Subject Manually"
                 "EXISTING" -> selectedSubject?.let { "${it.code}: ${it.name}" } ?: "Auto-group from linked chat"
                 else -> "Auto-group from linked chat (Recommended)"
               },
@@ -1881,7 +1897,7 @@ private fun ImportChatTab(
             verticalAlignment = Alignment.CenterVertically
           ) {
             Text(
-              text = "Fetching Link & Extracting Knowledge",
+              text = "Importing...",
               fontWeight = FontWeight.Bold,
               fontSize = 13.sp,
               color = PaletteDarkText,
@@ -1958,7 +1974,7 @@ private fun ImportChatTab(
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text(
-          text = "Fetch Link & Group Chat",
+          text = "Import",
           fontWeight = FontWeight.Bold,
           fontSize = 15.sp,
           maxLines = 1,
@@ -2057,7 +2073,7 @@ private fun ExtractionPreviewDialog(
               .padding(end = 8.dp)
           ) {
             Text(
-              text = "Knowledge Extraction Preview",
+              text = "Preview",
               style = MaterialTheme.typography.titleLarge,
               fontWeight = FontWeight.Bold,
               color = PaletteDarkText
@@ -2109,7 +2125,7 @@ private fun ExtractionPreviewDialog(
           OutlinedTextField(
             value = editableTitle,
             onValueChange = { editableTitle = it },
-            label = { Text("Conversation Title") },
+            label = { Text("Conversation title") },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
             colors = OutlinedTextFieldDefaults.colors(
@@ -2146,7 +2162,7 @@ private fun ExtractionPreviewDialog(
                   )
                   Text(
                     text = when (subjectMode) {
-                      "CREATE_NEW" -> "Create New: ${newSubjectName.ifBlank { preview.discoveredSubject }}"
+                      "CREATE_NEW" -> "New: ${newSubjectName.ifBlank { preview.discoveredSubject }}"
                       "EXISTING" -> selectedSubject?.let { "${it.code}: ${it.name}" } ?: preview.discoveredSubject
                       else -> {
                         val sName = subjectSuggestion?.suggestedName ?: preview.discoveredSubject
@@ -2244,11 +2260,10 @@ private fun ExtractionPreviewDialog(
           ) {
             Column(modifier = Modifier.padding(12.dp)) {
               Text(
-                text = "TOPICS DISCOVERED",
+                text = "Topics found",
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Bold,
-                color = PaletteDeepSage,
-                letterSpacing = 1.sp
+                color = PaletteDeepSage
               )
               Spacer(modifier = Modifier.height(4.dp))
               Text(
@@ -2261,7 +2276,7 @@ private fun ExtractionPreviewDialog(
           }
 
           Text(
-            text = "Extracted Concepts (${preview.concepts.size})",
+            text = "Concepts (${preview.concepts.size})",
             fontWeight = FontWeight.Bold,
             color = PaletteDarkText,
             fontSize = 14.sp
@@ -2399,7 +2414,7 @@ private fun MoveChatToSubjectDialog(
         verticalArrangement = Arrangement.spacedBy(12.dp)
       ) {
         Text(
-          text = "Move Chat to Subject",
+          text = "Move chat to subject",
           style = MaterialTheme.typography.titleMedium,
           fontWeight = FontWeight.Bold,
           color = PaletteDarkText
@@ -2704,7 +2719,7 @@ private fun EditChatDetailsDialog(
         verticalArrangement = Arrangement.spacedBy(12.dp)
       ) {
         Text(
-          text = "Edit Conversation Details",
+          text = "Edit conversation details",
           style = MaterialTheme.typography.titleMedium,
           fontWeight = FontWeight.Bold,
           color = PaletteDarkText
@@ -2798,7 +2813,7 @@ private fun EditConceptDialog(
           .padding(18.dp)
       ) {
         Text(
-          text = "Edit Extracted Concept",
+          text = "Edit extracted concept",
           style = MaterialTheme.typography.titleMedium,
           fontWeight = FontWeight.Bold,
           color = PaletteDarkText
@@ -2815,14 +2830,14 @@ private fun EditConceptDialog(
           OutlinedTextField(
             value = conceptName,
             onValueChange = { conceptName = it },
-            label = { Text("Concept Name") },
+            label = { Text("Concept name") },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp)
           )
           OutlinedTextField(
             value = topic,
             onValueChange = { topic = it },
-            label = { Text("Topic Name") },
+            label = { Text("Topic name") },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp)
           )
@@ -2836,7 +2851,7 @@ private fun EditConceptDialog(
           OutlinedTextField(
             value = definition,
             onValueChange = { definition = it },
-            label = { Text("Academic Definition") },
+            label = { Text("Definition") },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
             minLines = 2

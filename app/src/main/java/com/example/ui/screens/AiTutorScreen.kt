@@ -168,7 +168,7 @@ fun AiTutorScreen(
     // 1. Top Mode Selector Bar (Chat vs History tabs)
     Surface(
       color = MaterialTheme.colorScheme.surface,
-      shadowElevation = 1.dp,
+      shadowElevation = 0.dp,
       modifier = Modifier.fillMaxWidth()
     ) {
       Column {
@@ -205,7 +205,7 @@ fun AiTutorScreen(
                   )
                   Spacer(modifier = Modifier.width(6.dp))
                   Text(
-                    text = "Active Chat",
+                    text = "Active chat",
                     fontSize = 12.sp,
                     fontWeight = if (selectedTab == TutorTab.CHAT) FontWeight.Bold else FontWeight.Medium,
                     color = if (selectedTab == TutorTab.CHAT) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
@@ -303,7 +303,7 @@ fun AiTutorScreen(
               onClick = { viewModel.selectTutorSubject(null) },
               label = {
                 Text(
-                  text = "🌐 All Subjects",
+                  text = "All subjects",
                   fontSize = 12.sp,
                   fontWeight = if (selectedSubject == null) FontWeight.Bold else FontWeight.Normal
                 )
@@ -481,7 +481,7 @@ fun AiTutorScreen(
             showSystemInstructionDialog = false
           }
         ) {
-          Text("Save Persona")
+          Text("Save persona")
         }
       },
       dismissButton = {
@@ -508,7 +508,7 @@ fun AiTutorScreen(
           },
           colors = ButtonDefaults.buttonColors(containerColor = RoseError)
         ) {
-          Text("Clear All")
+          Text("Clear all")
         }
       },
       dismissButton = {
@@ -645,7 +645,7 @@ private fun ChatTabContent(
       }
     }
 
-    // Model Selector & Grounding Controls (Collapsible to maximize chat window)
+    // Answer source picker (collapsible)
     AnimatedVisibility(visible = isHeaderExpanded) {
       Surface(
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
@@ -747,7 +747,7 @@ private fun ChatTabContent(
           selectedSubject = selectedSubject,
           onCopy = {
             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            clipboard.setPrimaryClip(ClipData.newPlainText("Tutor Message", msg.text))
+            clipboard.setPrimaryClip(ClipData.newPlainText("Tutor message", msg.text))
             Toast.makeText(context, "Copied response to clipboard", Toast.LENGTH_SHORT).show()
           },
           onOpenUrl = { url ->
@@ -797,7 +797,7 @@ private fun ChatTabContent(
     // Input Bar
     Surface(
       color = MaterialTheme.colorScheme.surface,
-      shadowElevation = 8.dp,
+      shadowElevation = 0.dp,
       modifier = Modifier.fillMaxWidth()
     ) {
       Column(modifier = Modifier.fillMaxWidth()) {
@@ -913,7 +913,7 @@ private fun HistoryTabContent(
       verticalAlignment = Alignment.CenterVertically
     ) {
       Text(
-        text = if (selectedSubject != null) "Sessions for ${selectedSubject.name} (${filteredSessions.size})" else "All Past Tutoring Sessions (${filteredSessions.size})",
+        text = if (selectedSubject != null) "Sessions for ${selectedSubject.name} (${filteredSessions.size})" else "Past chats (${filteredSessions.size})",
         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
         color = MaterialTheme.colorScheme.onBackground,
         maxLines = 1,
@@ -925,7 +925,7 @@ private fun HistoryTabContent(
 
       if (tutorSessions.isNotEmpty()) {
         TextButton(onClick = onClearAllHistory, modifier = Modifier.heightIn(min = 44.dp)) {
-          Text("Clear All", fontSize = 12.sp, color = RoseError, maxLines = 1, softWrap = false)
+          Text("Clear all", fontSize = 12.sp, color = RoseError, maxLines = 1, softWrap = false)
         }
       }
     }
@@ -967,7 +967,7 @@ private fun HistoryTabContent(
           )
 
           Text(
-            text = "Ask the AI Tutor a question to automatically log your learning history and derivations here.",
+            text = "Your past chats appear here.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.widthIn(max = 280.dp)
@@ -981,7 +981,7 @@ private fun HistoryTabContent(
           ) {
             Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(modifier = Modifier.width(6.dp))
-            Text("Start a New Chat")
+            Text("Start a new chat")
           }
         }
       }
@@ -997,7 +997,7 @@ private fun HistoryTabContent(
             onClick = { onSelectSession(session) },
             onCopy = {
               val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-              clipboard.setPrimaryClip(ClipData.newPlainText("Session Snippet", session.previewSnippet))
+              clipboard.setPrimaryClip(ClipData.newPlainText("Session snippet", session.previewSnippet))
               Toast.makeText(context, "Snippet copied to clipboard", Toast.LENGTH_SHORT).show()
             },
             onDelete = { onDeleteSession(session.id) }
@@ -1040,7 +1040,7 @@ private fun TutorSessionHistoryCard(
       1.dp,
       if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
     ),
-    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
   ) {
     Column(modifier = Modifier.padding(14.dp)) {
       Row(
@@ -1069,7 +1069,7 @@ private fun TutorSessionHistoryCard(
               modifier = Modifier.padding(end = 6.dp)
             ) {
               Text(
-                text = "Web Search",
+                text = "Web search",
                 style = MaterialTheme.typography.labelSmall,
                 color = CyanAccent,
                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -1159,7 +1159,7 @@ private fun TutorSessionHistoryCard(
             modifier = Modifier.heightIn(min = 40.dp),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 0.dp)
           ) {
-            Text("Open Chat", fontSize = 11.sp, maxLines = 1, softWrap = false)
+            Text("Open chat", fontSize = 11.sp, maxLines = 1, softWrap = false)
           }
         }
       }
@@ -1245,7 +1245,7 @@ private fun ChatMessageBubble(
                 Icon(Icons.Default.Public, contentDescription = null, tint = CyanAccent, modifier = Modifier.size(10.dp))
                 Spacer(modifier = Modifier.width(3.dp))
                 Text(
-                  text = "Google Search",
+                  text = "Sources",
                   style = MaterialTheme.typography.labelSmall,
                   color = CyanAccent,
                   maxLines = 1,
@@ -1330,7 +1330,7 @@ private fun ChatMessageBubble(
                   Icon(Icons.Default.Search, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(12.dp))
                   Spacer(modifier = Modifier.width(4.dp))
                   Text(
-                    text = "Search Grounding Citations",
+                    text = "Sources",
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.primary
                   )
@@ -1402,7 +1402,7 @@ private fun ChatMessageBubble(
                   verticalAlignment = Alignment.CenterVertically
                 ) {
                   Text(
-                    text = "💡 Another Example",
+                    text = "Another example",
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSecondaryContainer
                   )
@@ -1425,7 +1425,7 @@ private fun ChatMessageBubble(
                   verticalAlignment = Alignment.CenterVertically
                 ) {
                   Text(
-                    text = "💻 Example in Code",
+                    text = "Example in code",
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSecondaryContainer
                   )
@@ -1448,7 +1448,7 @@ private fun ChatMessageBubble(
                   verticalAlignment = Alignment.CenterVertically
                 ) {
                   Text(
-                    text = "⚡ Another Example in Code",
+                    text = "Another example in code",
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSecondaryContainer
                   )
@@ -1471,7 +1471,7 @@ private fun ChatMessageBubble(
                   verticalAlignment = Alignment.CenterVertically
                 ) {
                   Text(
-                    text = "📌 Summarize",
+                    text = "Summarize",
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSecondaryContainer
                   )
@@ -1494,7 +1494,7 @@ private fun ChatMessageBubble(
                   verticalAlignment = Alignment.CenterVertically
                 ) {
                   Text(
-                    text = "🔍 Explain Example",
+                    text = "Explain example",
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSecondaryContainer
                   )
@@ -1574,7 +1574,7 @@ private fun PromptChip(
   Surface(
     shape = RoundedCornerShape(16.dp),
     color = MaterialTheme.colorScheme.surface,
-    shadowElevation = 1.dp,
+    shadowElevation = 0.dp,
     modifier = Modifier.clickable { onClick() }
   ) {
     Text(
@@ -1590,11 +1590,11 @@ private fun PromptChip(
 private fun getPromptsForSubject(subject: Subject?): List<PromptOption> {
   if (subject == null) {
     return listOf(
-      PromptOption("💻 Java Objects & Memory", "Explain Java Objects, reference semantics, and heap/stack memory architecture with code examples."),
-      PromptOption("⚛️ Quantum Physics & Superposition", "Explain Quantum Superposition, wave-particle duality, and mathematical formulation."),
-      PromptOption("✈️ Aerodynamics: How Planes Fly", "Explain how airplanes fly with Bernoulli's principle, angle of attack, and lift mechanics."),
-      PromptOption("🔬 Bayesian Inference & MCMC", "Explain Bayes' Theorem, prior/posterior distributions, and Markov Chain Monte Carlo sampling."),
-      PromptOption("📈 Inflation & Monetary Policy", "Explain inflation, currency supply, interest rates, and central bank monetary policy mechanisms.")
+      PromptOption("Java Objects & Memory", "Explain Java Objects, reference semantics, and heap/stack memory architecture with code examples."),
+      PromptOption("Quantum Physics & Superposition", "Explain Quantum Superposition, wave-particle duality, and mathematical formulation."),
+      PromptOption("Aerodynamics: How Planes Fly", "Explain how airplanes fly with Bernoulli's principle, angle of attack, and lift mechanics."),
+      PromptOption("Bayesian Inference & MCMC", "Explain Bayes' Theorem, prior/posterior distributions, and Markov Chain Monte Carlo sampling."),
+      PromptOption("Inflation & Monetary Policy", "Explain inflation, currency supply, interest rates, and central bank monetary policy mechanisms.")
     )
   }
 
@@ -1603,31 +1603,31 @@ private fun getPromptsForSubject(subject: Subject?): List<PromptOption> {
 
   return when {
     name.contains("data structure") || name.contains("algorithm") || code.contains("cs2") -> listOf(
-      PromptOption("💻 AVL Double Rotations in Kotlin", "Explain how Left-Right and Right-Left double rotations work in AVL trees, and provide clean Kotlin code."),
-      PromptOption("⚡ Dijkstra vs Bellman-Ford", "Compare Dijkstra and Bellman-Ford algorithms regarding time complexity, negative edges, and cycle detection."),
-      PromptOption("🧠 Prove Master Theorem case 2", "Derive and prove Case 2 of the Master Theorem for divide-and-conquer algorithmic recurrences."),
-      PromptOption("🔍 Self-balancing trees research", "What are the modern variants of self-balancing search trees (e.g. WAVL, Zip trees) used in database indexing?")
+      PromptOption("AVL Double Rotations in Kotlin", "Explain how Left-Right and Right-Left double rotations work in AVL trees, and provide clean Kotlin code."),
+      PromptOption("Dijkstra vs Bellman-Ford", "Compare Dijkstra and Bellman-Ford algorithms regarding time complexity, negative edges, and cycle detection."),
+      PromptOption("Prove Master Theorem case 2", "Derive and prove Case 2 of the Master Theorem for divide-and-conquer algorithmic recurrences."),
+      PromptOption("Self-balancing trees research", "What are the modern variants of self-balancing search trees (e.g. WAVL, Zip trees) used in database indexing?")
     )
     name.contains("linear algebra") || name.contains("calculus") || code.contains("math") -> listOf(
-      PromptOption("🧠 Matrix Diagonalization Proof", "Prove the necessary and sufficient conditions for matrix diagonalizability with eigenvalues and eigenspaces."),
-      PromptOption("📐 Gram-Schmidt Step-by-Step", "Walk me through the Gram-Schmidt orthogonalization algorithm with an example step-by-step derivation."),
-      PromptOption("⚡ Eigenvalues of Orthogonal Matrix", "Explain why all eigenvalues of a real orthogonal matrix must have absolute value equal to 1."),
-      PromptOption("🔍 Spectral Theorem application", "Explain the Spectral Theorem and its modern applications in machine learning SVD and PCA.")
+      PromptOption("Matrix Diagonalization Proof", "Prove the necessary and sufficient conditions for matrix diagonalizability with eigenvalues and eigenspaces."),
+      PromptOption("Gram-Schmidt Step-by-Step", "Walk me through the Gram-Schmidt orthogonalization algorithm with an example step-by-step derivation."),
+      PromptOption("Eigenvalues of Orthogonal Matrix", "Explain why all eigenvalues of a real orthogonal matrix must have absolute value equal to 1."),
+      PromptOption("Spectral Theorem application", "Explain the Spectral Theorem and its modern applications in machine learning SVD and PCA.")
     )
     name.contains("physics") || code.contains("phys") -> listOf(
-      PromptOption("🔍 Davisson-Germer electron diffraction", "Explain the Davisson-Germer experiment that verified de Broglie's wave hypothesis,."),
-      PromptOption("⚡ Schrödinger 1D Infinite Well", "Derive the energy eigenstates and wavefunctions for a particle in a 1D infinite square well."),
-      PromptOption("🧠 Heisenberg Uncertainty Derivation", "Derive Heisenberg's uncertainty principle using operators and the Cauchy-Schwarz inequality.")
+      PromptOption("Davisson-Germer electron diffraction", "Explain the Davisson-Germer experiment that verified de Broglie's wave hypothesis,."),
+      PromptOption("Schrödinger 1D Infinite Well", "Derive the energy eigenstates and wavefunctions for a particle in a 1D infinite square well."),
+      PromptOption("Heisenberg Uncertainty Derivation", "Derive Heisenberg's uncertainty principle using operators and the Cauchy-Schwarz inequality.")
     )
     name.contains("software") || name.contains("engineering") || code.contains("cs3") -> listOf(
-      PromptOption("💻 SOLID Principles in Kotlin", "Explain all 5 SOLID principles with concrete, clean Kotlin code examples."),
-      PromptOption("⚡ Dependency Injection vs Factory", "Explain the key differences and design trade-offs between Dependency Injection and Factory patterns."),
-      PromptOption("🔍 Thread-safe Singleton in Kotlin", "How is the thread-safe Singleton pattern implemented idiomatically in Kotlin?")
+      PromptOption("SOLID Principles in Kotlin", "Explain all 5 SOLID principles with concrete, clean Kotlin code examples."),
+      PromptOption("Dependency Injection vs Factory", "Explain the key differences and design trade-offs between Dependency Injection and Factory patterns."),
+      PromptOption("Thread-safe Singleton in Kotlin", "How is the thread-safe Singleton pattern implemented idiomatically in Kotlin?")
     )
     else -> listOf(
-      PromptOption("🔍 Key theorems in ${subject.code}", "What are the most crucial core theorems and exam questions in ${subject.name}? "),
-      PromptOption("🧠 Step-by-step concept breakdown", "Break down the core principles of ${subject.name} into clear conceptual pillars with exam tips."),
-      PromptOption("⚡ 5-minute summary", "Give me a high-yield 5-minute study summary for ${subject.name}.")
+      PromptOption("Key theorems in ${subject.code}", "What are the most crucial core theorems and exam questions in ${subject.name}? "),
+      PromptOption("Step-by-step concept breakdown", "Break down the core principles of ${subject.name} into clear conceptual pillars with exam tips."),
+      PromptOption("5-minute summary", "Give me a high-yield 5-minute study summary for ${subject.name}.")
     )
   }
 }

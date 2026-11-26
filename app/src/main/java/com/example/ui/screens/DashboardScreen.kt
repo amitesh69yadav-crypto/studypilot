@@ -3,6 +3,7 @@ package com.example.ui.screens
 import com.example.ui.components.formatTimeRange
 import com.example.ui.components.formatTo12Hour
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,7 +29,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.CalendarMonth
@@ -72,6 +74,9 @@ import com.example.ui.theme.PaletteDeepSage
 import com.example.ui.theme.PaletteMediumSage
 import com.example.ui.theme.PaletteMintFoam
 import com.example.ui.theme.PalettePaleCeladon
+import com.example.ui.theme.RoseError
+import com.example.ui.theme.AmberAccent
+import com.example.ui.theme.CyanAccent
 import com.example.ui.viewmodel.Screen
 import com.example.ui.viewmodel.StudyPilotViewModel
 
@@ -116,48 +121,48 @@ fun DashboardScreen(
     modifier = Modifier.fillMaxSize(),
     contentPadding = PaddingValues(bottom = 24.dp)
   ) {
-    // 1. Streak & Status Subheader Banner
+    // 1. Clean Subtle Header
     item {
       Row(
         modifier = Modifier
           .fillMaxWidth()
-          .padding(horizontal = 16.dp, vertical = 10.dp),
+          .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 10.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
       ) {
-        Column(modifier = Modifier.weight(1f)) {
-          val isGuestMode = !currentUser.isLoggedIn || currentUser.id == com.example.ui.viewmodel.StudyPilotViewModel.GUEST_USER_ID
-          val firstName = currentUser.name.trim().split(" ").firstOrNull().orEmpty().ifBlank { "Guest" }
-          Text(
-            text = if (isGuestMode) "Welcome, Guest" else "Welcome back, $firstName",
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-            color = MaterialTheme.colorScheme.onBackground,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-          )
-          Text(
-            text = if (isGuestMode) "Guest Mode • Tap here to Sign In" else "${currentUser.university} • Command Center",
-            style = MaterialTheme.typography.bodySmall,
-            color = if (isGuestMode) PaletteDeepSage else MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = if (isGuestMode) FontWeight.SemiBold else FontWeight.Normal,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = if (isGuestMode) {
-              Modifier
-                .clickable { onNavigate(Screen.Login) }
-                .padding(vertical = 2.dp)
-            } else {
-              Modifier
+        val isGuestMode = !currentUser.isLoggedIn || currentUser.id == com.example.ui.viewmodel.StudyPilotViewModel.GUEST_USER_ID
+        val firstName = currentUser.name.trim().split(" ").firstOrNull().orEmpty().ifBlank { "Guest" }
+        Column {
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = if (isGuestMode) Modifier.clickable { onNavigate(Screen.Login) } else Modifier
+          ) {
+            Text(
+              text = if (isGuestMode) "Welcome" else "Hello, $firstName",
+              style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+              color = MaterialTheme.colorScheme.onBackground
+            )
+            if (isGuestMode) {
+              Spacer(modifier = Modifier.width(6.dp))
+              Text(
+                text = "· Sign in",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary
+              )
             }
+          }
+          Spacer(modifier = Modifier.height(2.dp))
+          Text(
+            text = java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("EEEE, MMM d")),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
           )
         }
 
-        Spacer(modifier = Modifier.width(10.dp))
-
         Surface(
           shape = RoundedCornerShape(20.dp),
-          color = PalettePaleCeladon,
-          border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage)
+          color = MaterialTheme.colorScheme.surface,
+          border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
           Row(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
@@ -166,14 +171,14 @@ fun DashboardScreen(
             Icon(
               imageVector = Icons.Default.LocalFireDepartment,
               contentDescription = "Streak",
-              tint = PaletteDarkText,
-              modifier = Modifier.size(16.dp)
+              tint = MaterialTheme.colorScheme.primary,
+              modifier = Modifier.size(14.dp)
             )
             Spacer(modifier = Modifier.width(4.dp))
             Text(
-              text = "$studyStreak-Day Streak",
-              style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-              color = PaletteDarkText
+              text = "$studyStreak d",
+              style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+              color = MaterialTheme.colorScheme.primary
             )
           }
         }
@@ -182,7 +187,7 @@ fun DashboardScreen(
 
     // 2. Real-Time "What Should I Do Now?" Live Card
     item {
-      Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+      Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 5.dp)) {
         WhatShouldIDoNowCard(
           status = scheduleStatus,
           onPlanScheduleClick = { onNavigate(Screen.Timetable) },
@@ -209,379 +214,191 @@ fun DashboardScreen(
       }
     }
 
-    // 2b. Live Mobile Device Clock & Alarm Control Card
+    // 3. Subtle 4-Item Quick Action Row
     item {
-      Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-        MobileClockAlarmCard(
-          activeAlarmsCount = activeAlarmsCount,
-          onQuickAlarmClick = { showQuickAlarmDialog = true },
-          onTestAlarmSoundClick = {
-            val sample = sessions.firstOrNull() ?: TimetableSession(
-              id = 999L,
-              subjectId = 0L,
-              subjectName = "Alarm System Test",
-              topic = "Mobile Ringtone & Beeps Test",
-              date = "",
-              startTime = "Now",
-              endTime = "",
-              location = "",
-              notes = ""
-            )
-            viewModel.triggerTestAlarm(sample)
-          }
+      Row(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 16.dp, vertical = 5.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+      ) {
+        QuickActionButton(
+          icon = Icons.Default.Schedule,
+          label = "Schedule",
+          modifier = Modifier.weight(1f),
+          onClick = onQuickAddSession
+        )
+        QuickActionButton(
+          icon = Icons.Default.Book,
+          label = "Topic",
+          modifier = Modifier.weight(1f),
+          onClick = onQuickAddTopic
+        )
+        QuickActionButton(
+          icon = Icons.Default.Alarm,
+          label = "Alarm",
+          modifier = Modifier.weight(1f),
+          onClick = { showQuickAlarmDialog = true }
+        )
+        QuickActionButton(
+          icon = Icons.Default.Psychology,
+          label = "Tutor",
+          modifier = Modifier.weight(1f),
+          onClick = { onNavigate(Screen.AiTutor) }
         )
       }
     }
 
-    // 2. Next Scheduled Weekend Quiz Hero Banner
+    // 4. Subtle 2-Tile Hub: Quiz & Memory
     item {
-      ElevatedCard(
+      Row(
         modifier = Modifier
           .fillMaxWidth()
-          .padding(horizontal = 16.dp, vertical = 6.dp),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.elevatedCardColors(
-          containerColor = MaterialTheme.colorScheme.primaryContainer
-        ),
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
+          .padding(horizontal = 16.dp, vertical = 5.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
       ) {
-        Column(
-          modifier = Modifier.padding(18.dp)
+        Surface(
+          modifier = Modifier
+            .weight(1f)
+            .height(60.dp)
+            .clickable { onNavigate(Screen.WeekendQuizzes) },
+          shape = RoundedCornerShape(12.dp),
+          color = MaterialTheme.colorScheme.surface,
+          border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
           Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+              .fillMaxSize()
+              .padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically
           ) {
-            Box(
-              modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary),
-              contentAlignment = Alignment.Center
-            ) {
-              Icon(
-                imageVector = Icons.Default.AutoAwesome,
-                contentDescription = "AI Quiz",
-                tint = MaterialTheme.colorScheme.onPrimary,
-                modifier = Modifier.size(20.dp)
-              )
-            }
-            Spacer(modifier = Modifier.width(12.dp))
             Column {
               Text(
-                text = "AI Weekend Revision Quiz",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onPrimaryContainer
+                text = "Quiz",
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface
               )
               Text(
-                text = "Scheduled: Saturday & Sunday at 10:00 AM",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                text = "${topics.size} topics",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
               )
             }
           }
-
-          Spacer(modifier = Modifier.height(12.dp))
-          Text(
-            text = "Prepares adaptive questions covering this week's topics. Balances overdue and weak areas so every topic is rotated.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.9f)
-          )
-
-          Spacer(modifier = Modifier.height(14.dp))
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-          ) {
-            Button(
-              onClick = { viewModel.startWeekendQuiz(forceWeakOnly = false) },
-              colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary
-              ),
-              shape = RoundedCornerShape(12.dp),
-              contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-              modifier = Modifier
-                .weight(1f)
-                .heightIn(min = 48.dp)
-            ) {
-              Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-              Spacer(modifier = Modifier.width(6.dp))
-              Text(
-                "Start Quiz",
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                softWrap = false,
-                overflow = TextOverflow.Ellipsis
-              )
-            }
-
-            if (strugglingCount > 0) {
-              OutlinedButton(
-                onClick = { viewModel.startWeekendQuiz(forceWeakOnly = true) },
-                shape = RoundedCornerShape(12.dp),
-                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                modifier = Modifier
-                  .weight(1f)
-                  .heightIn(min = 48.dp)
-              ) {
-                Text(
-                  "Revise Weak ($strugglingCount)",
-                  fontWeight = FontWeight.SemiBold,
-                  maxLines = 1,
-                  softWrap = false,
-                  overflow = TextOverflow.Ellipsis
-                )
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // 3. Perfectly Balanced 2x2 Quick Action Buttons Grid
-    item {
-      Column(
-        modifier = Modifier
-          .fillMaxWidth()
-          .padding(horizontal = 16.dp, vertical = 6.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-      ) {
-        Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-          Button(
-            onClick = onQuickAddSession,
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-            modifier = Modifier
-              .weight(1f)
-              .heightIn(min = 48.dp)
-          ) {
-            Icon(Icons.Default.Add, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-              "Add Schedule",
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
-              fontSize = 12.sp,
-              fontWeight = FontWeight.SemiBold,
-              maxLines = 1,
-              softWrap = false,
-              overflow = TextOverflow.Ellipsis
-            )
-          }
-
-          Button(
-            onClick = onQuickAddTopic,
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-            modifier = Modifier
-              .weight(1f)
-              .heightIn(min = 48.dp)
-          ) {
-            Icon(Icons.Default.Book, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-              "Record Topic",
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
-              fontSize = 12.sp,
-              fontWeight = FontWeight.SemiBold,
-              maxLines = 1,
-              softWrap = false,
-              overflow = TextOverflow.Ellipsis
-            )
-          }
         }
 
-        Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-          Button(
-            onClick = { onNavigate(Screen.WeekendQuizzes) },
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-            modifier = Modifier
-              .weight(1f)
-              .heightIn(min = 48.dp)
-          ) {
-            Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-              "Quiz Hub",
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
-              fontSize = 12.sp,
-              fontWeight = FontWeight.SemiBold,
-              maxLines = 1,
-              softWrap = false,
-              overflow = TextOverflow.Ellipsis
-            )
-          }
-
-          Button(
-            onClick = { onNavigate(Screen.AiTutor) },
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-            modifier = Modifier
-              .weight(1f)
-              .heightIn(min = 48.dp)
-          ) {
-            Icon(Icons.Default.Psychology, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-              "AI Study Tutor",
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
-              fontSize = 12.sp,
-              fontWeight = FontWeight.SemiBold,
-              maxLines = 1,
-              softWrap = false,
-              overflow = TextOverflow.Ellipsis
-            )
-          }
-        }
-
-        // Quick Import AI Chat action
-        Button(
-          onClick = { onNavigate(Screen.AiChatImport) },
+        Surface(
+          modifier = Modifier
+            .weight(1f)
+            .height(60.dp)
+            .clickable { onNavigate(Screen.AiChatImport) },
           shape = RoundedCornerShape(12.dp),
-          colors = ButtonDefaults.buttonColors(containerColor = PaletteDeepSage),
-          contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-          modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 48.dp)
+          color = MaterialTheme.colorScheme.surface,
+          border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
-          Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = null, tint = PaletteCreamIvory, modifier = Modifier.size(18.dp))
-          Spacer(modifier = Modifier.width(8.dp))
-          Text(
-            "Import AI Chats & Intelligent Memory",
-            color = PaletteCreamIvory,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-          )
-        }
-      }
-    }
-
-    // 4. Learning Stats Grid
-    item {
-      Column(
-        modifier = Modifier
-          .fillMaxWidth()
-          .padding(vertical = 4.dp)
-      ) {
-        SectionHeader(title = "Learning Overview")
-        Row(
-          modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-          horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-          StatCard(
-            title = "Topics Studied",
-            value = topics.size.toString(),
-            subtitle = "$masteredCount mastered",
-            icon = Icons.Default.Book,
-            iconTint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.weight(1f)
-          )
-          StatCard(
-            title = "Avg Quiz Score",
-            value = if (attempts.isNotEmpty()) "$averageScore%" else "0%",
-            subtitle = "${attempts.size} quizzes taken",
-            icon = Icons.AutoMirrored.Filled.TrendingUp,
-            iconTint = PaletteDeepSage,
-            modifier = Modifier.weight(1f)
-          )
-        }
-      }
-    }
-
-    // Personal Learning Memory Card
-    item {
-      Column(
-        modifier = Modifier
-          .fillMaxWidth()
-          .padding(horizontal = 16.dp, vertical = 6.dp)
-      ) {
-        Card(
-          modifier = Modifier
-            .fillMaxWidth(),
-          shape = RoundedCornerShape(16.dp),
-          colors = CardDefaults.cardColors(containerColor = PaletteMintFoam),
-          elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-        ) {
-          Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-              modifier = Modifier.fillMaxWidth(),
-              horizontalArrangement = Arrangement.SpaceBetween,
-              verticalAlignment = Alignment.CenterVertically
-            ) {
-              Row(
-                modifier = Modifier
-                  .weight(1f)
-                  .padding(end = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-              ) {
-                Surface(
-                  color = PaletteDeepSage,
-                  shape = CircleShape,
-                  modifier = Modifier.size(32.dp)
-                ) {
-                  Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                      Icons.Default.Psychology,
-                      contentDescription = null,
-                      tint = PaletteCreamIvory,
-                      modifier = Modifier.size(18.dp)
-                    )
-                  }
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                  Text(
-                    text = "Personal Learning Memory",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp,
-                    color = PaletteDarkText,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                  )
-                  Text(
-                    text = "${extractedConcepts.size} concepts • ${importedChats.size} AI chats indexed",
-                    fontSize = 11.sp,
-                    color = PaletteDeepSage,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                  )
-                }
-              }
-
-              OutlinedButton(
-                onClick = { onNavigate(Screen.AiChatImport) },
-                shape = RoundedCornerShape(10.dp),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = PaletteDarkText),
-                border = ButtonDefaults.outlinedButtonBorder.copy(
-                  brush = androidx.compose.ui.graphics.SolidColor(PaletteMediumSage)
-                ),
-                modifier = Modifier.heightIn(min = 44.dp)
-              ) {
-                Text("Open", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
-              }
+          Row(
+            modifier = Modifier
+              .fillMaxSize()
+              .padding(horizontal = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Column {
+              Text(
+                text = "Memory",
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface
+              )
+              Text(
+                text = "${extractedConcepts.size} facts",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+              )
             }
           }
         }
       }
     }
 
+    // 5. Even 3-Column Stats Capsule
+    item {
+      Surface(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 16.dp, vertical = 5.dp),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+      ) {
+        Row(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 10.dp),
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Column(
+            modifier = Modifier.weight(1f),
+            horizontalAlignment = Alignment.CenterHorizontally
+          ) {
+            Text(
+              text = "${topics.size}",
+              style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+              color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+              text = "Studied",
+              style = MaterialTheme.typography.labelSmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+          }
+
+          Box(
+            modifier = Modifier
+              .width(1.dp)
+              .height(24.dp)
+              .background(MaterialTheme.colorScheme.outlineVariant)
+          )
+
+          Column(
+            modifier = Modifier.weight(1f),
+            horizontalAlignment = Alignment.CenterHorizontally
+          ) {
+            Text(
+              text = if (attempts.isNotEmpty()) "$averageScore%" else "—",
+              style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+              color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+              text = "Avg Score",
+              style = MaterialTheme.typography.labelSmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+          }
+
+          Box(
+            modifier = Modifier
+              .width(1.dp)
+              .height(24.dp)
+              .background(MaterialTheme.colorScheme.outlineVariant)
+          )
+
+          Column(
+            modifier = Modifier.weight(1f),
+            horizontalAlignment = Alignment.CenterHorizontally
+          ) {
+            Text(
+              text = "$masteredCount",
+              style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+              color = MaterialTheme.colorScheme.primary
+            )
+            Text(
+              text = "Mastered",
+              style = MaterialTheme.typography.labelSmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+          }
+        }
+      }
+    }
     // 5. Today's Lectures & Study Sessions
     item {
       Column(
@@ -590,8 +407,8 @@ fun DashboardScreen(
           .padding(vertical = 4.dp)
       ) {
         SectionHeader(
-          title = "Today's Timetable",
-          actionText = "View All",
+          title = "Today",
+          actionText = "All",
           onActionClick = { onNavigate(Screen.Timetable) }
         )
 
@@ -600,15 +417,16 @@ fun DashboardScreen(
             modifier = Modifier
               .fillMaxWidth()
               .padding(horizontal = 16.dp),
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(12.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
           ) {
             Text(
-              text = "No lectures scheduled for today. Take time to revise!",
-              style = MaterialTheme.typography.bodyMedium,
+              text = "No classes scheduled today.",
+              style = MaterialTheme.typography.bodySmall,
               color = MaterialTheme.colorScheme.onSurfaceVariant,
-              modifier = Modifier.padding(16.dp)
+              modifier = Modifier.padding(14.dp)
             )
           }
         } else {
@@ -635,8 +453,8 @@ fun DashboardScreen(
           .padding(vertical = 4.dp)
       ) {
         SectionHeader(
-          title = "Recent Topics",
-          actionText = "My Library",
+          title = "Recent",
+          actionText = "Library",
           onActionClick = { onNavigate(Screen.MyTopics) }
         )
 
@@ -645,15 +463,16 @@ fun DashboardScreen(
             modifier = Modifier
               .fillMaxWidth()
               .padding(horizontal = 16.dp),
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(12.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
           ) {
             Text(
-              text = "No study topics recorded yet. Record what you learned in lectures!",
-              style = MaterialTheme.typography.bodyMedium,
+              text = "No topics recorded yet.",
+              style = MaterialTheme.typography.bodySmall,
               color = MaterialTheme.colorScheme.onSurfaceVariant,
-              modifier = Modifier.padding(16.dp)
+              modifier = Modifier.padding(14.dp)
             )
           }
         } else {
@@ -678,8 +497,8 @@ fun DashboardScreen(
             .padding(vertical = 4.dp)
         ) {
           SectionHeader(
-            title = "Assignments & Exam Deadlines",
-            actionText = "Manage",
+            title = "Deadlines",
+            actionText = "Tasks",
             onActionClick = { onNavigate(Screen.Tasks) }
           )
 
@@ -712,63 +531,77 @@ private fun SessionItemRow(
   onToggleStatus: () -> Unit
 ) {
   val isDone = session.status == "COMPLETED"
-  Card(
-    modifier = Modifier.fillMaxWidth(),
-    shape = RoundedCornerShape(16.dp),
-    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-    elevation = CardDefaults.cardElevation(defaultElevation = 1.5.dp)
+  Surface(
+    modifier = Modifier
+      .fillMaxWidth()
+      .clickable { onToggleStatus() },
+    shape = RoundedCornerShape(12.dp),
+    color = MaterialTheme.colorScheme.surface,
+    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
   ) {
     Row(
       modifier = Modifier
         .fillMaxWidth()
-        .padding(14.dp),
+        .padding(horizontal = 14.dp, vertical = 12.dp),
       verticalAlignment = Alignment.CenterVertically
     ) {
-      Box(
-        modifier = Modifier
-          .size(40.dp)
-          .clip(RoundedCornerShape(10.dp))
-          .background(MaterialTheme.colorScheme.primaryContainer),
-        contentAlignment = Alignment.Center
+      Column(
+        modifier = Modifier.width(48.dp),
+        verticalArrangement = Arrangement.Center
       ) {
-        Icon(
-          imageVector = Icons.Default.Schedule,
-          contentDescription = null,
-          tint = MaterialTheme.colorScheme.primary,
-          modifier = Modifier.size(20.dp)
-        )
-      }
-      Spacer(modifier = Modifier.width(12.dp))
-      Column(modifier = Modifier.weight(1f)) {
         Text(
-          text = session.topic,
-          style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-          color = MaterialTheme.colorScheme.onSurface
+          text = session.startTime.ifBlank { "—" },
+          style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+          color = MaterialTheme.colorScheme.primary
         )
-        Text(
-          text = "${session.subjectName.ifBlank { "Alarm" }} • ${formatTimeRange(session.startTime, session.endTime)}",
-          style = MaterialTheme.typography.bodySmall,
-          color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        if (session.location.isNotBlank()) {
+        if (session.endTime.isNotBlank()) {
           Text(
-            text = "📍 ${session.location}",
+            text = session.endTime,
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.primary
+            color = MaterialTheme.colorScheme.onSurfaceVariant
           )
         }
       }
-      Spacer(modifier = Modifier.width(8.dp))
-      Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = if (isDone) PaletteMintFoam else MaterialTheme.colorScheme.surfaceVariant,
-        modifier = Modifier.clickable { onToggleStatus() }
-      ) {
+
+      Box(
+        modifier = Modifier
+          .padding(horizontal = 10.dp)
+          .width(1.dp)
+          .height(28.dp)
+          .background(MaterialTheme.colorScheme.outlineVariant)
+      )
+
+      Column(modifier = Modifier.weight(1f)) {
         Text(
-          text = if (isDone) "Completed" else "Scheduled",
-          style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-          color = if (isDone) PaletteDarkText else MaterialTheme.colorScheme.onSurfaceVariant,
-          modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+          text = session.topic,
+          style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+          color = if (isDone) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis
+        )
+        val loc = if (session.location.isNotBlank()) " · ${session.location}" else ""
+        Text(
+          text = "${session.subjectName}$loc",
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis
+        )
+      }
+
+      Spacer(modifier = Modifier.width(8.dp))
+      if (isDone) {
+        Icon(
+          imageVector = Icons.Default.CheckCircle,
+          contentDescription = "Completed",
+          tint = MaterialTheme.colorScheme.primary,
+          modifier = Modifier.size(20.dp)
+        )
+      } else {
+        Box(
+          modifier = Modifier
+            .size(20.dp)
+            .border(1.5.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
         )
       }
     }
@@ -777,52 +610,36 @@ private fun SessionItemRow(
 
 @Composable
 private fun RecentTopicRow(topic: StudyTopic) {
-  Card(
+  Surface(
     modifier = Modifier.fillMaxWidth(),
-    shape = RoundedCornerShape(16.dp),
-    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-    elevation = CardDefaults.cardElevation(defaultElevation = 1.5.dp)
+    shape = RoundedCornerShape(12.dp),
+    color = MaterialTheme.colorScheme.surface,
+    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
   ) {
     Row(
       modifier = Modifier
         .fillMaxWidth()
-        .padding(14.dp),
+        .padding(horizontal = 14.dp, vertical = 12.dp),
       verticalAlignment = Alignment.CenterVertically
     ) {
-      Box(
-        modifier = Modifier
-          .size(40.dp)
-          .clip(RoundedCornerShape(10.dp))
-          .background(PaletteMintFoam),
-        contentAlignment = Alignment.Center
-      ) {
-        Icon(
-          imageVector = Icons.Default.Book,
-          contentDescription = null,
-          tint = PaletteDarkText,
-          modifier = Modifier.size(20.dp)
-        )
-      }
-      Spacer(modifier = Modifier.width(12.dp))
+
       Column(modifier = Modifier.weight(1f)) {
         Text(
           text = topic.title,
-          style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-          color = MaterialTheme.colorScheme.onSurface
+          style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+          color = MaterialTheme.colorScheme.onSurface,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis
         )
         Text(
-          text = "${topic.subjectName} • Studied ${topic.dateStudied}",
+          text = topic.subjectName,
           style = MaterialTheme.typography.bodySmall,
-          color = MaterialTheme.colorScheme.onSurfaceVariant
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis
         )
-        if (topic.timesTested > 0) {
-          Text(
-            text = "Tested ${topic.timesTested}x (${topic.timesCorrect} correct)",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-          )
-        }
       }
+
       Spacer(modifier = Modifier.width(8.dp))
       MasteryBadge(level = topic.masteryLevel)
     }
@@ -831,58 +648,80 @@ private fun RecentTopicRow(topic: StudyTopic) {
 
 @Composable
 private fun DashboardTaskRow(task: StudyTask) {
-  Card(
+  Surface(
     modifier = Modifier.fillMaxWidth(),
-    shape = RoundedCornerShape(16.dp),
-    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-    elevation = CardDefaults.cardElevation(defaultElevation = 1.5.dp)
+    shape = RoundedCornerShape(12.dp),
+    color = MaterialTheme.colorScheme.surface,
+    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
   ) {
     Row(
       modifier = Modifier
         .fillMaxWidth()
-        .padding(14.dp),
+        .padding(horizontal = 14.dp, vertical = 12.dp),
       verticalAlignment = Alignment.CenterVertically
     ) {
-      Box(
-        modifier = Modifier
-          .size(40.dp)
-          .clip(RoundedCornerShape(10.dp))
-          .background(PaletteMintFoam),
-        contentAlignment = Alignment.Center
-      ) {
-        Icon(
-          imageVector = Icons.AutoMirrored.Filled.Assignment,
-          contentDescription = null,
-          tint = PaletteDarkText,
-          modifier = Modifier.size(20.dp)
-        )
-      }
-      Spacer(modifier = Modifier.width(12.dp))
       Column(modifier = Modifier.weight(1f)) {
         Text(
           text = task.title,
           style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-          color = MaterialTheme.colorScheme.onSurface
+          color = MaterialTheme.colorScheme.onSurface,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis
         )
         Text(
-          text = "${task.subjectName} • Due: ${task.dueDate}",
+          text = "${task.subjectName} · Due ${task.dueDate}",
           style = MaterialTheme.typography.bodySmall,
           color = MaterialTheme.colorScheme.onSurfaceVariant
         )
       }
-      Spacer(modifier = Modifier.width(8.dp))
-      Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = PalettePaleCeladon,
-        border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage)
-      ) {
-        Text(
-          text = task.priority,
-          style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-          color = PaletteDarkText,
-          modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
-        )
+      val priorityColor = when (task.priority.uppercase()) {
+        "HIGH" -> RoseError
+        "MEDIUM" -> AmberAccent
+        else -> CyanAccent
       }
+      Box(
+        modifier = Modifier
+          .size(8.dp)
+          .clip(CircleShape)
+          .background(priorityColor)
+      )
+    }
+  }
+}
+
+@Composable
+private fun QuickActionButton(
+  icon: ImageVector,
+  label: String,
+  modifier: Modifier = Modifier,
+  onClick: () -> Unit
+) {
+  Surface(
+    modifier = modifier.height(60.dp).clickable { onClick() },
+    shape = RoundedCornerShape(12.dp),
+    color = MaterialTheme.colorScheme.surface,
+    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+  ) {
+    Column(
+      modifier = Modifier
+        .fillMaxSize()
+        .padding(vertical = 8.dp, horizontal = 2.dp),
+      horizontalAlignment = Alignment.CenterHorizontally,
+      verticalArrangement = Arrangement.Center
+    ) {
+      Icon(
+        imageVector = icon,
+        contentDescription = label,
+        tint = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.size(18.dp)
+      )
+      Spacer(modifier = Modifier.height(4.dp))
+      Text(
+        text = label,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1
+      )
     }
   }
 }

@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,16 +21,19 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.BrightnessAuto
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Devices
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Storage
-import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.SwapHoriz
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Devices
-import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.automirrored.filled.Logout
@@ -108,7 +112,7 @@ fun SettingsScreen(
           .padding(horizontal = 16.dp, vertical = 6.dp),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
       ) {
         Column(modifier = Modifier.padding(16.dp)) {
           // Top Row: Avatar + User Details + Status Badge
@@ -126,13 +130,13 @@ fun SettingsScreen(
                 modifier = Modifier
                   .size(48.dp)
                   .clip(CircleShape)
-                  .background(PaletteDeepSage),
+                  .background(MaterialTheme.colorScheme.primary),
                 contentAlignment = Alignment.Center
               ) {
                 Text(
                   text = currentUser.avatarInitials,
-                  fontWeight = FontWeight.ExtraBold,
-                  color = PaletteCreamIvory,
+                  fontWeight = FontWeight.Bold,
+                  color = MaterialTheme.colorScheme.onPrimary,
                   fontSize = 16.sp
                 )
               }
@@ -160,7 +164,7 @@ fun SettingsScreen(
                     Text(
                       text = subMeta,
                       style = MaterialTheme.typography.labelSmall,
-                      color = PaletteDeepSage,
+                      color = MaterialTheme.colorScheme.primary,
                       fontWeight = FontWeight.SemiBold,
                       maxLines = 1,
                       overflow = TextOverflow.Ellipsis
@@ -172,7 +176,7 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            val badgeColor = if (isGuestMode) PaletteDeepSage else EmeraldSuccess
+            val badgeColor = if (isGuestMode) MaterialTheme.colorScheme.primary else EmeraldSuccess
             Surface(
               shape = RoundedCornerShape(20.dp),
               color = badgeColor.copy(alpha = 0.12f),
@@ -208,8 +212,8 @@ fun SettingsScreen(
               onClick = { viewModel.navigateTo(com.example.ui.viewmodel.Screen.Login) },
               shape = RoundedCornerShape(12.dp),
               colors = ButtonDefaults.buttonColors(
-                containerColor = PaletteDeepSage,
-                contentColor = PaletteCreamIvory
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
               ),
               modifier = Modifier
                 .fillMaxWidth()
@@ -219,7 +223,7 @@ fun SettingsScreen(
               Icon(Icons.Default.PersonAdd, contentDescription = null, modifier = Modifier.size(16.dp))
               Spacer(modifier = Modifier.width(8.dp))
               Text(
-                text = "Sign In / Create Account",
+                text = "Sign in or create a profile",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
@@ -242,18 +246,18 @@ fun SettingsScreen(
                 Icon(
                   Icons.Default.Devices,
                   contentDescription = null,
-                  tint = PaletteDeepSage,
+                  tint = MaterialTheme.colorScheme.primary,
                   modifier = Modifier.size(20.dp)
                 )
                 Column(modifier = Modifier.weight(1f)) {
                   Text(
-                    text = "Guest Mode (Local Storage Only)",
+                    text = "Guest mode",
                     fontWeight = FontWeight.Bold,
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurface
                   )
                   Text(
-                    text = "Sign in or register to store your profile and sync your data.",
+                    text = "Sign in to keep a profile on this device.",
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                   )
@@ -276,8 +280,8 @@ fun SettingsScreen(
                 },
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.filledTonalButtonColors(
-                  containerColor = PalettePaleCeladon,
-                  contentColor = PaletteDeepSage
+                  containerColor = MaterialTheme.colorScheme.primaryContainer,
+                  contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 ),
                 modifier = Modifier
                   .weight(1f)
@@ -285,7 +289,7 @@ fun SettingsScreen(
               ) {
                 Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("Edit Profile", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+                Text("Edit profile", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
               }
 
               OutlinedButton(
@@ -301,7 +305,7 @@ fun SettingsScreen(
               ) {
                 Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("Sign Out", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+                Text("Sign out", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
               }
             }
 
@@ -322,9 +326,9 @@ fun SettingsScreen(
                   .weight(1f)
                   .heightIn(min = 44.dp)
               ) {
-                Icon(Icons.Default.Devices, contentDescription = null, modifier = Modifier.size(15.dp), tint = PaletteDeepSage)
+                Icon(Icons.Default.Devices, contentDescription = null, modifier = Modifier.size(15.dp), tint = MaterialTheme.colorScheme.primary)
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("Cloud Sync", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+                Text("Cloud sync", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
               }
 
               OutlinedButton(
@@ -340,7 +344,7 @@ fun SettingsScreen(
               ) {
                 Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(15.dp))
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("Delete Account", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+                Text("Delete account", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
               }
             }
 
@@ -359,7 +363,7 @@ fun SettingsScreen(
                 Icon(
                   Icons.Default.Devices,
                   contentDescription = null,
-                  tint = PaletteDeepSage,
+                  tint = MaterialTheme.colorScheme.primary,
                   modifier = Modifier.size(20.dp)
                 )
                 Column(modifier = Modifier.weight(1f)) {
@@ -382,6 +386,79 @@ fun SettingsScreen(
       }
     }
 
+    // 0.2. Appearance & Theme (Dark Mode)
+    item {
+      val currentThemeMode by viewModel.themeMode.collectAsState()
+      Card(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 16.dp, vertical = 6.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+      ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+          Text(
+            text = "Appearance",
+            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface
+          )
+          Text(
+            text = "Theme",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+          )
+          Spacer(modifier = Modifier.height(14.dp))
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+          ) {
+            listOf(
+              Triple("system", "System", Icons.Default.BrightnessAuto),
+              Triple("light", "Light", Icons.Default.LightMode),
+              Triple("dark", "Dark", Icons.Default.DarkMode)
+            ).forEach { (mode, label, icon) ->
+              val isSelected = currentThemeMode == mode
+              Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                border = androidx.compose.foundation.BorderStroke(
+                  1.dp,
+                  if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+                ),
+                modifier = Modifier
+                  .weight(1f)
+                  .heightIn(min = 44.dp)
+                  .clickable { viewModel.setThemeMode(mode) }
+              ) {
+                Row(
+                  modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp),
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.Center
+                ) {
+                  Icon(
+                    imageVector = icon,
+                    contentDescription = label,
+                    tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(16.dp)
+                  )
+                  Spacer(modifier = Modifier.width(6.dp))
+                  Text(
+                    text = label,
+                    fontSize = 12.sp,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                  )
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
     // 0.5. Stored Accounts Switcher
     item {
       Card(
@@ -390,7 +467,7 @@ fun SettingsScreen(
           .padding(horizontal = 16.dp, vertical = 6.dp),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
       ) {
         Column(modifier = Modifier.padding(16.dp)) {
           Row(
@@ -404,13 +481,13 @@ fun SettingsScreen(
                 .padding(end = 8.dp)
             ) {
               Text(
-                text = "Stored Accounts (${savedAccounts.size})",
+                text = "Profiles (${savedAccounts.size})",
                 fontWeight = FontWeight.Bold,
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface
               )
               Text(
-                text = "Accounts saved on this device with isolated study data",
+                text = "Profiles on this device",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
               )
@@ -438,7 +515,7 @@ fun SettingsScreen(
               modifier = Modifier.fillMaxWidth()
             ) {
               Text(
-                text = "No stored accounts yet. Sign in or create an account to store your profile here.",
+                text = "No saved profiles yet.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(12.dp)
@@ -450,10 +527,10 @@ fun SettingsScreen(
                 val isCurrent = !isGuestMode && account.id == currentUser.id
                 Surface(
                   shape = RoundedCornerShape(12.dp),
-                  color = if (isCurrent) PalettePaleCeladon.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                  color = if (isCurrent) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
                   border = androidx.compose.foundation.BorderStroke(
                     1.dp,
-                    if (isCurrent) PaletteMediumSage else MaterialTheme.colorScheme.outlineVariant
+                    if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
                   ),
                   modifier = Modifier.fillMaxWidth()
                 ) {
@@ -473,13 +550,13 @@ fun SettingsScreen(
                         modifier = Modifier
                           .size(38.dp)
                           .clip(CircleShape)
-                          .background(if (isCurrent) PaletteDeepSage else MaterialTheme.colorScheme.outline),
+                          .background(if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline),
                         contentAlignment = Alignment.Center
                       ) {
                         Text(
                           text = account.avatarInitials,
                           fontWeight = FontWeight.Bold,
-                          color = PaletteCreamIvory,
+                          color = if (isCurrent) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                           fontSize = 13.sp
                         )
                       }
@@ -545,7 +622,7 @@ fun SettingsScreen(
                         Icon(
                           Icons.Default.Delete,
                           contentDescription = "Delete Profile",
-                          tint = MaterialTheme.colorScheme.error.copy(alpha = 0.75f),
+                          tint = MaterialTheme.colorScheme.onSurfaceVariant,
                           modifier = Modifier.size(18.dp)
                         )
                       }
@@ -568,7 +645,7 @@ fun SettingsScreen(
             Icon(Icons.Default.PersonAdd, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(modifier = Modifier.width(6.dp))
             Text(
-              text = if (savedAccounts.isEmpty()) "Sign In / Create Account" else "Sign In / Add Another Account",
+              text = if (savedAccounts.isEmpty()) "Sign in or create a profile" else "Add another profile",
               fontSize = 12.sp,
               fontWeight = FontWeight.SemiBold,
               maxLines = 1,
@@ -589,7 +666,7 @@ fun SettingsScreen(
           .padding(horizontal = 16.dp, vertical = 6.dp),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
       ) {
         Column(modifier = Modifier.padding(18.dp)) {
           Row(
@@ -598,7 +675,7 @@ fun SettingsScreen(
             verticalAlignment = Alignment.CenterVertically
           ) {
             Text(
-              text = "Enrolled Subjects (${subjects.size})",
+              text = "Subjects (${subjects.size})",
               fontWeight = FontWeight.Bold,
               style = MaterialTheme.typography.titleMedium,
               maxLines = 1,
@@ -614,7 +691,7 @@ fun SettingsScreen(
             ) {
               Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
               Spacer(modifier = Modifier.width(4.dp))
-              Text("Add Subject", fontSize = 12.sp, maxLines = 1, softWrap = false)
+              Text("Add subject", fontSize = 12.sp, maxLines = 1, softWrap = false)
             }
           }
 
@@ -656,7 +733,7 @@ fun SettingsScreen(
               }
 
               IconButton(onClick = { viewModel.deleteSubject(sub) }, modifier = Modifier.size(48.dp)) {
-                Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+                Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
               }
             }
           }
@@ -672,18 +749,18 @@ fun SettingsScreen(
           .padding(horizontal = 16.dp, vertical = 6.dp),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
       ) {
         Column(modifier = Modifier.padding(18.dp)) {
           Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Default.Storage, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Local Database Persistence", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+            Text("Data", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
           }
 
           Spacer(modifier = Modifier.height(8.dp))
           Text(
-            text = "All schedules, study topics, quiz attempts, and spaced repetition intervals are stored in on-device SQLite via Room. Your progress is completely preserved across sessions.",
+            text = "Everything is stored on this device.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
           )
@@ -696,7 +773,7 @@ fun SettingsScreen(
               .fillMaxWidth()
               .height(44.dp)
           ) {
-            Text("Reload Sample University Courses & Topics", fontWeight = FontWeight.SemiBold)
+            Text("Load sample data", fontWeight = FontWeight.SemiBold)
           }
 
           Spacer(modifier = Modifier.height(10.dp))
@@ -711,7 +788,7 @@ fun SettingsScreen(
           ) {
             Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
             Spacer(modifier = Modifier.width(6.dp))
-            Text("Delete All Sample Data", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
+            Text("Delete all data", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
           }
         }
       }
@@ -731,13 +808,13 @@ fun SettingsScreen(
   if (showEditProfileDialog) {
     AlertDialog(
       onDismissRequest = { showEditProfileDialog = false },
-      title = { Text("Edit Academic Profile", fontWeight = FontWeight.Bold) },
+      title = { Text("Edit profile", fontWeight = FontWeight.Bold) },
       text = {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
           OutlinedTextField(
             value = editName,
             onValueChange = { editName = it },
-            label = { Text("Full Name") },
+            label = { Text("Full name") },
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
@@ -745,7 +822,7 @@ fun SettingsScreen(
           OutlinedTextField(
             value = editEmail,
             onValueChange = { editEmail = it },
-            label = { Text("Academic Email") },
+            label = { Text("Email") },
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
@@ -774,10 +851,13 @@ fun SettingsScreen(
             viewModel.updateProfile(editName, editEmail, editUniversity, editRole)
             showEditProfileDialog = false
           },
-          colors = ButtonDefaults.buttonColors(containerColor = com.example.ui.theme.PaletteDeepSage),
+          colors = ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary
+          ),
           shape = RoundedCornerShape(10.dp)
         ) {
-          Text("Save Profile")
+          Text("Save profile")
         }
       },
       dismissButton = {
@@ -791,9 +871,9 @@ fun SettingsScreen(
   if (showDeleteCurrentAccountDialog) {
     AlertDialog(
       onDismissRequest = { showDeleteCurrentAccountDialog = false },
-      title = { Text("Delete Current Account", fontWeight = FontWeight.Bold) },
+      title = { Text("Delete this profile", fontWeight = FontWeight.Bold) },
       text = {
-        Text("Are you sure you want to permanently delete the profile for ${currentUser.name} (${currentUser.email})? All local coursework, study records, timetable sessions, and cloud synced data for this student will be permanently removed.")
+        Text("Delete ${currentUser.name} (${currentUser.email}) and all of its data? This can't be undone.")
       },
       confirmButton = {
         Button(
@@ -804,7 +884,7 @@ fun SettingsScreen(
           colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
           shape = RoundedCornerShape(10.dp)
         ) {
-          Text("Delete Account", color = MaterialTheme.colorScheme.onError, fontWeight = FontWeight.Bold)
+          Text("Delete account", color = MaterialTheme.colorScheme.onError, fontWeight = FontWeight.Bold)
         }
       },
       dismissButton = {
@@ -818,9 +898,9 @@ fun SettingsScreen(
   accountToDelete?.let { target ->
     AlertDialog(
       onDismissRequest = { accountToDelete = null },
-      title = { Text("Delete Student Profile", fontWeight = FontWeight.Bold) },
+      title = { Text("Delete profile", fontWeight = FontWeight.Bold) },
       text = {
-        Text("Are you sure you want to delete the profile for ${target.name} (${target.email} • ${target.studentId})? All courses, study tasks, and sessions for this student will be removed.")
+        Text("Delete ${target.name} (${target.email}) and all of its data? This can't be undone.")
       },
       confirmButton = {
         Button(
@@ -832,7 +912,7 @@ fun SettingsScreen(
           colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
           shape = RoundedCornerShape(10.dp)
         ) {
-          Text("Delete Profile", color = MaterialTheme.colorScheme.onError, fontWeight = FontWeight.Bold)
+          Text("Delete profile", color = MaterialTheme.colorScheme.onError, fontWeight = FontWeight.Bold)
         }
       },
       dismissButton = {
@@ -849,7 +929,7 @@ fun SettingsScreen(
       icon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
       title = { Text("Delete All Sample Data?", fontWeight = FontWeight.Bold) },
       text = {
-        Text("This will permanently remove all sample subjects, timetable sessions, tasks, and topics from your profile. Once deleted, this sample data will never return automatically.")
+        Text("Delete all subjects, sessions, tasks and topics in this profile? This can't be undone, and sample data won't come back on its own.")
       },
       confirmButton = {
         Button(
@@ -860,7 +940,7 @@ fun SettingsScreen(
           colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
           shape = RoundedCornerShape(10.dp)
         ) {
-          Text("Delete Permanently", color = MaterialTheme.colorScheme.onError, fontWeight = FontWeight.Bold)
+          Text("Delete permanently", color = MaterialTheme.colorScheme.onError, fontWeight = FontWeight.Bold)
         }
       },
       dismissButton = {
@@ -912,7 +992,7 @@ fun AddSubjectDialog(
         },
         shape = RoundedCornerShape(10.dp)
       ) {
-        Text("Add Subject")
+        Text("Add subject")
       }
     },
     dismissButton = {

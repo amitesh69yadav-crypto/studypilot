@@ -178,14 +178,14 @@ fun LoginScreen(
             )
           } else {
             isSigningInGoogle = false
-            errorMessage = "Google Sign-In did not return account credentials. Please sign in with email or continue in Guest Mode."
+            errorMessage = "Google sign-in didn't return an account. Try again, or use email or guest mode."
           }
         } catch (_: androidx.credentials.exceptions.GetCredentialCancellationException) {
           isSigningInGoogle = false
         } catch (e: Exception) {
           isSigningInGoogle = false
           android.util.Log.w("LoginScreen", "Google Sign-In unavailable: ${e.message}")
-          errorMessage = e.localizedMessage ?: "Google Sign-In failed. Please sign in with email or continue in Guest Mode."
+          errorMessage = e.localizedMessage ?: "Google sign-in failed. Use email or guest mode instead."
         }
       }
     }
@@ -194,15 +194,7 @@ fun LoginScreen(
   BoxWithConstraints(
     modifier = Modifier
       .fillMaxSize()
-      .background(
-        Brush.verticalGradient(
-          colors = listOf(
-            PaletteCreamIvory,
-            PalettePaleCeladon.copy(alpha = 0.5f),
-            PaletteMintFoam
-          )
-        )
-      )
+      .background(MaterialTheme.colorScheme.background)
   ) {
     val isWideScreen = maxWidth >= 768.dp
 
@@ -220,9 +212,9 @@ fun LoginScreen(
           modifier = Modifier
             .weight(1f)
             .fillMaxHeight(),
-          colors = CardDefaults.cardColors(containerColor = PaletteDeepSage),
+          colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary),
           shape = RoundedCornerShape(24.dp),
-          elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+          elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
           Column(
             modifier = Modifier
@@ -255,24 +247,23 @@ fun LoginScreen(
                   Text(
                     text = "StudyPilot",
                     fontSize = 26.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = PaletteCreamIvory
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimary
                   )
                   Text(
                     text = "Study planner and AI tutor",
                     fontSize = 13.sp,
-                    color = PaletteCreamIvory.copy(alpha = 0.85f)
+                    color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f)
                   )
                 }
               }
 
               Spacer(modifier = Modifier.height(28.dp))
 
-
               Surface(
                 shape = RoundedCornerShape(16.dp),
-                color = PaletteCreamIvory.copy(alpha = 0.12f),
-                border = androidx.compose.foundation.BorderStroke(1.dp, PaletteCreamIvory.copy(alpha = 0.25f)),
+                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.12f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.25f)),
                 modifier = Modifier.fillMaxWidth()
               ) {
                 Row(
@@ -282,14 +273,14 @@ fun LoginScreen(
                 ) {
                   Surface(
                     shape = CircleShape,
-                    color = PaletteMintFoam,
+                    color = MaterialTheme.colorScheme.primaryContainer,
                     modifier = Modifier.size(42.dp)
                   ) {
                     Box(contentAlignment = Alignment.Center) {
                       Icon(
                         imageVector = Icons.Default.Devices,
                         contentDescription = null,
-                        tint = PaletteDeepSage,
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(22.dp)
                       )
                     }
@@ -299,12 +290,12 @@ fun LoginScreen(
                       text = "Works on phones and tablets",
                       fontSize = 14.sp,
                       fontWeight = FontWeight.Bold,
-                      color = PaletteCreamIvory
+                      color = MaterialTheme.colorScheme.onPrimary
                     )
                     Text(
                       text = "Wider layouts on tablets and foldables, with alarms for every class on your phone.",
                       fontSize = 12.sp,
-                      color = PaletteCreamIvory.copy(alpha = 0.85f),
+                      color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f),
                       lineHeight = 16.sp
                     )
                   }
@@ -317,7 +308,7 @@ fun LoginScreen(
                 text = "What it does",
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
-                color = PaletteCreamIvory
+                color = MaterialTheme.colorScheme.onPrimary
               )
               Spacer(modifier = Modifier.height(12.dp))
 
@@ -343,7 +334,7 @@ fun LoginScreen(
             // Bottom trust guarantee
             Surface(
               shape = RoundedCornerShape(12.dp),
-              color = PaletteCreamIvory.copy(alpha = 0.15f),
+              color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.15f),
               modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 20.dp)
@@ -362,7 +353,7 @@ fun LoginScreen(
                 Text(
                   text = "Email profiles stay on this device. Google sign-in adds cloud backup.",
                   fontSize = 11.sp,
-                  color = PaletteCreamIvory
+                  color = MaterialTheme.colorScheme.onPrimary
                 )
               }
             }
@@ -376,7 +367,7 @@ fun LoginScreen(
             .fillMaxHeight(),
           colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
           shape = RoundedCornerShape(24.dp),
-          elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+          elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
           AuthFormContent(
             authMode = authMode,
@@ -467,22 +458,21 @@ fun LoginScreen(
         Text(
           text = "StudyPilot",
           fontSize = 24.sp,
-          fontWeight = FontWeight.ExtraBold,
-          color = PaletteDarkText
+          fontWeight = FontWeight.Bold,
+          color = MaterialTheme.colorScheme.onBackground
         )
         Text(
           text = "Study planner and AI tutor",
           fontSize = 12.sp,
-          color = PaletteDarkText.copy(alpha = 0.8f)
+          color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
         Spacer(modifier = Modifier.height(16.dp))
 
-
         Surface(
           shape = RoundedCornerShape(12.dp),
-          color = PalettePaleCeladon,
-          border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage),
+          color = MaterialTheme.colorScheme.surfaceVariant,
+          border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
           modifier = Modifier
             .fillMaxWidth()
             .widthIn(max = 480.dp)
@@ -492,13 +482,13 @@ fun LoginScreen(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
           ) {
-            Icon(Icons.Default.Smartphone, contentDescription = null, tint = PaletteDeepSage, modifier = Modifier.size(16.dp))
+            Icon(Icons.Default.Smartphone, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
             Spacer(modifier = Modifier.width(4.dp))
-            Text(text = "Phone", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = PaletteDeepSage)
-            Text(text = " + ", fontSize = 11.sp, color = PaletteDeepSage)
-            Icon(Icons.Default.Laptop, contentDescription = null, tint = PaletteDeepSage, modifier = Modifier.size(16.dp))
+            Text(text = "Phone", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+            Text(text = " + ", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
+            Icon(Icons.Default.Laptop, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
             Spacer(modifier = Modifier.width(4.dp))
-            Text(text = "Tablet", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = PaletteDeepSage)
+            Text(text = "Tablet", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
           }
         }
 
@@ -510,8 +500,9 @@ fun LoginScreen(
             .fillMaxWidth()
             .widthIn(max = 500.dp),
           colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+          border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
           shape = RoundedCornerShape(20.dp),
-          elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+          elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
           AuthFormContent(
             authMode = authMode,
@@ -607,11 +598,11 @@ private fun AcademicPerkItem(
   ) {
     Surface(
       shape = CircleShape,
-      color = PaletteCreamIvory.copy(alpha = 0.2f),
+      color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.2f),
       modifier = Modifier.size(34.dp)
     ) {
       Box(contentAlignment = Alignment.Center) {
-        Icon(icon, contentDescription = null, tint = PaletteCreamIvory, modifier = Modifier.size(18.dp))
+        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(18.dp))
       }
     }
     Column {
@@ -619,12 +610,12 @@ private fun AcademicPerkItem(
         text = title,
         fontSize = 13.sp,
         fontWeight = FontWeight.Bold,
-        color = PaletteCreamIvory
+        color = MaterialTheme.colorScheme.onPrimary
       )
       Text(
         text = desc,
         fontSize = 11.sp,
-        color = PaletteCreamIvory.copy(alpha = 0.8f),
+        color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f),
         lineHeight = 15.sp
       )
     }
@@ -671,7 +662,7 @@ private fun AuthFormContent(
     // Mode Switcher Tabs
     Surface(
       shape = RoundedCornerShape(12.dp),
-      color = PalettePaleCeladon,
+      color = MaterialTheme.colorScheme.surfaceVariant,
       modifier = Modifier.fillMaxWidth()
     ) {
       Row(
@@ -685,15 +676,15 @@ private fun AuthFormContent(
             .clip(RoundedCornerShape(8.dp))
             .clickable { onAuthModeChange(AuthMode.SIGN_IN) }
             .testTag("tab_sign_in"),
-          color = if (authMode == AuthMode.SIGN_IN) PaletteDeepSage else Color.Transparent,
+          color = if (authMode == AuthMode.SIGN_IN) MaterialTheme.colorScheme.primary else Color.Transparent,
           shape = RoundedCornerShape(8.dp)
         ) {
           Box(contentAlignment = Alignment.Center) {
             Text(
-              text = "Sign In",
+              text = "Sign in",
               fontSize = 13.sp,
               fontWeight = if (authMode == AuthMode.SIGN_IN) FontWeight.Bold else FontWeight.Medium,
-              color = if (authMode == AuthMode.SIGN_IN) PaletteCreamIvory else PaletteDarkText
+              color = if (authMode == AuthMode.SIGN_IN) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
             )
           }
         }
@@ -705,15 +696,15 @@ private fun AuthFormContent(
             .clip(RoundedCornerShape(8.dp))
             .clickable { onAuthModeChange(AuthMode.SIGN_UP) }
             .testTag("tab_create_account"),
-          color = if (authMode == AuthMode.SIGN_UP) PaletteDeepSage else Color.Transparent,
+          color = if (authMode == AuthMode.SIGN_UP) MaterialTheme.colorScheme.primary else Color.Transparent,
           shape = RoundedCornerShape(8.dp)
         ) {
           Box(contentAlignment = Alignment.Center) {
             Text(
-              text = "Create Account",
+              text = "Create account",
               fontSize = 13.sp,
               fontWeight = if (authMode == AuthMode.SIGN_UP) FontWeight.Bold else FontWeight.Medium,
-              color = if (authMode == AuthMode.SIGN_UP) PaletteCreamIvory else PaletteDarkText
+              color = if (authMode == AuthMode.SIGN_UP) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
             )
           }
         }
@@ -760,15 +751,15 @@ private fun AuthFormContent(
         value = name,
         onValueChange = onNameChange,
         label = { Text("Full Name *") },
-        leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = PaletteDeepSage) },
+        leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
         singleLine = true,
         shape = RoundedCornerShape(12.dp),
         modifier = Modifier
           .fillMaxWidth()
           .testTag("signup_name_input"),
         colors = OutlinedTextFieldDefaults.colors(
-          focusedBorderColor = PaletteDeepSage,
-          focusedLabelColor = PaletteDeepSage
+          focusedBorderColor = MaterialTheme.colorScheme.primary,
+          focusedLabelColor = MaterialTheme.colorScheme.primary
         )
       )
 
@@ -778,15 +769,15 @@ private fun AuthFormContent(
         value = university,
         onValueChange = onUniversityChange,
         label = { Text("University / College *") },
-        leadingIcon = { Icon(Icons.Default.School, contentDescription = null, tint = PaletteDeepSage) },
+        leadingIcon = { Icon(Icons.Default.School, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
         singleLine = true,
         shape = RoundedCornerShape(12.dp),
         modifier = Modifier
           .fillMaxWidth()
           .testTag("signup_university_input"),
         colors = OutlinedTextFieldDefaults.colors(
-          focusedBorderColor = PaletteDeepSage,
-          focusedLabelColor = PaletteDeepSage
+          focusedBorderColor = MaterialTheme.colorScheme.primary,
+          focusedLabelColor = MaterialTheme.colorScheme.primary
         )
       )
 
@@ -796,15 +787,15 @@ private fun AuthFormContent(
         value = studentId,
         onValueChange = onStudentIdChange,
         label = { Text("Student ID (Optional)") },
-        leadingIcon = { Icon(Icons.Default.Badge, contentDescription = null, tint = PaletteDeepSage) },
+        leadingIcon = { Icon(Icons.Default.Badge, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
         singleLine = true,
         shape = RoundedCornerShape(12.dp),
         modifier = Modifier
           .fillMaxWidth()
           .testTag("signup_studentid_input"),
         colors = OutlinedTextFieldDefaults.colors(
-          focusedBorderColor = PaletteDeepSage,
-          focusedLabelColor = PaletteDeepSage
+          focusedBorderColor = MaterialTheme.colorScheme.primary,
+          focusedLabelColor = MaterialTheme.colorScheme.primary
         )
       )
 
@@ -817,7 +808,7 @@ private fun AuthFormContent(
       onValueChange = onEmailChange,
       label = { Text("Email Address *") },
       placeholder = { Text("name@university.edu") },
-      leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, tint = PaletteDeepSage) },
+      leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
       singleLine = true,
       keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
       shape = RoundedCornerShape(12.dp),
@@ -825,8 +816,8 @@ private fun AuthFormContent(
         .fillMaxWidth()
         .testTag("login_email_input"),
       colors = OutlinedTextFieldDefaults.colors(
-        focusedBorderColor = PaletteDeepSage,
-        focusedLabelColor = PaletteDeepSage
+        focusedBorderColor = MaterialTheme.colorScheme.primary,
+        focusedLabelColor = MaterialTheme.colorScheme.primary
       )
     )
 
@@ -837,7 +828,7 @@ private fun AuthFormContent(
       value = password,
       onValueChange = onPasswordChange,
       label = { Text("Password *") },
-      leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = PaletteDeepSage) },
+      leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
       trailingIcon = {
         IconButton(onClick = onTogglePasswordVisibility) {
           Icon(
@@ -854,8 +845,8 @@ private fun AuthFormContent(
         .fillMaxWidth()
         .testTag("login_password_input"),
       colors = OutlinedTextFieldDefaults.colors(
-        focusedBorderColor = PaletteDeepSage,
-        focusedLabelColor = PaletteDeepSage
+        focusedBorderColor = MaterialTheme.colorScheme.primary,
+        focusedLabelColor = MaterialTheme.colorScheme.primary
       )
     )
 
@@ -867,7 +858,7 @@ private fun AuthFormContent(
         value = confirmPassword,
         onValueChange = onConfirmPasswordChange,
         label = { Text("Confirm Password *") },
-        leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = PaletteDeepSage) },
+        leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
         trailingIcon = {
           IconButton(onClick = onToggleConfirmPasswordVisibility) {
             Icon(
@@ -884,8 +875,8 @@ private fun AuthFormContent(
           .fillMaxWidth()
           .testTag("signup_confirm_password_input"),
         colors = OutlinedTextFieldDefaults.colors(
-          focusedBorderColor = PaletteDeepSage,
-          focusedLabelColor = PaletteDeepSage
+          focusedBorderColor = MaterialTheme.colorScheme.primary,
+          focusedLabelColor = MaterialTheme.colorScheme.primary
         )
       )
     }
@@ -908,7 +899,7 @@ private fun AuthFormContent(
         Checkbox(
           checked = rememberMe,
           onCheckedChange = onRememberMeChange,
-          colors = CheckboxDefaults.colors(checkedColor = PaletteDeepSage),
+          colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary),
           modifier = Modifier.testTag("remember_me_checkbox")
         )
         Text(
@@ -930,7 +921,7 @@ private fun AuthFormContent(
             text = "Forgot password?",
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
-            color = PaletteDeepSage,
+            color = MaterialTheme.colorScheme.primary,
             maxLines = 1,
             softWrap = false
           )
@@ -946,8 +937,8 @@ private fun AuthFormContent(
         if (authMode == AuthMode.SIGN_IN) onSignInClick() else onSignUpClick()
       },
       colors = ButtonDefaults.buttonColors(
-        containerColor = PaletteDeepSage,
-        contentColor = PaletteCreamIvory
+        containerColor = MaterialTheme.colorScheme.primary,
+        contentColor = MaterialTheme.colorScheme.onPrimary
       ),
       shape = RoundedCornerShape(12.dp),
       modifier = Modifier
@@ -980,14 +971,14 @@ private fun AuthFormContent(
       modifier = Modifier.fillMaxWidth(),
       verticalAlignment = Alignment.CenterVertically
     ) {
-      HorizontalDivider(modifier = Modifier.weight(1f), color = PaletteMediumSage.copy(alpha = 0.4f))
+      HorizontalDivider(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.outlineVariant)
       Text(
         text = "  OR INSTANT ACCESS  ",
         fontSize = 10.sp,
         fontWeight = FontWeight.Bold,
         color = MaterialTheme.colorScheme.onSurfaceVariant
       )
-      HorizontalDivider(modifier = Modifier.weight(1f), color = PaletteMediumSage.copy(alpha = 0.4f))
+      HorizontalDivider(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.outlineVariant)
     }
 
     Spacer(modifier = Modifier.height(16.dp))
@@ -996,7 +987,7 @@ private fun AuthFormContent(
     OutlinedButton(
       onClick = onGoogleSignInClick,
       shape = RoundedCornerShape(12.dp),
-      border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage),
+      border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
       modifier = Modifier
         .fillMaxWidth()
         .heightIn(min = 48.dp)
@@ -1008,11 +999,11 @@ private fun AuthFormContent(
       ) {
         Surface(
           shape = CircleShape,
-          color = PalettePaleCeladon,
+          color = MaterialTheme.colorScheme.primaryContainer,
           modifier = Modifier.size(24.dp)
         ) {
           Box(contentAlignment = Alignment.Center) {
-            Text(text = "G", fontWeight = FontWeight.ExtraBold, fontSize = 13.sp, color = PaletteDeepSage)
+            Text(text = "G", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
           }
         }
         Spacer(modifier = Modifier.width(10.dp))
@@ -1020,7 +1011,7 @@ private fun AuthFormContent(
           text = "Continue with Google Student SSO",
           fontSize = 12.sp,
           fontWeight = FontWeight.SemiBold,
-          color = PaletteDarkText,
+          color = MaterialTheme.colorScheme.onSurface,
           maxLines = 1,
           softWrap = false,
           overflow = TextOverflow.Ellipsis
@@ -1034,7 +1025,7 @@ private fun AuthFormContent(
     OutlinedButton(
       onClick = onGuestSignInClick,
       shape = RoundedCornerShape(12.dp),
-      border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage.copy(alpha = 0.6f)),
+      border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
       modifier = Modifier
         .fillMaxWidth()
         .heightIn(min = 48.dp)
@@ -1047,15 +1038,15 @@ private fun AuthFormContent(
         Icon(
           imageVector = Icons.Default.AutoAwesome,
           contentDescription = null,
-          tint = PaletteDeepSage,
+          tint = MaterialTheme.colorScheme.primary,
           modifier = Modifier.size(16.dp)
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text(
-          text = "Continue in Guest Mode",
+          text = "Continue as guest",
           fontSize = 12.sp,
           fontWeight = FontWeight.Medium,
-          color = PaletteDarkText,
+          color = MaterialTheme.colorScheme.onSurface,
           maxLines = 1,
           softWrap = false
         )
@@ -1086,7 +1077,7 @@ private fun AuthFormContent(
           text = if (authMode == AuthMode.SIGN_IN) "Create one now" else "Sign in",
           fontSize = 12.sp,
           fontWeight = FontWeight.Bold,
-          color = PaletteDeepSage,
+          color = MaterialTheme.colorScheme.primary,
           maxLines = 1,
           softWrap = false
         )

@@ -207,7 +207,7 @@ fun ActiveQuizScreen(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(18.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
           ) {
             Column(modifier = Modifier.padding(18.dp)) {
               Row(
@@ -396,7 +396,7 @@ fun ActiveQuizScreen(
       Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 8.dp
+        shadowElevation = 0.dp
       ) {
         Row(
           modifier = Modifier
@@ -429,7 +429,7 @@ fun ActiveQuizScreen(
               } else {
                 Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("Submit Quiz")
+                Text("Submit quiz")
               }
             }
           } else {
@@ -502,7 +502,7 @@ fun QuizResultsView(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
       ) {
         Column(
           modifier = Modifier.padding(20.dp),
@@ -537,7 +537,7 @@ fun QuizResultsView(
 
           Spacer(modifier = Modifier.height(10.dp))
           Text(
-            text = "✅ Spaced repetition intervals automatically updated for all tested topics.",
+            text = "Spaced repetition intervals automatically updated for all tested topics.",
             style = MaterialTheme.typography.labelSmall,
             color = EmeraldSuccess
           )
@@ -558,7 +558,7 @@ fun QuizResultsView(
               ) {
                 Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("Retry Mistakes", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+                Text("Retry mistakes", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
               }
             }
 
@@ -570,7 +570,7 @@ fun QuizResultsView(
                 .weight(1f)
                 .heightIn(min = 48.dp)
             ) {
-              Text("Back to Hub", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+              Text("Done", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
             }
           }
         }
@@ -580,7 +580,7 @@ fun QuizResultsView(
     // Detailed Question Breakdown & Feedback
     item {
       Text(
-        text = "Detailed Answer Breakdown",
+        text = "Detailed answer breakdown",
         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
         color = MaterialTheme.colorScheme.onBackground
       )
@@ -595,7 +595,7 @@ fun QuizResultsView(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
       ) {
         Column(modifier = Modifier.padding(14.dp)) {
           Row(
@@ -646,8 +646,8 @@ fun QuizResultsView(
           Text(q.questionText, style = MaterialTheme.typography.bodyMedium)
 
           Spacer(modifier = Modifier.height(8.dp))
-          Text("Your Answer: $userAns", style = MaterialTheme.typography.bodySmall, color = if (isCorrect) EmeraldSuccess else RoseError)
-          Text("Correct Answer: ${q.correctAnswer}", style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold))
+          Text("Your answer: $userAns", style = MaterialTheme.typography.bodySmall, color = if (isCorrect) EmeraldSuccess else RoseError)
+          Text("Correct answer: ${q.correctAnswer}", style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold))
 
           Spacer(modifier = Modifier.height(6.dp))
           Surface(
@@ -655,7 +655,7 @@ fun QuizResultsView(
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
           ) {
             Text(
-              text = "💡 Explanation: ${eval?.feedback ?: q.explanation}",
+              text = "Explanation: ${eval?.feedback ?: q.explanation}",
               style = MaterialTheme.typography.bodySmall,
               modifier = Modifier.padding(8.dp)
             )

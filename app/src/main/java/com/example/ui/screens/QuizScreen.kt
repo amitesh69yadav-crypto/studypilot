@@ -65,6 +65,7 @@ import com.example.data.model.QuizAttempt
 import com.example.data.model.QuizConfig
 import com.example.data.model.StudyTopic
 import com.example.ui.components.SectionHeader
+import com.example.ui.theme.PaletteDarkText
 import com.example.ui.theme.AmberAccent
 import com.example.ui.theme.CyanAccent
 import com.example.ui.theme.EmeraldSuccess
@@ -103,7 +104,7 @@ fun QuizScreen(
         colors = CardDefaults.elevatedCardColors(
           containerColor = MaterialTheme.colorScheme.surface
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
       ) {
         Column(modifier = Modifier.padding(18.dp)) {
           Row(
@@ -115,29 +116,14 @@ fun QuizScreen(
               verticalAlignment = Alignment.CenterVertically,
               modifier = Modifier.weight(1f).padding(end = 8.dp)
             ) {
-              Box(
-                modifier = Modifier
-                  .size(44.dp)
-                  .clip(CircleShape)
-                  .background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center
-              ) {
-                Icon(
-                  imageVector = Icons.Default.AutoAwesome,
-                  contentDescription = null,
-                  tint = MaterialTheme.colorScheme.primary,
-                  modifier = Modifier.size(24.dp)
-                )
-              }
-              Spacer(modifier = Modifier.width(12.dp))
               Column {
                 Text(
-                  text = "Generate Weekend Quiz",
+                  text = "Weekend quiz",
                   style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                   color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                  text = "${quizConfig.questionCount} Questions • ${quizConfig.difficulty} Difficulty",
+                  text = "${quizConfig.questionCount} questions · ${quizConfig.difficulty.lowercase()}",
                   style = MaterialTheme.typography.bodySmall,
                   color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -155,7 +141,7 @@ fun QuizScreen(
 
           Spacer(modifier = Modifier.height(12.dp))
           Text(
-            text = "Assembles questions from your recorded lecture notes. Prioritizes untested and struggling concepts, rotating all eligible topics fairly across weekend quizzes.",
+            text = "Questions from your topics, weakest first.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
           )
@@ -181,7 +167,7 @@ fun QuizScreen(
               } else {
                 Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("Start Quiz", fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+                Text("Start quiz", fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
               }
             }
 
@@ -195,7 +181,7 @@ fun QuizScreen(
                   .weight(1f)
                   .heightIn(min = 48.dp)
               ) {
-                Icon(Icons.Default.Bolt, contentDescription = null, tint = RoseError, modifier = Modifier.size(16.dp))
+                Icon(Icons.Default.Bolt, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(4.dp))
                 Text("Revise (${strugglingTopics.size})", fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
               }
@@ -216,7 +202,7 @@ fun QuizScreen(
           colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
         ) {
           Column(modifier = Modifier.padding(16.dp)) {
-            Text("Quiz Assembly Settings", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+            Text("Quiz settings", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
             Spacer(modifier = Modifier.height(10.dp))
 
             // Quiz Days
@@ -305,7 +291,7 @@ fun QuizScreen(
               verticalAlignment = Alignment.CenterVertically
             ) {
               Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-                Text("Prioritize Weak Topics", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
+                Text("Prioritize weak topics", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
                 Text("Give overdue and struggling concepts higher weight", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
               }
               Switch(
@@ -326,7 +312,7 @@ fun QuizScreen(
           .padding(horizontal = 16.dp, vertical = 6.dp),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
       ) {
         Column(modifier = Modifier.padding(16.dp)) {
           Row(
@@ -335,12 +321,12 @@ fun QuizScreen(
             verticalAlignment = Alignment.CenterVertically
           ) {
             Text(
-              text = "Topic Coverage Tracker",
+              text = "Topic coverage",
               style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
               color = MaterialTheme.colorScheme.onSurface
             )
             Text(
-              text = "$coveragePercent% Covered",
+              text = "$coveragePercent% covered",
               style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
               color = MaterialTheme.colorScheme.primary
             )
@@ -366,22 +352,22 @@ fun QuizScreen(
               modifier = Modifier.weight(1f),
               horizontalAlignment = Alignment.Start
             ) {
-              Text(text = "${testedTopics.size}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = EmeraldSuccess)
-              Text(text = "Topics Tested", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+              Text(text = "${testedTopics.size}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+              Text(text = "Topics tested", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Column(
               modifier = Modifier.weight(1f),
               horizontalAlignment = Alignment.CenterHorizontally
             ) {
-              Text(text = "${untestedTopics.size}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = AmberAccent)
-              Text(text = "Untested (Queued)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+              Text(text = "${untestedTopics.size}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+              Text(text = "Untested", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Column(
               modifier = Modifier.weight(1f),
               horizontalAlignment = Alignment.End
             ) {
-              Text(text = "${strugglingTopics.size}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = RoseError)
-              Text(text = "Needs Review", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+              Text(text = "${strugglingTopics.size}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+              Text(text = "Needs review", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
           }
 
@@ -392,7 +378,7 @@ fun QuizScreen(
               color = AmberAccent.copy(alpha = 0.1f)
             ) {
               Text(
-                text = "📌 Untested topics queued for rotation: ${untestedTopics.joinToString(", ") { it.title }.take(100)}...",
+                text = "Next up: ${untestedTopics.joinToString(", ") { it.title }.take(100)}",
                 style = MaterialTheme.typography.labelSmall,
                 color = AmberAccent,
                 modifier = Modifier.padding(8.dp)
@@ -410,7 +396,7 @@ fun QuizScreen(
           .fillMaxWidth()
           .padding(vertical = 4.dp)
       ) {
-        SectionHeader(title = "Quiz History (${quizAttempts.size})")
+        SectionHeader(title = "History (${quizAttempts.size})")
 
         if (quizAttempts.isEmpty()) {
           Card(
@@ -419,10 +405,10 @@ fun QuizScreen(
               .padding(horizontal = 16.dp),
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
           ) {
             Text(
-              text = "No quizzes completed yet. Complete your first weekend revision quiz to track improvement!",
+              text = "No quizzes yet.",
               style = MaterialTheme.typography.bodyMedium,
               color = MaterialTheme.colorScheme.onSurfaceVariant,
               modifier = Modifier.padding(16.dp)
@@ -455,7 +441,7 @@ private fun QuizAttemptItemRow(attempt: QuizAttempt) {
     modifier = Modifier.fillMaxWidth(),
     shape = RoundedCornerShape(16.dp),
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-    elevation = CardDefaults.cardElevation(defaultElevation = 1.5.dp)
+    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
   ) {
     Row(
       modifier = Modifier
@@ -489,7 +475,7 @@ private fun QuizAttemptItemRow(attempt: QuizAttempt) {
           color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
-          text = "${attempt.topicsCoveredCount} topics tested" + if (attempt.topicsSkippedCount > 0) " (${attempt.topicsSkippedCount} queued in rotation)" else " (all covered)",
+          text = "${attempt.topicsCoveredCount} topics" + if (attempt.topicsSkippedCount > 0) " · ${attempt.topicsSkippedCount} left for next time" else "",
           style = MaterialTheme.typography.labelSmall,
           color = MaterialTheme.colorScheme.primary
         )

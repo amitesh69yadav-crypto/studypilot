@@ -99,7 +99,7 @@ fun FormattedTutorResponse(
             code = block.code,
             onCopy = {
               val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-              clipboard.setPrimaryClip(ClipData.newPlainText("Code Snippet", block.code))
+              clipboard.setPrimaryClip(ClipData.newPlainText("Code snippet", block.code))
               Toast.makeText(context, "Code copied to clipboard", Toast.LENGTH_SHORT).show()
             }
           )
@@ -174,7 +174,7 @@ private fun CodeBlockView(
       .padding(vertical = 4.dp),
     shape = RoundedCornerShape(10.dp),
     colors = CardDefaults.cardColors(containerColor = codeBackground),
-    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
   ) {
     Column {
       // Code Header Bar
@@ -195,10 +195,9 @@ private fun CodeBlockView(
           )
           Spacer(modifier = Modifier.width(6.dp))
           Text(
-            text = language.ifBlank { "CODE" }.uppercase(),
+            text = language.ifBlank { "code" },
             style = MaterialTheme.typography.labelSmall.copy(
               fontWeight = FontWeight.Bold,
-              letterSpacing = 0.5.sp,
               fontFamily = FontFamily.Monospace
             ),
             color = CyanAccent,
@@ -364,7 +363,7 @@ private fun TableView(table: MarkdownBlock.Table, isUser: Boolean) {
     shape = RoundedCornerShape(12.dp),
     colors = CardDefaults.cardColors(containerColor = containerBg),
     border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
-    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
   ) {
     Column(
       modifier = Modifier
