@@ -17,6 +17,8 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import com.example.MainActivity
 import com.example.data.model.TimetableSession
+import com.example.platform.AlarmEvent
+import com.example.platform.AlarmEventBus
 import com.example.ui.components.formatTimeRange
 
 /**

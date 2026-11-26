@@ -3,7 +3,7 @@ package com.example.data.ai.llm
 import android.app.ActivityManager
 import android.content.Context
 import android.os.StatFs
-import android.util.Log
+import com.example.platform.Log
 import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Content
 import com.google.ai.edge.litertlm.Contents
@@ -31,43 +31,8 @@ import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.TimeUnit
 
-/** Models that run on the phone with LiteRT-LM. Both are Apache-2.0 and download without an account. */
-enum class PhoneModel(
-  val displayName: String,
-  val fileName: String,
-  val url: String,
-  val sizeBytes: Long,
-  val minRamGb: Int,
-  val summary: String
-) {
-  GEMMA_4_E2B(
-    displayName = "Gemma 4 E2B",
-    fileName = "gemma-4-E2B-it.litertlm",
-    url = "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm",
-    sizeBytes = 2_588_147_712L,
-    minRamGb = 6,
-    summary = "Best answers. For phones with 6 GB of RAM or more."
-  ),
-  QWEN_3_5_0_8B(
-    displayName = "Qwen 3.5 0.8B",
-    fileName = "Qwen3.5-0.8B_int8.litertlm",
-    url = "https://huggingface.co/litert-community/Qwen3.5-0.8B/resolve/main/Qwen3.5-0.8B_int8.litertlm",
-    sizeBytes = 964_657_152L,
-    minRamGb = 3,
-    summary = "Smaller and quicker, for older phones. Weaker at maths and long answers."
-  )
-}
-
-sealed class DownloadState {
-  object Idle : DownloadState()
-  data class Running(val model: PhoneModel, val bytes: Long) : DownloadState() {
-    val fraction: Float get() = (bytes.toDouble() / model.sizeBytes).toFloat().coerceIn(0f, 1f)
-  }
-  data class Failed(val model: PhoneModel, val reason: String) : DownloadState()
-}
-
-/** Downloads, stores and runs the on-device model. */
-class PhoneModels(context: Context) {
+/** Downloads, stores and runs the on-device model with LiteRT-LM (Android). */
+class PhoneModels(context: Context) : OnDeviceModels {
 
   private val appContext = context.applicationContext
   private val dir = File(appContext.filesDir, "models").apply { mkdirs() }
@@ -76,16 +41,16 @@ class PhoneModels(context: Context) {
   private val http = OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS).readTimeout(60, TimeUnit.SECONDS).build()
 
   private val _download = MutableStateFlow<DownloadState>(DownloadState.Idle)
-  val download: StateFlow<DownloadState> = _download.asStateFlow()
+  override val download: StateFlow<DownloadState> = _download.asStateFlow()
 
   private val _installed = MutableStateFlow(scanInstalled())
-  val installed: StateFlow<Set<PhoneModel>> = _installed.asStateFlow()
+  override val installed: StateFlow<Set<PhoneModel>> = _installed.asStateFlow()
 
   private val _selected = MutableStateFlow(
     prefs.getString(KEY_SELECTED, null)?.let { name -> PhoneModel.entries.firstOrNull { it.name == name } }
   )
   /** The model the user picked; it is used once downloaded. */
-  val selected: StateFlow<PhoneModel?> = _selected.asStateFlow()
+  override val selected: StateFlow<PhoneModel?> = _selected.asStateFlow()
 
   private var downloadJob: Job? = null
 
@@ -93,28 +58,28 @@ class PhoneModels(context: Context) {
   private var engine: Engine? = null
   private var engineModel: PhoneModel? = null
 
-  fun file(model: PhoneModel) = File(dir, model.fileName)
+  private fun file(model: PhoneModel) = File(dir, model.fileName)
   private fun partFile(model: PhoneModel) = File(dir, model.fileName + ".part")
 
   private fun scanInstalled() = PhoneModel.entries.filter { file(it).length() == it.sizeBytes }.toSet()
 
   /** Total RAM in whole GB, to warn before downloading a model the phone can't run. */
-  fun deviceRamGb(): Int {
+  override fun deviceRamGb(): Int {
     val am = appContext.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return 0
     val info = ActivityManager.MemoryInfo().also { am.getMemoryInfo(it) }
     return Math.round(info.totalMem / 1_073_741_824.0).toInt()
   }
 
-  fun select(model: PhoneModel) {
+  override fun select(model: PhoneModel) {
     _selected.value = model
     prefs.edit().putString(KEY_SELECTED, model.name).apply()
   }
 
   /** The model to answer with: the selected one if downloaded, otherwise any downloaded model. */
-  fun activeModel(): PhoneModel? = _selected.value?.takeIf { it in _installed.value } ?: _installed.value.firstOrNull()
+  override fun activeModel(): PhoneModel? = _selected.value?.takeIf { it in _installed.value } ?: _installed.value.firstOrNull()
 
   /** Starts (or resumes) downloading [model]. Progress is in [download]. */
-  fun startDownload(model: PhoneModel) {
+  override fun startDownload(model: PhoneModel) {
     if (_download.value is DownloadState.Running) return
     select(model)
     downloadJob = scope.launch {
@@ -164,13 +129,13 @@ class PhoneModels(context: Context) {
   }
 
   /** Stops the download; the partial file is kept so the next start resumes. */
-  fun cancelDownload() {
+  override fun cancelDownload() {
     downloadJob?.cancel()
     downloadJob = null
     _download.value = DownloadState.Idle
   }
 
-  suspend fun delete(model: PhoneModel) {
+  override suspend fun delete(model: PhoneModel) {
     engineLock.withLock {
       if (engineModel == model) closeEngine()
     }
@@ -179,7 +144,7 @@ class PhoneModels(context: Context) {
     _installed.value = scanInstalled()
   }
 
-  fun backendOrNull(): LlmBackend? {
+  override fun backendOrNull(): LlmBackend? {
     val model = activeModel() ?: return null
     return object : LlmBackend {
       override val label = "Phone · ${model.displayName}"

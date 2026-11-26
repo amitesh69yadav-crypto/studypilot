@@ -3,39 +3,13 @@ package com.example.data.service
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import com.example.data.local.AppDatabase
+import com.example.platform.AlarmEvent
+import com.example.platform.AlarmEventBus
+import com.example.platform.AndroidPlatform
 import com.example.data.model.TimetableSession
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
-
-sealed class AlarmEvent {
-  data class Triggered(
-    val sessionId: Long,
-    val subjectName: String,
-    val topic: String,
-    val startTime: String,
-    val endTime: String,
-    val location: String,
-    val notes: String
-  ) : AlarmEvent()
-
-  data class Dismissed(val sessionId: Long) : AlarmEvent()
-  data class Snoozed(val sessionId: Long, val minutes: Int) : AlarmEvent()
-}
-
-/** Lets the open app react to alarms that ring, get dismissed or snoozed from the notification. */
-object AlarmEventBus {
-  private val _events = MutableSharedFlow<AlarmEvent>(extraBufferCapacity = 10)
-  val events: SharedFlow<AlarmEvent> = _events.asSharedFlow()
-
-  fun emit(event: AlarmEvent) {
-    _events.tryEmit(event)
-  }
-}
 
 /** Handles the app's own alarm PendingIntents. Not exported. */
 class AlarmReceiver : BroadcastReceiver() {
@@ -106,7 +80,7 @@ class AlarmReceiver : BroadcastReceiver() {
     val pending = goAsync()
     CoroutineScope(Dispatchers.IO).launch {
       try {
-        val stored = AppDatabase.getDatabase(context).studyPilotDao().getSessionById(sessionId)
+        val stored = AndroidPlatform.get(context).database.studyPilotDao().getSessionById(sessionId)
         if (stored != null && stored.isAlarmEnabled && stored.recurringDays.isNotBlank()) {
           AlarmAndCalendarService(context).scheduleSessionAlarm(stored)
         }
@@ -128,7 +102,7 @@ class AlarmRescheduleReceiver : BroadcastReceiver() {
         val activeUserId = context.getSharedPreferences("studypilot_auth_prefs", Context.MODE_PRIVATE)
           .getString("active_user_id", null) ?: "guest_user"
         val service = AlarmAndCalendarService(context)
-        AppDatabase.getDatabase(context).studyPilotDao()
+        AndroidPlatform.get(context).database.studyPilotDao()
           .getSessionsListForUser(activeUserId)
           .filter { it.isAlarmEnabled }
           .forEach { service.scheduleSessionAlarm(it) }

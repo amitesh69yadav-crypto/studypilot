@@ -11,7 +11,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.example.data.model.Subject
 import com.example.data.model.TimetableSession
 import com.example.data.service.AlarmAndCalendarService
-import com.example.data.service.ScheduleState
+import com.example.data.schedule.ScheduleState
 import com.example.ui.components.formatTimeRange
 import com.example.ui.screens.GoogleCalendarEventCard
 import com.example.ui.screens.SessionEditDialog
@@ -201,7 +201,7 @@ class ScheduleAlarmOptionalFieldsTest {
       com.example.data.local.AppDatabase::class.java
     ).allowMainThreadQueries().build()
     try {
-      val repo = com.example.data.repository.StudyPilotRepository(db.studyPilotDao(), context = app)
+      val repo = com.example.data.repository.StudyPilotRepository(db.studyPilotDao())
       val uniqueTopic = "Early Alarm Only Test"
       val session = TimetableSession(
         userId = StudyPilotViewModel.GUEST_USER_ID,

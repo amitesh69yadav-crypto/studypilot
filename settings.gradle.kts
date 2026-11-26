@@ -25,3 +25,4 @@ dependencyResolutionManagement {
 rootProject.name = "StudyPilot"
 
 include(":app")
+include(":shared")

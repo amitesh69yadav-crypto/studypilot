@@ -41,9 +41,30 @@ googleServices = "4.5.0"
 credentials = "1.5.0"
 googleid = "1.1.1"
 litertlm = "0.19.1"
+composeMultiplatform = "1.12.2"
+roomKmp = "2.8.5"
+sqliteBundled = "2.6.2"
+lifecycleKmp = "2.11.0"
+ktor = "3.6.2"
 
 
 [libraries]
+cmp-runtime = { group = "org.jetbrains.compose.runtime", name = "runtime", version.ref = "composeMultiplatform" }
+cmp-foundation = { group = "org.jetbrains.compose.foundation", name = "foundation", version.ref = "composeMultiplatform" }
+cmp-material3 = { group = "org.jetbrains.compose.material3", name = "material3", version = "1.9.0" }
+cmp-icons-extended = { group = "org.jetbrains.compose.material", name = "material-icons-extended", version = "1.7.3" }
+cmp-resources = { group = "org.jetbrains.compose.components", name = "components-resources", version.ref = "composeMultiplatform" }
+cmp-ui-tooling-preview = { group = "org.jetbrains.compose.ui", name = "ui-tooling-preview", version.ref = "composeMultiplatform" }
+lifecycle-viewmodel-kmp = { group = "org.jetbrains.androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "lifecycleKmp" }
+lifecycle-runtime-kmp = { group = "org.jetbrains.androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "lifecycleKmp" }
+room-kmp-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "roomKmp" }
+room-kmp-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "roomKmp" }
+sqlite-bundled = { group = "androidx.sqlite", name = "sqlite-bundled", version.ref = "sqliteBundled" }
+org-json = { group = "org.json", name = "json", version = "20250517" }
+kotlinx-coroutines-swing = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-swing", version.ref = "kotlinxCoroutinesCore" }
+ktor-server-core = { group = "io.ktor", name = "ktor-server-core", version.ref = "ktor" }
+ktor-server-cio = { group = "io.ktor", name = "ktor-server-cio", version.ref = "ktor" }
+zxing-core = { group = "com.google.zxing", name = "core", version = "3.5.3" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
@@ -98,6 +119,10 @@ litertlm-android = { group = "com.google.ai.edge.litertlm", name = "litertlm-and
 
 
 [plugins]
+kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
+android-kmp-library = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
+compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "composeMultiplatform" }
+room = { id = "androidx.room", version.ref = "roomKmp" }
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 google-devtools-ksp = { id = "com.google.devtools.ksp", version.ref = "googleDevtoolsKsp" }

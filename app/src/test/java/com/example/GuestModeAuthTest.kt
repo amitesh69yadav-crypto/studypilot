@@ -1,5 +1,6 @@
 package com.example
 
+import com.example.platform.AndroidPlatform
 import android.app.Application
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
@@ -34,7 +35,7 @@ class GuestModeAuthTest {
 
   @Test
   fun freshLaunchOpensInGuestModeWithNoDefaultPersonalLogin() {
-    val vm = StudyPilotViewModel(app)
+    val vm = StudyPilotViewModel(AndroidPlatform.get(app))
 
     assertEquals(Screen.Dashboard, vm.currentScreen.value)
     assertFalse(vm.isAuthenticated.value)
@@ -57,7 +58,7 @@ class GuestModeAuthTest {
 
   @Test
   fun registeringAndLoggingInStoresUserInfoAcrossSessions() {
-    val vm = StudyPilotViewModel(app)
+    val vm = StudyPilotViewModel(AndroidPlatform.get(app))
 
     val registered = vm.register(
       name = "Alice Johnson",
@@ -77,7 +78,7 @@ class GuestModeAuthTest {
     assertEquals(Screen.Dashboard, vm.currentScreen.value)
 
     // Re-create ViewModel to verify user info stays stored across restarts
-    val restartedVm = StudyPilotViewModel(app)
+    val restartedVm = StudyPilotViewModel(AndroidPlatform.get(app))
     assertTrue(restartedVm.isAuthenticated.value)
     assertEquals("Alice Johnson", restartedVm.currentUser.value.name)
     assertEquals("alice@example.edu", restartedVm.currentUser.value.email)
@@ -89,7 +90,7 @@ class GuestModeAuthTest {
 
   @Test
   fun logoutReturnsToGuestModeWhileKeepingStoredAccount() {
-    val vm = StudyPilotViewModel(app)
+    val vm = StudyPilotViewModel(AndroidPlatform.get(app))
     assertTrue(vm.login(email = "bob.smith@college.edu", pass = "secret123", rememberMe = true))
     assertTrue(vm.isAuthenticated.value)
 
@@ -102,7 +103,7 @@ class GuestModeAuthTest {
     assertEquals("bob.smith@college.edu", vm.savedAccounts.value.first().email)
 
     // Re-opening after logout still starts cleanly in Guest Mode
-    val reopened = StudyPilotViewModel(app)
+    val reopened = StudyPilotViewModel(AndroidPlatform.get(app))
     assertFalse(reopened.isAuthenticated.value)
     assertEquals(StudyPilotViewModel.GUEST_USER_ID, reopened.currentUser.value.id)
     assertEquals(1, reopened.savedAccounts.value.size)
@@ -120,7 +121,7 @@ class GuestModeAuthTest {
 
   @Test
   fun signingInRequiresTheProfilePassword() {
-    val vm = StudyPilotViewModel(app)
+    val vm = StudyPilotViewModel(AndroidPlatform.get(app))
     assertTrue(vm.register(name = "Cara", email = "cara@uni.edu", pass = "correct-horse", university = ""))
     vm.logout()
 
@@ -135,7 +136,7 @@ class GuestModeAuthTest {
 
   @Test
   fun registeringAnExistingEmailIsRejected() {
-    val vm = StudyPilotViewModel(app)
+    val vm = StudyPilotViewModel(AndroidPlatform.get(app))
     assertTrue(vm.register(name = "Dan", email = "dan@uni.edu", pass = "password1", university = ""))
     vm.logout()
     assertFalse(vm.register(name = "Impostor", email = "dan@uni.edu", pass = "password2", university = ""))
@@ -165,7 +166,7 @@ class GuestModeAuthTest {
       .remove("cleared_default_login_v1")
       .commit()
 
-    val vm = StudyPilotViewModel(app)
+    val vm = StudyPilotViewModel(AndroidPlatform.get(app))
     assertFalse(vm.isAuthenticated.value)
     assertEquals(StudyPilotViewModel.GUEST_USER_ID, vm.currentUser.value.id)
     assertTrue(vm.savedAccounts.value.isEmpty())

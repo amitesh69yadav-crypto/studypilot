@@ -1,5 +1,6 @@
 package com.example
 
+import com.example.platform.AndroidPlatform
 import android.app.Application
 import android.content.Context
 import android.os.Looper
@@ -28,7 +29,7 @@ class TutorFollowUpTest {
   fun setUp() {
     val app = ApplicationProvider.getApplicationContext<Application>()
     app.getSharedPreferences("studypilot_auth_prefs", Context.MODE_PRIVATE).edit().clear().commit()
-    vm = StudyPilotViewModel(app)
+    vm = StudyPilotViewModel(AndroidPlatform.get(app))
     vm.setAiSource(AiSource.BUILT_IN)
     vm.startNewTutorChat(null)
   }

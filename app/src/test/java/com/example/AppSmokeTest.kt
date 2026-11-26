@@ -1,5 +1,6 @@
 package com.example
 
+import com.example.platform.AndroidPlatform
 import android.app.Application
 import android.content.Context
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -46,7 +47,7 @@ class AppSmokeTest {
   fun everyScreenRendersOnATablet() = visitAllScreens()
 
   private fun visitAllScreens() {
-    val vm = StudyPilotViewModel(app)
+    val vm = StudyPilotViewModel(AndroidPlatform.get(app))
     composeTestRule.setContent { StudyPilotTheme { StudyPilotApp(viewModel = vm) } }
 
     for (screen in allScreens) {
@@ -58,7 +59,7 @@ class AppSmokeTest {
 
   @Test
   fun ringingAlarmShowsBannerAndStops() {
-    val vm = StudyPilotViewModel(app)
+    val vm = StudyPilotViewModel(AndroidPlatform.get(app))
     composeTestRule.setContent { StudyPilotTheme { StudyPilotApp(viewModel = vm) } }
 
     val session = com.example.data.model.TimetableSession(
