@@ -153,7 +153,11 @@ fun StatCard(
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
   ) {
-    Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+    Column(
+      modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 96.dp).padding(16.dp),
+      horizontalAlignment = Alignment.CenterHorizontally,
+      verticalArrangement = Arrangement.Center
+    ) {
       Text(text = value, style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurface)
       Text(
         text = title,

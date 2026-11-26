@@ -350,7 +350,7 @@ fun QuizScreen(
           ) {
             Column(
               modifier = Modifier.weight(1f),
-              horizontalAlignment = Alignment.Start
+              horizontalAlignment = Alignment.CenterHorizontally
             ) {
               Text(text = "${testedTopics.size}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
               Text(text = "Topics tested", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -364,7 +364,7 @@ fun QuizScreen(
             }
             Column(
               modifier = Modifier.weight(1f),
-              horizontalAlignment = Alignment.End
+              horizontalAlignment = Alignment.CenterHorizontally
             ) {
               Text(text = "${strugglingTopics.size}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
               Text(text = "Needs review", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -411,7 +411,8 @@ fun QuizScreen(
               text = "No quizzes yet.",
               style = MaterialTheme.typography.bodyMedium,
               color = MaterialTheme.colorScheme.onSurfaceVariant,
-              modifier = Modifier.padding(16.dp)
+              textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+              modifier = Modifier.fillMaxWidth().padding(24.dp)
             )
           }
         } else {

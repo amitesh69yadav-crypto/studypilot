@@ -126,7 +126,7 @@ fun AiChatImportScreen(
                     0 -> "Chats (${importedChats.size})"
                     1 -> "Memory (${extractedConcepts.size})"
                     2 -> "Coverage"
-                    else -> "+ Import Link"
+                    else -> "Import"
                   },
                   fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Medium,
                   color = if (selectedTab == index) PaletteDarkText else PaletteDarkText.copy(alpha = 0.6f),
@@ -370,8 +370,8 @@ private fun ChatLibraryTab(
 
     Spacer(modifier = Modifier.height(12.dp))
 
-    // Subject grouping filter row
-    Row(
+    // Subject grouping filter row (hidden while "All" is the only choice)
+    if (subjectFilters.size > 1) Row(
       modifier = Modifier
         .fillMaxWidth()
         .horizontalScroll(rememberScrollState()),

@@ -2176,141 +2176,27 @@ fun GoogleCalendarEventCard(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Aligned Wrapping Toolbar Action Row (all controls visible, zero clipping)
-        FlowRow(
+        // One even row: every action gets the same width.
+        Row(
           modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.spacedBy(8.dp),
-          verticalArrangement = Arrangement.spacedBy(8.dp)
+          horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-          // Status completion button
-          Surface(
-            shape = RoundedCornerShape(8.dp),
-            color = if (isCompleted) PalettePaleCeladon else PaletteDeepSage,
-            border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage),
-            modifier = Modifier
-              .heightIn(min = 36.dp)
-              .clickable {
-                val next = if (isCompleted) "SCHEDULED" else "COMPLETED"
-                onStatusChange(next)
-              }
-          ) {
-            Row(
-              modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-              verticalAlignment = Alignment.CenterVertically
-            ) {
-              Icon(
-                imageVector = if (isCompleted) Icons.Default.CheckCircle else Icons.Default.Check,
-                contentDescription = null,
-                tint = if (isCompleted) PaletteDarkText else PaletteCreamIvory,
-                modifier = Modifier.size(14.dp)
-              )
-              Spacer(modifier = Modifier.width(4.dp))
-              Text(
-                text = if (isCompleted) "Completed" else "Done",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = if (isCompleted) PaletteDarkText else PaletteCreamIvory
-              )
-            }
-          }
-
-          // AI Tutor Help
-          Surface(
-            shape = RoundedCornerShape(8.dp),
-            color = PalettePaleCeladon,
-            border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage),
-            modifier = Modifier
-              .heightIn(min = 36.dp)
-              .clickable { onAskAiTutor() }
-          ) {
-            Row(
-              modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-              verticalAlignment = Alignment.CenterVertically
-            ) {
-              Icon(Icons.Default.Psychology, contentDescription = null, tint = PaletteDarkText, modifier = Modifier.size(14.dp))
-              Spacer(modifier = Modifier.width(4.dp))
-              Text("AI Tutor", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = PaletteDarkText)
-            }
-          }
-
-          // Alarm Toggle Pill
-          Surface(
-            shape = RoundedCornerShape(8.dp),
-            color = if (session.isAlarmEnabled) PalettePaleCeladon else PaletteCreamIvory,
-            border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage),
-            modifier = Modifier
-              .heightIn(min = 36.dp)
-              .clickable { onToggleAlarm() }
-          ) {
-            Row(
-              modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-              verticalAlignment = Alignment.CenterVertically
-            ) {
-              Icon(
-                imageVector = if (session.isAlarmEnabled) Icons.Default.AlarmOn else Icons.Default.AlarmOff,
-                contentDescription = null,
-                tint = PaletteDarkText,
-                modifier = Modifier.size(14.dp)
-              )
-              Spacer(modifier = Modifier.width(4.dp))
-              Text(
-                text = if (session.isAlarmEnabled) "Alarm On" else "Alarm Off",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = PaletteDarkText
-              )
-            }
-          }
-
+          SessionAction(
+            icon = if (isCompleted) Icons.Default.CheckCircle else Icons.Default.Check,
+            label = if (isCompleted) "Completed" else "Done",
+            emphasized = !isCompleted,
+            modifier = Modifier.weight(1f)
+          ) { onStatusChange(if (isCompleted) "SCHEDULED" else "COMPLETED") }
+          SessionAction(Icons.Default.Psychology, "AI Tutor", modifier = Modifier.weight(1f)) { onAskAiTutor() }
+          SessionAction(
+            icon = if (session.isAlarmEnabled) Icons.Default.AlarmOn else Icons.Default.AlarmOff,
+            label = if (session.isAlarmEnabled) "Alarm On" else "Alarm Off",
+            modifier = Modifier.weight(1f)
+          ) { onToggleAlarm() }
           if (session.isAlarmEnabled) {
-            // Ring Test Button
-            Surface(
-              shape = RoundedCornerShape(8.dp),
-              color = PaletteDeepSage,
-              border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage),
-              modifier = Modifier
-                .heightIn(min = 36.dp)
-                .clickable { onTestAlarm() }
-            ) {
-              Row(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-              ) {
-                Icon(
-                  imageVector = Icons.Default.NotificationsActive,
-                  contentDescription = "Test Alarm",
-                  tint = PaletteCreamIvory,
-                  modifier = Modifier.size(14.dp)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                  text = "Ring",
-                  fontSize = 11.sp,
-                  fontWeight = FontWeight.Bold,
-                  color = PaletteCreamIvory
-                )
-              }
-            }
+            SessionAction(Icons.Default.NotificationsActive, "Ring", modifier = Modifier.weight(1f)) { onTestAlarm() }
           }
-
-          // Opens the device calendar's "new event" screen prefilled with this session.
-          Surface(
-            shape = RoundedCornerShape(8.dp),
-            color = PalettePaleCeladon,
-            border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage),
-            modifier = Modifier
-              .heightIn(min = 36.dp)
-              .clickable { onSyncCalendar() }
-          ) {
-            Row(
-              modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-              verticalAlignment = Alignment.CenterVertically
-            ) {
-              Icon(Icons.Default.CalendarMonth, contentDescription = "Add to calendar", tint = PaletteDarkText, modifier = Modifier.size(14.dp))
-              Spacer(modifier = Modifier.width(4.dp))
-              Text("Calendar", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = PaletteDarkText)
-            }
-          }
+          SessionAction(Icons.Default.CalendarMonth, "Calendar", modifier = Modifier.weight(1f)) { onSyncCalendar() }
         }
       }
     }
@@ -2667,4 +2553,42 @@ fun SessionEditDialog(
     containerColor = PaletteCreamIvory,
     shape = RoundedCornerShape(16.dp)
   )
+}
+
+/** Icon over a short label; equal-width cells keep a row of card actions even. */
+@Composable
+private fun SessionAction(
+  icon: androidx.compose.ui.graphics.vector.ImageVector,
+  label: String,
+  modifier: Modifier = Modifier,
+  emphasized: Boolean = false,
+  onClick: () -> Unit
+) {
+  Surface(
+    shape = RoundedCornerShape(12.dp),
+    color = if (emphasized) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+    modifier = modifier.heightIn(min = 56.dp).clickable(onClick = onClick)
+  ) {
+    Column(
+      modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp),
+      horizontalAlignment = Alignment.CenterHorizontally,
+      verticalArrangement = Arrangement.Center
+    ) {
+      Icon(
+        icon,
+        contentDescription = null,
+        tint = if (emphasized) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.size(18.dp)
+      )
+      Spacer(modifier = Modifier.height(4.dp))
+      Text(
+        text = label,
+        style = MaterialTheme.typography.labelSmall,
+        color = if (emphasized) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+      )
+    }
+  }
 }

@@ -280,13 +280,17 @@ fun WhatShouldIDoNowCard(
           Text(
             text = if (status.state == ScheduleState.DAY_COMPLETE) "Done for today" else "Free time",
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-            color = MaterialTheme.colorScheme.onSurface
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
           )
           Spacer(modifier = Modifier.height(2.dp))
           Text(
             text = "No sessions scheduled",
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
           )
 
           Spacer(modifier = Modifier.height(16.dp))

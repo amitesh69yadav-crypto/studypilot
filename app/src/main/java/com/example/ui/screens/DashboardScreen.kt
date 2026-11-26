@@ -270,9 +270,10 @@ fun DashboardScreen(
             modifier = Modifier
               .fillMaxSize()
               .padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
           ) {
-            Column {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
               Text(
                 text = "Quiz",
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
@@ -300,9 +301,10 @@ fun DashboardScreen(
             modifier = Modifier
               .fillMaxSize()
               .padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
           ) {
-            Column {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
               Text(
                 text = "Memory",
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
@@ -426,7 +428,8 @@ fun DashboardScreen(
               text = "No classes scheduled today.",
               style = MaterialTheme.typography.bodySmall,
               color = MaterialTheme.colorScheme.onSurfaceVariant,
-              modifier = Modifier.padding(16.dp)
+              textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+              modifier = Modifier.fillMaxWidth().padding(16.dp)
             )
           }
         } else {
@@ -472,7 +475,8 @@ fun DashboardScreen(
               text = "No topics recorded yet.",
               style = MaterialTheme.typography.bodySmall,
               color = MaterialTheme.colorScheme.onSurfaceVariant,
-              modifier = Modifier.padding(16.dp)
+              textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+              modifier = Modifier.fillMaxWidth().padding(16.dp)
             )
           }
         } else {
@@ -590,6 +594,13 @@ private fun SessionItemRow(
       }
 
       Spacer(modifier = Modifier.width(8.dp))
+      Text(
+        text = sessionWhen(session, isDone),
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1
+      )
+      Spacer(modifier = Modifier.width(12.dp))
       if (isDone) {
         Icon(
           imageVector = Icons.Default.CheckCircle,
@@ -723,5 +734,23 @@ private fun QuickActionButton(
         maxLines = 1
       )
     }
+  }
+}
+
+/** "Done", "Now", "In 40 min", "In 2 h" or "Earlier" for a session today. */
+private fun sessionWhen(session: TimetableSession, isDone: Boolean): String {
+  if (isDone) return "Done"
+  val parts = session.startTime.split(":").mapNotNull { it.trim().take(2).toIntOrNull() }
+  if (parts.size < 2) return ""
+  val now = java.util.Calendar.getInstance()
+  val nowMin = now.get(java.util.Calendar.HOUR_OF_DAY) * 60 + now.get(java.util.Calendar.MINUTE)
+  val diff = parts[0] * 60 + parts[1] - nowMin
+  val endParts = session.endTime.split(":").mapNotNull { it.trim().take(2).toIntOrNull() }
+  val endDiff = if (endParts.size == 2) endParts[0] * 60 + endParts[1] - nowMin else diff
+  return when {
+    diff <= 0 && endDiff > 0 -> "Now"
+    diff <= 0 -> "Earlier"
+    diff < 60 -> "In $diff min"
+    else -> "In ${diff / 60} h"
   }
 }

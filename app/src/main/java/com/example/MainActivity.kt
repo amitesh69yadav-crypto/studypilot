@@ -62,6 +62,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -294,7 +295,7 @@ fun StudyPilotApp(viewModel: StudyPilotViewModel) {
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
       if (currentScreen != Screen.ActiveQuiz && currentScreen != Screen.Login) {
-        TopAppBar(
+        CenterAlignedTopAppBar(
           title = {
             Text(
               text = screenTitle,
@@ -307,7 +308,7 @@ fun StudyPilotApp(viewModel: StudyPilotViewModel) {
               overflow = TextOverflow.Ellipsis
             )
           },
-          colors = TopAppBarDefaults.topAppBarColors(
+          colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
             containerColor = MaterialTheme.colorScheme.surface,
             titleContentColor = MaterialTheme.colorScheme.onSurface
           ),

@@ -235,7 +235,7 @@ fun ProgressScreen(
           StatCard(
             title = "Quizzes completed",
             value = attempts.size.toString(),
-            subtitle = if (attempts.isEmpty()) null else "Average $averageScore%",
+            subtitle = if (attempts.isEmpty()) "none yet" else "average $averageScore%",
             icon = Icons.Default.Quiz,
             iconTint = EmeraldSuccess,
             modifier = Modifier.weight(1f)
@@ -293,52 +293,21 @@ fun ProgressScreen(
                 color = MaterialTheme.colorScheme.onSurface
               )
               Text(
-                text = "From your timetable",
+                text = "Mon to Sun, from your timetable",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
               )
             }
 
-            Surface(
-              shape = RoundedCornerShape(8.dp),
-              color = MaterialTheme.colorScheme.primaryContainer,
-              border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
-            ) {
-              Text(
-                text = "Mon - Sun",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-              )
-            }
+            Text(
+              text = String.format(Locale.getDefault(), "%.1f h", totalWeeklyHours),
+              style = MaterialTheme.typography.titleLarge,
+              color = MaterialTheme.colorScheme.onSurface
+            )
           }
 
           Spacer(modifier = Modifier.height(16.dp))
 
-          // Total Weekly Summary Pill
-          Row(
-            modifier = Modifier
-              .fillMaxWidth()
-              .clip(RoundedCornerShape(8.dp))
-              .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-              .padding(horizontal = 12.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-          ) {
-            Text(
-              text = "Total",
-              fontSize = 12.sp,
-              fontWeight = FontWeight.Medium,
-              color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-              text = String.format(Locale.getDefault(), "%.1f Hours logged", totalWeeklyHours),
-              fontSize = 12.sp,
-              fontWeight = FontWeight.Bold,
-              color = MaterialTheme.colorScheme.primary
-            )
-          }
 
           Spacer(modifier = Modifier.height(16.dp))
 
@@ -453,25 +422,17 @@ fun ProgressScreen(
                 color = MaterialTheme.colorScheme.onSurface
               )
               Text(
-                text = "Average score: $averageScore% (${attempts.size} quizzes completed)",
+                text = if (attempts.isEmpty()) "Target 85%" else "Average of ${attempts.size} quizzes · target 85%",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
               )
             }
 
-            Surface(
-              shape = RoundedCornerShape(8.dp),
-              color = MaterialTheme.colorScheme.primaryContainer,
-              border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
-            ) {
-              Text(
-                text = "Target: 85%+",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-              )
-            }
+            Text(
+              text = if (attempts.isEmpty()) "—" else "$averageScore%",
+              style = MaterialTheme.typography.titleLarge,
+              color = MaterialTheme.colorScheme.onSurface
+            )
           }
 
           Spacer(modifier = Modifier.height(16.dp))
