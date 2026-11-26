@@ -87,7 +87,9 @@ fun AiSettingsCard(viewModel: StudyPilotViewModel) {
 
       Spacer(Modifier.height(12.dp))
       Text("Use", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-      AiSource.entries.forEach { option ->
+      val onDesktop = !viewModel.hasPhoneModels
+      // The desktop has no phone model; there "PC" means the Ollama on this computer.
+      AiSource.entries.filter { !onDesktop || it != AiSource.PHONE }.forEach { option ->
         Row(
           verticalAlignment = Alignment.CenterVertically,
           modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
@@ -95,13 +97,21 @@ fun AiSettingsCard(viewModel: StudyPilotViewModel) {
           RadioButton(selected = source == option, onClick = { viewModel.setAiSource(option) })
           Column(Modifier.weight(1f)) {
             Text(option.label, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
-            Text(option.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            val description = when {
+              !onDesktop -> option.description
+              option == AiSource.AUTO -> "Ollama on this computer when it's running, otherwise built-in answers"
+              option == AiSource.PC -> "Only Ollama on this computer"
+              else -> option.description
+            }
+            Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
           }
         }
       }
 
-      HorizontalDivider(Modifier.padding(vertical = 16.dp))
-      PhoneModelSection(viewModel)
+      if (!onDesktop) {
+        HorizontalDivider(Modifier.padding(vertical = 16.dp))
+        PhoneModelSection(viewModel)
+      }
 
       HorizontalDivider(Modifier.padding(vertical = 16.dp))
       PcSection(viewModel)
@@ -202,9 +212,18 @@ private fun PcSection(viewModel: StudyPilotViewModel) {
 
   LaunchedEffect(pcUrl) { if (pcUrl.isNotBlank()) viewModel.checkPc() }
 
-  SectionTitle(Icons.Default.Computer, "On your PC", "Much smarter answers when the phone is on the same Wi-Fi as your PC.")
+  val onDesktop = !viewModel.hasPhoneModels
+  if (onDesktop) {
+    SectionTitle(Icons.Default.Computer, "Ollama", "Runs the tutor's model on this computer.")
+  } else {
+    SectionTitle(Icons.Default.Computer, "On your PC", "Much smarter answers when the phone is on the same Wi-Fi as your PC.")
+  }
   Text(
-    "Install Ollama on the PC, run \"ollama pull qwen3:8b\", and start it with OLLAMA_HOST=0.0.0.0 so the phone can reach it.",
+    if (onDesktop) {
+      "Install Ollama and run \"ollama pull qwen3:8b\". The address below is this computer."
+    } else {
+      "Install Ollama on the PC, run \"ollama pull qwen3:8b\", and start it with OLLAMA_HOST=0.0.0.0 so the phone can reach it."
+    },
     style = MaterialTheme.typography.bodySmall,
     color = MaterialTheme.colorScheme.onSurfaceVariant
   )

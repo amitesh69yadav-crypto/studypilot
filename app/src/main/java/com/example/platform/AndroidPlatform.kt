@@ -8,6 +8,8 @@ import com.example.data.ai.llm.OnDeviceModels
 import com.example.data.ai.llm.PhoneModels
 import com.example.data.local.AppDatabase
 import com.example.data.model.TimetableSession
+import com.example.data.sync.SyncClient
+import com.example.data.sync.SyncEngine
 import com.example.data.service.AlarmAndCalendarService
 import com.example.data.service.AlarmRingingService
 import java.net.Inet4Address
@@ -29,6 +31,15 @@ class AndroidPlatform private constructor(private val context: Context) : Platfo
   override val cloud: CloudStore by lazy { FirestoreCloudStore() }
 
   override val onDeviceModels: OnDeviceModels by lazy { PhoneModels(context) }
+
+  override val syncEngine: SyncEngine by lazy { SyncEngine(database, prefs("studypilot_auth_prefs")) }
+
+  /** Talks to the paired PC. */
+  val syncClient: SyncClient by lazy {
+    // The name the owner gave the phone ("Galaxy S25"), else the model code.
+    val name = runCatching { android.provider.Settings.Global.getString(context.contentResolver, "device_name") }.getOrNull()
+    SyncClient(syncEngine, prefs("studypilot_sync"), name?.takeIf { it.isNotBlank() } ?: android.os.Build.MODEL ?: "Android phone")
+  }
 
   override fun localSubnetPrefix(): String? {
     val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return null

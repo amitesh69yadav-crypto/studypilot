@@ -47,3 +47,6 @@ fun parseHexColor(hex: String): Color? {
 private val EMAIL = Regex("""^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$""")
 
 fun isValidEmail(text: String): Boolean = EMAIL.matches(text.trim())
+
+/** The "Phone" (on the PC) or "PC" (on the phone) card shown at the top of Settings. */
+val LocalDeviceSyncCard = staticCompositionLocalOf<(@Composable () -> Unit)?> { null }

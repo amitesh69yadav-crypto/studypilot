@@ -1,19 +1,27 @@
 # StudyPilot
 
-Android study planner for university students: timetable with exact alarms, topic tracking with
-spaced repetition, weekend revision quizzes, an AI tutor, and importing shared AI chats as study notes.
+Study planner for university students, on Android and Windows: timetable with exact alarms, topic
+tracking with spaced repetition, weekend revision quizzes, an AI tutor, and importing shared AI chats
+as study notes. The phone and desktop apps share one data set over your Wi-Fi.
 
-Kotlin, Jetpack Compose, Room. AI runs on the phone (LiteRT-LM) or on your own PC (Ollama); no API keys.
+Kotlin Multiplatform, Compose (Jetpack on Android, Compose Multiplatform on desktop), Room. AI runs on the phone (LiteRT-LM) or on your own PC (Ollama); no API keys.
 Firebase Auth + Firestore for optional cloud backup.
 
 ## Build
 
-Requirements: JDK 17+, Android SDK 36.
+Requirements: JDK 17+, Android SDK 37.
 
 ```sh
-./gradlew assembleDebug        # app/build/outputs/apk/debug/app-debug.apk
-./gradlew testDebugUnitTest    # unit + Robolectric tests, including a smoke test that renders every screen
+./gradlew assembleDebug             # app/build/outputs/apk/debug/app-debug.apk
+./gradlew testDebugUnitTest         # unit + Robolectric tests, including a smoke test that renders every screen
+./gradlew :shared:desktopTest       # phone-PC sync tests against two real databases
+./gradlew :desktop:run              # desktop app
+./gradlew :desktop:packageMsi       # Windows installer: desktop/build/compose/binaries/main/msi/
 ```
+
+Modules: `shared` holds the screens, viewmodel, database and AI (Android + desktop JVM targets);
+`app` is the Android shell (alarms, Firebase, on-device models); `desktop` is the Windows window, its
+alarms and the sync server. Platform differences go through `Platform` and `PlatformActions`.
 
 Files that are not in the repo:
 
@@ -57,6 +65,26 @@ Settings > AI chooses where answers come from. **Auto** tries them in this order
    Used when neither model is available; such answers are labelled.
 
 Replies stream in as they're generated. Multiple-choice and true/false answers are graded without a model.
+
+## Desktop app and phone sync
+
+The desktop app is the full app with the same screens, using Ollama on the same PC for the tutor.
+Its data lives in `%APPDATA%\StudyPilot`.
+
+To connect a phone: on the PC open **Settings > Phone > Pair a phone**, then on the phone open
+**Settings > PC > Scan code** (or **Type it in** with the address and 6-digit code shown on the PC).
+Allow StudyPilot through Windows Firewall on private networks when asked. Pairing happens once.
+
+After that, while the phone app is open on the same Wi-Fi, it syncs with the PC every 15 seconds and
+right after each change. Everything syncs: subjects, timetable, topics, quizzes, tasks, imported
+chats and tutor conversations, plus saved profiles. The newest edit to a record wins; deletes sync too.
+On the first sync the PC opens the same profile as the phone. Nothing goes through a cloud service.
+Traffic is plain HTTP on your local network and only paired phones (holding a token from pairing) are
+answered.
+
+How it works: SQLite triggers record each insert, update and delete in a `sync_ids` table (global id,
+change time, change number, device). Each side sends the changes after the last number the other
+saw, with references to other records sent as global ids (`SyncEngine`, `SyncHost`, `SyncClient`).
 
 ### Setting up the PC
 

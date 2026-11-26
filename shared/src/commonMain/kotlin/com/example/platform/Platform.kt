@@ -3,6 +3,7 @@ package com.example.platform
 import com.example.data.ai.llm.OnDeviceModels
 import com.example.data.local.AppDatabase
 import com.example.data.model.TimetableSession
+import com.example.data.sync.SyncEngine
 import kotlinx.coroutines.flow.SharedFlow
 
 /**
@@ -28,6 +29,9 @@ interface Platform {
 
   /** "Android" or "Desktop", for labels. */
   val name: String
+
+  /** Phone-PC sync for [database]; create it once per process. */
+  val syncEngine: SyncEngine
 }
 
 interface KeyValueStore {

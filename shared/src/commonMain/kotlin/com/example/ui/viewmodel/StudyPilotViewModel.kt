@@ -1,5 +1,6 @@
 package com.example.ui.viewmodel
 
+import com.example.data.sync.SyncEvents
 import androidx.lifecycle.ViewModel
 import com.example.data.ai.StudyAi
 import com.example.data.schedule.CurrentScheduleStatus
@@ -130,6 +131,9 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
   val phoneSelected: StateFlow<PhoneModel?> = repository.ai.phone?.selected ?: MutableStateFlow(null)
 
   fun deviceRamGb(): Int = repository.ai.phone?.deviceRamGb() ?: 0
+
+  /** False on the desktop, which has no on-device model. */
+  val hasPhoneModels: Boolean get() = repository.ai.phone != null
 
   // --- UI notifications & Theme ---
   private val _snackbarMessage = MutableSharedFlow<String>()
@@ -556,6 +560,22 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
     // Sample data is only added automatically for the first guest launch; signed-in accounts start empty.
     if (_currentUser.value.id == GUEST_USER_ID) {
       viewModelScope.launch { repository.seedSampleUniversityData(GUEST_USER_ID) }
+    }
+
+    // Start tracking changes for phone-PC sync before anything is edited.
+    viewModelScope.launch { runCatching { platform.syncEngine.prepare() } }
+
+    // Data from the other device: new profiles, and on the first sync open the same account as there.
+    viewModelScope.launch {
+      SyncEvents.results.collect { result ->
+        if (result.accountsChanged) _savedAccounts.value = loadRegisteredAccounts()
+        val peerUser = result.peerActiveUserId?.let { id -> _savedAccounts.value.find { it.id == id } }
+        if (result.firstSync && peerUser != null && _currentUser.value.id == GUEST_USER_ID) {
+          activateUser(peerUser.copy(isLoggedIn = true, lastLoginTime = System.currentTimeMillis()), "Showing ${peerUser.name}'s data from ${result.peerName}")
+        } else if (result.applied > 0) {
+          _snackbarMessage.emit("Synced ${result.applied} change${if (result.applied == 1) "" else "s"} from ${result.peerName}")
+        }
+      }
     }
 
     // An alarm may already be ringing when the app opens (launched from its notification).

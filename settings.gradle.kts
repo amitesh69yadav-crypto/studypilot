@@ -26,3 +26,4 @@ rootProject.name = "StudyPilot"
 
 include(":app")
 include(":shared")
+include(":desktop")

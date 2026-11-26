@@ -40,6 +40,11 @@ kotlin {
         api(libs.sqlite.bundled)
       }
     }
+    val desktopTest by getting {
+      dependencies {
+        implementation(kotlin("test"))
+      }
+    }
   }
 }
 

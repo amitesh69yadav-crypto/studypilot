@@ -64,6 +64,7 @@ org-json = { group = "org.json", name = "json", version = "20250517" }
 kotlinx-coroutines-swing = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-swing", version.ref = "kotlinxCoroutinesCore" }
 ktor-server-core = { group = "io.ktor", name = "ktor-server-core", version.ref = "ktor" }
 ktor-server-cio = { group = "io.ktor", name = "ktor-server-cio", version.ref = "ktor" }
+code-scanner = { group = "com.google.android.gms", name = "play-services-code-scanner", version = "16.1.0" }
 zxing-core = { group = "com.google.zxing", name = "core", version = "3.5.3" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }

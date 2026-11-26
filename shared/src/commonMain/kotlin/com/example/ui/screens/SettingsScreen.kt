@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import com.example.platform.LocalDeviceSyncCard
 import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -85,6 +86,7 @@ fun SettingsScreen(
   val subjects by viewModel.subjects.collectAsState()
   val currentUser by viewModel.currentUser.collectAsState()
   val savedAccounts by viewModel.savedAccounts.collectAsState()
+  val deviceSyncCard = LocalDeviceSyncCard.current
 
   var showAddSubjectDialog by remember { mutableStateOf(false) }
   var showEditProfileDialog by remember { mutableStateOf(false) }
@@ -655,6 +657,7 @@ fun SettingsScreen(
       }
     }
 
+    deviceSyncCard?.let { card -> item { card() } }
     item { AiSettingsCard(viewModel) }
 
     // 2. Subject & Course Manager

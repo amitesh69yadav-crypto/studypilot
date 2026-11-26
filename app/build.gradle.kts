@@ -109,6 +109,7 @@ dependencies {
   implementation(libs.androidx.lifecycle.viewmodel.compose)
   // implementation(libs.androidx.navigation.compose)
   implementation(project(":shared"))
+  implementation(libs.code.scanner)
   // implementation(libs.coil.compose)
   implementation(libs.converter.moshi)
   implementation(libs.litertlm.android)

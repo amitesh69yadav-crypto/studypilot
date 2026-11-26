@@ -5,7 +5,14 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.platform.AndroidActions
 import com.example.platform.AndroidPlatform
+import com.example.platform.LocalDeviceSyncCard
 import com.example.platform.LocalPlatformActions
+import com.example.platform.PcSyncCard
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.debounce
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -44,6 +51,8 @@ class MainActivity : ComponentActivity() {
     handleAlarmIntent(intent)
     requestNotificationPermissionIfNeeded()
 
+    keepSyncedWithPc()
+
     // Show over the lock screen only while an alarm is ringing, never for normal use.
     lifecycleScope.launch {
       viewModel.ringingAlarmSession.collect { showOverLockScreen(it != null) }
@@ -58,7 +67,11 @@ class MainActivity : ComponentActivity() {
         else -> isSystemDark
       }
       val actions = remember { AndroidActions(this) }
-      CompositionLocalProvider(LocalPlatformActions provides actions) {
+      val platform = AndroidPlatform.get(application)
+      CompositionLocalProvider(
+        LocalPlatformActions provides actions,
+        LocalDeviceSyncCard provides { PcSyncCard(platform.syncClient) }
+      ) {
         StudyPilotTheme(darkTheme = isDark) {
           StudyPilotApp(viewModel = viewModel)
         }
@@ -76,6 +89,28 @@ class MainActivity : ComponentActivity() {
     if (ringingSessionId > 0) {
       showOverLockScreen(true)
       viewModel.showRingingAlarm(ringingSessionId)
+    }
+  }
+
+  /** While the app is on screen: sync with the paired PC every 15 s and shortly after each local change. */
+  @OptIn(FlowPreview::class)
+  private fun keepSyncedWithPc() {
+    val platform = AndroidPlatform.get(application)
+    lifecycleScope.launch {
+      repeatOnLifecycle(Lifecycle.State.STARTED) {
+        launch {
+          while (true) {
+            platform.syncClient.syncNow()
+            delay(15_000)
+          }
+        }
+        launch {
+          platform.syncEngine.prepare()
+          platform.database.invalidationTracker.createFlow(*platform.syncEngine.tableNames)
+            .debounce(1_500)
+            .collect { platform.syncClient.syncNow() }
+        }
+      }
     }
   }
 
