@@ -182,7 +182,7 @@ private fun CodeBlockView(
         modifier = Modifier
           .fillMaxWidth()
           .background(barColor)
-          .padding(horizontal = 12.dp, vertical = 6.dp),
+          .padding(horizontal = 12.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
       ) {
@@ -193,7 +193,7 @@ private fun CodeBlockView(
             tint = CyanAccent,
             modifier = Modifier.size(14.dp)
           )
-          Spacer(modifier = Modifier.width(6.dp))
+          Spacer(modifier = Modifier.width(8.dp))
           Text(
             text = language.ifBlank { "code" },
             style = MaterialTheme.typography.labelSmall.copy(
@@ -238,7 +238,7 @@ private fun CodeBlockView(
       Box(
         modifier = Modifier
           .fillMaxWidth()
-          .padding(horizontal = 12.dp, vertical = 10.dp)
+          .padding(horizontal = 12.dp, vertical = 12.dp)
           .horizontalScroll(scrollState)
       ) {
         Text(
@@ -265,7 +265,7 @@ private fun BulletItemView(text: String, isUser: Boolean) {
   ) {
     Box(
       modifier = Modifier
-        .padding(top = 7.dp, end = 10.dp, start = 2.dp)
+        .padding(top = 8.dp, end = 12.dp, start = 2.dp)
         .size(6.dp)
         .clip(CircleShape)
         .background(if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary)
@@ -290,13 +290,13 @@ private fun NumberedItemView(number: String, text: String, isUser: Boolean) {
     Surface(
       shape = RoundedCornerShape(6.dp),
       color = if (isUser) Color.White.copy(alpha = 0.2f) else MaterialTheme.colorScheme.primaryContainer,
-      modifier = Modifier.padding(top = 2.dp, end = 10.dp)
+      modifier = Modifier.padding(top = 2.dp, end = 12.dp)
     ) {
       Text(
         text = number,
         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
         color = if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
         fontSize = 11.sp
       )
     }
@@ -320,7 +320,7 @@ private fun BlockQuoteView(text: String, isUser: Boolean) {
         if (isUser) Color.White.copy(alpha = 0.12f)
         else MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
       )
-      .padding(vertical = 8.dp, horizontal = 10.dp),
+      .padding(vertical = 8.dp, horizontal = 12.dp),
     verticalAlignment = Alignment.CenterVertically
   ) {
     Box(
@@ -330,7 +330,7 @@ private fun BlockQuoteView(text: String, isUser: Boolean) {
         .clip(RoundedCornerShape(2.dp))
         .background(if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary)
     )
-    Spacer(modifier = Modifier.width(10.dp))
+    Spacer(modifier = Modifier.width(12.dp))
     Text(
       text = parseInlineMarkdown(text, isUser = isUser),
       style = MaterialTheme.typography.bodyMedium.copy(
@@ -359,7 +359,7 @@ private fun TableView(table: MarkdownBlock.Table, isUser: Boolean) {
   Card(
     modifier = Modifier
       .fillMaxWidth()
-      .padding(vertical = 6.dp),
+      .padding(vertical = 8.dp),
     shape = RoundedCornerShape(12.dp),
     colors = CardDefaults.cardColors(containerColor = containerBg),
     border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
@@ -369,7 +369,7 @@ private fun TableView(table: MarkdownBlock.Table, isUser: Boolean) {
       modifier = Modifier
         .fillMaxWidth()
         .padding(12.dp),
-      verticalArrangement = Arrangement.spacedBy(10.dp)
+      verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
       table.rows.forEachIndexed { rowIdx, rowCells ->
         Surface(
@@ -380,8 +380,8 @@ private fun TableView(table: MarkdownBlock.Table, isUser: Boolean) {
           Column(
             modifier = Modifier
               .fillMaxWidth()
-              .padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+              .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
           ) {
             table.headers.indices.forEach { colIdx ->
               val headerText = table.headers.getOrElse(colIdx) { "" }

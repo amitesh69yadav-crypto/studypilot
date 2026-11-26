@@ -206,7 +206,7 @@ fun ProgressScreen(
           contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
         ) {
           Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
-          Spacer(modifier = Modifier.width(6.dp))
+          Spacer(modifier = Modifier.width(8.dp))
           Text("Export", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
         }
       }
@@ -218,11 +218,11 @@ fun ProgressScreen(
         modifier = Modifier
           .fillMaxWidth()
           .padding(horizontal = 16.dp, vertical = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
       ) {
         Row(
           modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.spacedBy(10.dp)
+          horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
           StatCard(
             title = "Topics studied",
@@ -244,7 +244,7 @@ fun ProgressScreen(
 
         Row(
           modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.spacedBy(10.dp)
+          horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
           StatCard(
             title = "Study streak",
@@ -276,7 +276,7 @@ fun ProgressScreen(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
       ) {
-        Column(modifier = Modifier.padding(18.dp)) {
+        Column(modifier = Modifier.padding(20.dp)) {
           Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -314,7 +314,7 @@ fun ProgressScreen(
             }
           }
 
-          Spacer(modifier = Modifier.height(14.dp))
+          Spacer(modifier = Modifier.height(16.dp))
 
           // Total Weekly Summary Pill
           Row(
@@ -342,77 +342,85 @@ fun ProgressScreen(
 
           Spacer(modifier = Modifier.height(16.dp))
 
-          // 7-Day Bar Chart Canvas
-          Box(
-            modifier = Modifier
-              .fillMaxWidth()
-              .height(140.dp)
-          ) {
-            val barPrimary = MaterialTheme.colorScheme.primary
-            val barSecondary = MaterialTheme.colorScheme.secondary
-            val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+          if (totalWeeklyHours > 0f) {
+            // 7-Day Bar Chart Canvas
+            Box(
+              modifier = Modifier
+                .fillMaxWidth()
+                .height(140.dp)
+            ) {
+              val barPrimary = MaterialTheme.colorScheme.primary
+              val barSecondary = MaterialTheme.colorScheme.secondary
+              val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
 
-            Canvas(modifier = Modifier.fillMaxSize()) {
-              val w = size.width
-              val h = size.height - 12.dp.toPx()
-              val barCount = weeklyDayHours.size
-              val slotWidth = w / barCount
-              val barWidth = (slotWidth * 0.52f).coerceAtMost(32.dp.toPx())
+              Canvas(modifier = Modifier.fillMaxSize()) {
+                val w = size.width
+                val h = size.height - 12.dp.toPx()
+                val barCount = weeklyDayHours.size
+                val slotWidth = w / barCount
+                val barWidth = (slotWidth * 0.52f).coerceAtMost(32.dp.toPx())
 
-              // Grid lines: 100%, 50%, baseline
-              drawLine(gridColor, Offset(0f, 0f), Offset(w, 0f), strokeWidth = 1f)
-              drawLine(gridColor, Offset(0f, h / 2), Offset(w, h / 2), strokeWidth = 1f)
-              drawLine(gridColor, Offset(0f, h), Offset(w, h), strokeWidth = 1.5f)
+                // Grid lines: 100%, 50%, baseline
+                drawLine(gridColor, Offset(0f, 0f), Offset(w, 0f), strokeWidth = 1f)
+                drawLine(gridColor, Offset(0f, h / 2), Offset(w, h / 2), strokeWidth = 1f)
+                drawLine(gridColor, Offset(0f, h), Offset(w, h), strokeWidth = 1.5f)
 
-              weeklyDayHours.forEachIndexed { i, (_, hrs) ->
-                val barHeight = if (hrs > 0f) (hrs / maxDayHours) * h else 3.dp.toPx()
-                val left = (i * slotWidth) + (slotWidth - barWidth) / 2
-                val top = h - barHeight
+                weeklyDayHours.forEachIndexed { i, (_, hrs) ->
+                  val barHeight = if (hrs > 0f) (hrs / maxDayHours) * h else 3.dp.toPx()
+                  val left = (i * slotWidth) + (slotWidth - barWidth) / 2
+                  val top = h - barHeight
 
-                val color = if (hrs > 0f) {
-                  if (i % 2 == 0) barPrimary else barSecondary
-                } else {
-                  gridColor
+                  val color = if (hrs > 0f) {
+                    if (i % 2 == 0) barPrimary else barSecondary
+                  } else {
+                    gridColor
+                  }
+
+                  drawRoundRect(
+                    color = color,
+                    topLeft = Offset(left, top),
+                    size = Size(barWidth, barHeight),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx(), 4.dp.toPx())
+                  )
                 }
-
-                drawRoundRect(
-                  color = color,
-                  topLeft = Offset(left, top),
-                  size = Size(barWidth, barHeight),
-                  cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx(), 4.dp.toPx())
-                )
               }
             }
-          }
 
-          Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-          // Day Names and Hours under each bar (Mon - Sun)
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-          ) {
-            weeklyDayHours.forEach { (day, hrs) ->
-              Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.weight(1f)
-              ) {
-                Text(
-                  text = "${hrs}h",
-                  fontSize = 10.sp,
-                  fontWeight = FontWeight.Bold,
-                  color = if (hrs > 0f) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                  textAlign = TextAlign.Center
-                )
-                Text(
-                  text = day,
-                  fontSize = 11.sp,
-                  fontWeight = FontWeight.Medium,
-                  color = MaterialTheme.colorScheme.onSurfaceVariant,
-                  textAlign = TextAlign.Center
-                )
+            // Day Names and Hours under each bar (Mon - Sun)
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+              weeklyDayHours.forEach { (day, hrs) ->
+                Column(
+                  horizontalAlignment = Alignment.CenterHorizontally,
+                  modifier = Modifier.weight(1f)
+                ) {
+                  Text(
+                    text = "${hrs}h",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (hrs > 0f) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    textAlign = TextAlign.Center
+                  )
+                  Text(
+                    text = day,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                  )
+                }
               }
             }
+          } else {
+            Text(
+              text = "Nothing logged yet. Completed timetable sessions count here.",
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
           }
         }
       }
@@ -428,7 +436,7 @@ fun ProgressScreen(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
       ) {
-        Column(modifier = Modifier.padding(18.dp)) {
+        Column(modifier = Modifier.padding(20.dp)) {
           Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -472,115 +480,123 @@ fun ProgressScreen(
             attempts.takeLast(6).map { it.scorePercentage }
           }
 
-          Box(
-            modifier = Modifier
-              .fillMaxWidth()
-              .height(130.dp)
-          ) {
-            val primaryColor = MaterialTheme.colorScheme.primary
-            val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
-            val targetColor = AmberAccent.copy(alpha = 0.6f)
+          if (scores.isNotEmpty()) {
+            Box(
+              modifier = Modifier
+                .fillMaxWidth()
+                .height(130.dp)
+            ) {
+              val primaryColor = MaterialTheme.colorScheme.primary
+              val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+              val targetColor = AmberAccent.copy(alpha = 0.6f)
 
-            Canvas(modifier = Modifier.fillMaxSize()) {
-              val w = size.width
-              val h = size.height
+              Canvas(modifier = Modifier.fillMaxSize()) {
+                val w = size.width
+                val h = size.height
 
-              // Grid lines: 100%, 50%, baseline (0%)
-              drawLine(gridColor, Offset(0f, 0f), Offset(w, 0f), strokeWidth = 1f)
-              drawLine(gridColor, Offset(0f, h / 2), Offset(w, h / 2), strokeWidth = 1f)
-              drawLine(gridColor, Offset(0f, h), Offset(w, h), strokeWidth = 1.5f)
+                // Grid lines: 100%, 50%, baseline (0%)
+                drawLine(gridColor, Offset(0f, 0f), Offset(w, 0f), strokeWidth = 1f)
+                drawLine(gridColor, Offset(0f, h / 2), Offset(w, h / 2), strokeWidth = 1f)
+                drawLine(gridColor, Offset(0f, h), Offset(w, h), strokeWidth = 1.5f)
 
-              // 85% target line (dashed)
-              val targetY = h - (0.85f * h)
-              val dashPathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
-              drawLine(
-                color = targetColor,
-                start = Offset(0f, targetY),
-                end = Offset(w, targetY),
-                strokeWidth = 1.5f,
-                pathEffect = dashPathEffect
-              )
-
-              if (scores.isEmpty()) {
-                // If there is no data, set to zero cleanly along baseline
-                val slotCount = 5
-                val stepX = w / (slotCount - 1)
-                val baselineY = h - 3.dp.toPx()
-
-                // Baseline line
+                // 85% target line (dashed)
+                val targetY = h - (0.85f * h)
+                val dashPathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
                 drawLine(
-                  color = primaryColor.copy(alpha = 0.35f),
-                  start = Offset(0f, baselineY),
-                  end = Offset(w, baselineY),
-                  strokeWidth = 2.dp.toPx()
+                  color = targetColor,
+                  start = Offset(0f, targetY),
+                  end = Offset(w, targetY),
+                  strokeWidth = 1.5f,
+                  pathEffect = dashPathEffect
                 )
 
-                for (idx in 0 until slotCount) {
-                  val p = Offset(idx * stepX, baselineY)
-                  drawCircle(color = primaryColor.copy(alpha = 0.4f), radius = 4.dp.toPx(), center = p)
-                  drawCircle(color = Color.White, radius = 2.dp.toPx(), center = p)
-                }
-              } else if (scores.size == 1) {
-                val singleScore = scores.first()
-                val p = Offset(w / 2f, h - (singleScore / 100f * h))
-                drawCircle(color = primaryColor, radius = 6.dp.toPx(), center = p)
-                drawCircle(color = Color.White, radius = 3.dp.toPx(), center = p)
-              } else {
-                val stepX = w / (scores.size - 1)
-                val points = scores.mapIndexed { idx, score ->
-                  val x = idx * stepX
-                  val y = h - (score / 100f * h)
-                  Offset(x, y)
-                }
+                if (scores.isEmpty()) {
+                  // If there is no data, set to zero cleanly along baseline
+                  val slotCount = 5
+                  val stepX = w / (slotCount - 1)
+                  val baselineY = h - 3.dp.toPx()
 
-                val path = Path().apply {
-                  moveTo(points.first().x, points.first().y)
-                  for (p in points.drop(1)) {
-                    lineTo(p.x, p.y)
+                  // Baseline line
+                  drawLine(
+                    color = primaryColor.copy(alpha = 0.35f),
+                    start = Offset(0f, baselineY),
+                    end = Offset(w, baselineY),
+                    strokeWidth = 2.dp.toPx()
+                  )
+
+                  for (idx in 0 until slotCount) {
+                    val p = Offset(idx * stepX, baselineY)
+                    drawCircle(color = primaryColor.copy(alpha = 0.4f), radius = 4.dp.toPx(), center = p)
+                    drawCircle(color = Color.White, radius = 2.dp.toPx(), center = p)
                   }
-                }
+                } else if (scores.size == 1) {
+                  val singleScore = scores.first()
+                  val p = Offset(w / 2f, h - (singleScore / 100f * h))
+                  drawCircle(color = primaryColor, radius = 6.dp.toPx(), center = p)
+                  drawCircle(color = Color.White, radius = 3.dp.toPx(), center = p)
+                } else {
+                  val stepX = w / (scores.size - 1)
+                  val points = scores.mapIndexed { idx, score ->
+                    val x = idx * stepX
+                    val y = h - (score / 100f * h)
+                    Offset(x, y)
+                  }
 
-                drawPath(path, color = primaryColor, style = Stroke(width = 3.dp.toPx()))
+                  val path = Path().apply {
+                    moveTo(points.first().x, points.first().y)
+                    for (p in points.drop(1)) {
+                      lineTo(p.x, p.y)
+                    }
+                  }
 
-                for (p in points) {
-                  drawCircle(color = primaryColor, radius = 5.dp.toPx(), center = p)
-                  drawCircle(color = Color.White, radius = 2.5.dp.toPx(), center = p)
+                  drawPath(path, color = primaryColor, style = Stroke(width = 3.dp.toPx()))
+
+                  for (p in points) {
+                    drawCircle(color = primaryColor, radius = 5.dp.toPx(), center = p)
+                    drawCircle(color = Color.White, radius = 2.5.dp.toPx(), center = p)
+                  }
                 }
               }
             }
-          }
 
-          Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-          // Labels under trajectory
-          if (scores.isEmpty()) {
-            Row(
-              modifier = Modifier.fillMaxWidth(),
-              horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-              listOf("Q1: 0%", "Q2: 0%", "Q3: 0%", "Q4: 0%", "Q5: 0%").forEach { label ->
-                Text(
-                  text = label,
-                  style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-                  color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                  textAlign = TextAlign.Center
-                )
+            // Labels under trajectory
+            if (scores.isEmpty()) {
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+              ) {
+                listOf("Q1: 0%", "Q2: 0%", "Q3: 0%", "Q4: 0%", "Q5: 0%").forEach { label ->
+                  Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                    textAlign = TextAlign.Center
+                  )
+                }
+              }
+            } else {
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+              ) {
+                scores.forEachIndexed { idx, score ->
+                  Text(
+                    text = "Q${idx + 1}: $score%",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                  )
+                }
               }
             }
           } else {
-            Row(
-              modifier = Modifier.fillMaxWidth(),
-              horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-              scores.forEachIndexed { idx, score ->
-                Text(
-                  text = "Q${idx + 1}: $score%",
-                  style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                  color = MaterialTheme.colorScheme.onSurfaceVariant,
-                  textAlign = TextAlign.Center
-                )
-              }
-            }
+            Text(
+              text = "Take a quiz to see your scores here.",
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
           }
         }
       }
@@ -591,12 +607,12 @@ fun ProgressScreen(
       Card(
         modifier = Modifier
           .fillMaxWidth()
-          .padding(horizontal = 16.dp, vertical = 6.dp),
+          .padding(horizontal = 16.dp, vertical = 4.dp),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
       ) {
-        Column(modifier = Modifier.padding(18.dp)) {
+        Column(modifier = Modifier.padding(20.dp)) {
           Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -617,7 +633,7 @@ fun ProgressScreen(
             )
           }
 
-          Spacer(modifier = Modifier.height(14.dp))
+          Spacer(modifier = Modifier.height(16.dp))
 
           MasteryProgressRow(
             label = "Mastered (Interval >= 14d)",
@@ -625,21 +641,21 @@ fun ProgressScreen(
             total = topics.size,
             color = EmeraldSuccess
           )
-          Spacer(modifier = Modifier.height(10.dp))
+          Spacer(modifier = Modifier.height(12.dp))
           MasteryProgressRow(
             label = "Familiar (Interval 3-7d)",
             count = familiarCount,
             total = topics.size,
             color = CyanAccent
           )
-          Spacer(modifier = Modifier.height(10.dp))
+          Spacer(modifier = Modifier.height(12.dp))
           MasteryProgressRow(
             label = "Needs Review (Interval 1d)",
             count = strugglingTopics.size,
             total = topics.size,
             color = RoseError
           )
-          Spacer(modifier = Modifier.height(10.dp))
+          Spacer(modifier = Modifier.height(12.dp))
           MasteryProgressRow(
             label = "Untested Concepts",
             count = untestedTopics.size,
@@ -703,7 +719,7 @@ fun ProgressScreen(
                 Row(
                   modifier = Modifier
                     .fillMaxWidth()
-                    .padding(14.dp),
+                    .padding(16.dp),
                   verticalAlignment = Alignment.CenterVertically
                 ) {
                   Column(modifier = Modifier.weight(1f)) {
@@ -780,7 +796,7 @@ fun ProgressScreen(
                 Row(
                   modifier = Modifier
                     .fillMaxWidth()
-                    .padding(14.dp),
+                    .padding(16.dp),
                   verticalAlignment = Alignment.CenterVertically
                 ) {
                   Column(modifier = Modifier.weight(1f)) {
@@ -831,12 +847,12 @@ fun ProgressScreen(
             "Copy your verified academic learning report to the clipboard or share with tutors:",
             style = MaterialTheme.typography.bodyMedium
           )
-          Spacer(modifier = Modifier.height(10.dp))
+          Spacer(modifier = Modifier.height(12.dp))
           Surface(
             shape = RoundedCornerShape(8.dp),
             color = MaterialTheme.colorScheme.surfaceVariant
           ) {
-            Text(reportText, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(10.dp))
+            Text(reportText, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(12.dp))
           }
         }
       },

@@ -212,9 +212,9 @@ fun EmptyState(
   Column(
     modifier = modifier
       .fillMaxWidth()
-      .padding(horizontal = 24.dp, vertical = 32.dp),
+      .padding(horizontal = 24.dp, vertical = 24.dp),
     horizontalAlignment = Alignment.CenterHorizontally,
-    verticalArrangement = Arrangement.Center
+    verticalArrangement = Arrangement.Top
   ) {
     Box(
       modifier = Modifier
@@ -236,7 +236,7 @@ fun EmptyState(
       style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
       color = MaterialTheme.colorScheme.onSurface
     )
-    Spacer(modifier = Modifier.height(6.dp))
+    Spacer(modifier = Modifier.height(8.dp))
     Text(
       text = description,
       style = MaterialTheme.typography.bodyMedium,
@@ -337,7 +337,7 @@ fun QuickMobileAlarmDialog(
             modifier = Modifier.size(20.dp)
           )
         }
-        Spacer(modifier = Modifier.width(10.dp))
+        Spacer(modifier = Modifier.width(12.dp))
         Text(
           text = "Set alarm",
           style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
@@ -348,7 +348,7 @@ fun QuickMobileAlarmDialog(
     text = {
       Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
       ) {
         Text(
           text = "Select when your alarm should ring based on your mobile device clock.",
@@ -364,8 +364,8 @@ fun QuickMobileAlarmDialog(
 
         FlowRow(
           modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.spacedBy(6.dp),
-          verticalArrangement = Arrangement.spacedBy(6.dp)
+          horizontalArrangement = Arrangement.spacedBy(8.dp),
+          verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
           listOf(1 to "+1 Min", 2 to "+2 Min", 5 to "+5 Min", 10 to "+10 Min", 30 to "+30 Min").forEach { (mins, label) ->
             val selected = !isCustomTime && selectedPresetMinutes == mins
@@ -380,7 +380,7 @@ fun QuickMobileAlarmDialog(
                   selectedPresetMinutes = mins
                 }
             ) {
-              Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+              Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                 Text(
                   text = label,
                   fontSize = 11.sp,
@@ -708,7 +708,7 @@ fun TimeWheelScrollerDialog(
                     fontWeight = FontWeight.Bold,
                     color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                    modifier = Modifier.padding(vertical = 6.dp)
+                    modifier = Modifier.padding(vertical = 8.dp)
                   )
                 }
               }
@@ -744,7 +744,7 @@ fun TimeWheelScrollerDialog(
                     fontWeight = FontWeight.Bold,
                     color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                    modifier = Modifier.padding(vertical = 6.dp)
+                    modifier = Modifier.padding(vertical = 8.dp)
                   )
                 }
               }

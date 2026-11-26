@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.layout.WindowInsets
 import android.app.DatePickerDialog
 import android.content.Intent
 import android.net.Uri
@@ -241,6 +242,10 @@ fun TimetableScreen(
   val isSelectedDateToday = selectedDate == realToday
 
   Scaffold(
+
+    // The app's main Scaffold already applies system bar insets.
+
+    contentWindowInsets = WindowInsets(0, 0, 0, 0),
     containerColor = PaletteCreamIvory
   ) { padding ->
     Column(
@@ -265,7 +270,7 @@ fun TimetableScreen(
             Column(
               modifier = Modifier
                 .weight(1f)
-                .padding(end = 10.dp)
+                .padding(end = 12.dp)
             ) {
               Text(
                 text = if (isSelectedDateToday) "Today · $selectedDateTitle" else selectedDateTitle,
@@ -304,7 +309,7 @@ fun TimetableScreen(
             }
           }
 
-          Spacer(modifier = Modifier.height(6.dp))
+          Spacer(modifier = Modifier.height(8.dp))
 
           // Secondary tools row (never crowds the title or overlaps cards)
           Row(
@@ -323,7 +328,7 @@ fun TimetableScreen(
                 .clickable { showHeaderCards = !showHeaderCards }
             ) {
               Row(
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
               ) {
@@ -361,7 +366,7 @@ fun TimetableScreen(
             border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage),
             modifier = Modifier.fillMaxWidth()
           ) {
-            Column(modifier = Modifier.padding(10.dp)) {
+            Column(modifier = Modifier.padding(12.dp)) {
               // Row A: Year & Month Fast-Navigation Bar (e.g. October 2026, jump months and years freely)
               val monthYearStr = remember(selectedDate) {
                 val parsedDateForHeader = try {
@@ -412,7 +417,7 @@ fun TimetableScreen(
                 // Center: Month & Year Label + Quick Today Button
                 Row(
                   verticalAlignment = Alignment.CenterVertically,
-                  horizontalArrangement = Arrangement.spacedBy(6.dp)
+                  horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                   Text(
                     text = monthYearStr,
@@ -428,7 +433,7 @@ fun TimetableScreen(
                         .height(22.dp)
                         .clickable { selectedDate = realToday }
                     ) {
-                      Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 6.dp)) {
+                      Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 8.dp)) {
                         Text(
                           text = "Today",
                           fontSize = 9.sp,
@@ -542,7 +547,7 @@ fun TimetableScreen(
                           fontWeight = FontWeight.Bold,
                           fontSize = 10.sp,
                           color = PaletteCreamIvory,
-                          modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                          modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                         )
                       }
                     } else {
@@ -570,7 +575,7 @@ fun TimetableScreen(
                           fontWeight = FontWeight.Bold,
                           fontSize = 10.sp,
                           color = PaletteDarkText,
-                          modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                          modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                         )
                       }
                     }
@@ -637,7 +642,7 @@ fun TimetableScreen(
                         .clickable { selectedDate = dStr }
                     ) {
                       Column(
-                        modifier = Modifier.padding(vertical = 5.dp),
+                        modifier = Modifier.padding(vertical = 4.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                       ) {
                         Text(
@@ -750,7 +755,7 @@ fun TimetableScreen(
           LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 28.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
           ) {
             // Animated Header Cards (What Should I Do Now, Alarms, Quick Format Bar)
             if (showHeaderCards) {
@@ -812,7 +817,7 @@ fun TimetableScreen(
                   border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage),
                   modifier = Modifier.fillMaxWidth()
                 ) {
-                  Column(modifier = Modifier.padding(10.dp)) {
+                  Column(modifier = Modifier.padding(12.dp)) {
                     Text(
                       text = "$selectedDateTitle",
                       fontWeight = FontWeight.Bold,
@@ -905,7 +910,7 @@ fun TimetableScreen(
               Row(
                 modifier = Modifier
                   .fillMaxWidth()
-                  .padding(top = 6.dp, bottom = 4.dp),
+                  .padding(top = 8.dp, bottom = 4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
               ) {
@@ -929,7 +934,7 @@ fun TimetableScreen(
                 }
                 Row(
                   verticalAlignment = Alignment.CenterVertically,
-                  horizontalArrangement = Arrangement.spacedBy(6.dp)
+                  horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                   if (selectedDaySessions.isNotEmpty()) {
                     TextButton(
@@ -1022,7 +1027,7 @@ fun TimetableScreen(
           LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 28.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
           ) {
             item {
               Surface(
@@ -1034,7 +1039,7 @@ fun TimetableScreen(
                 Row(
                   modifier = Modifier
                     .fillMaxWidth()
-                    .padding(14.dp),
+                    .padding(16.dp),
                   horizontalArrangement = Arrangement.SpaceBetween,
                   verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -1067,7 +1072,7 @@ fun TimetableScreen(
                     modifier = Modifier.heightIn(min = 44.dp)
                   ) {
                     Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
                       text = "New format",
                       fontSize = 12.sp,
@@ -1121,7 +1126,7 @@ fun TimetableScreen(
           LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 28.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
           ) {
             item {
               Row(
@@ -1324,7 +1329,7 @@ fun ScheduleFormatCard(
     color = PaletteMintFoam,
     border = androidx.compose.foundation.BorderStroke(1.2.dp, PaletteMediumSage)
   ) {
-    Column(modifier = Modifier.padding(14.dp)) {
+    Column(modifier = Modifier.padding(16.dp)) {
       // Header row: Icon + Format Name + Badge + Delete
       Row(
         modifier = Modifier.fillMaxWidth(),
@@ -1386,7 +1391,7 @@ fun ScheduleFormatCard(
         }
       }
 
-      Spacer(modifier = Modifier.height(10.dp))
+      Spacer(modifier = Modifier.height(12.dp))
 
       // Session count pill badge
       Surface(
@@ -1396,7 +1401,7 @@ fun ScheduleFormatCard(
         modifier = Modifier.fillMaxWidth()
       ) {
         Row(
-          modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+          modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
           verticalAlignment = Alignment.CenterVertically,
           horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -1547,7 +1552,7 @@ fun CopyDayScheduleDialog(
     text = {
       Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
       ) {
         Text(
           text = "Replicate all scheduled lecture slots and study alarms from one date to another date.",
@@ -1658,7 +1663,7 @@ fun ApplyFormatDialog(
     text = {
       Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
       ) {
         Text(
           text = "Select a saved routine format to apply to $targetDate:",
@@ -1682,7 +1687,7 @@ fun ApplyFormatDialog(
                 .fillMaxWidth()
                 .clickable { selectedFormat = format }
             ) {
-              Column(modifier = Modifier.padding(10.dp)) {
+              Column(modifier = Modifier.padding(12.dp)) {
                 Text(format.name, fontWeight = FontWeight.Bold, color = PaletteDarkText)
                 if (format.description.isNotBlank()) {
                   Text(format.description, fontSize = 11.sp, color = PaletteDarkText)
@@ -1748,7 +1753,7 @@ fun SaveDayAsFormatDialog(
     text = {
       Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
       ) {
         Text(
           text = "Save the ${daySessions.size} sessions on $dayDate as a template you can apply to any day.",
@@ -1824,7 +1829,7 @@ fun CreateNewFormatDialog(
     text = {
       Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
       ) {
         OutlinedTextField(
           value = formatName,
@@ -2080,7 +2085,7 @@ fun GoogleCalendarEventCard(
             size = Size(width = 6.dp.toPx(), height = size.height)
           )
         }
-        .padding(start = 18.dp, end = 14.dp, top = 12.dp, bottom = 12.dp)
+        .padding(start = 20.dp, end = 16.dp, top = 12.dp, bottom = 12.dp)
     ) {
         // Top row: Time + Subject Tag + Actions
         Row(
@@ -2107,7 +2112,7 @@ fun GoogleCalendarEventCard(
                 text = categoryTag,
                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                 color = PaletteDarkText,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                 maxLines = 1,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
               )
@@ -2124,7 +2129,7 @@ fun GoogleCalendarEventCard(
           }
         }
 
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         // Event Topic / Title
         Text(
           text = session.topic,
@@ -2143,7 +2148,7 @@ fun GoogleCalendarEventCard(
         ) {
           if (session.location.isNotBlank()) {
             Icon(Icons.Default.LocationOn, contentDescription = null, tint = PaletteDarkText, modifier = Modifier.size(14.dp))
-            Spacer(modifier = Modifier.width(3.dp))
+            Spacer(modifier = Modifier.width(4.dp))
             Text(
               text = session.location,
               style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
@@ -2190,7 +2195,7 @@ fun GoogleCalendarEventCard(
               }
           ) {
             Row(
-              modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+              modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
               verticalAlignment = Alignment.CenterVertically
             ) {
               Icon(
@@ -2219,7 +2224,7 @@ fun GoogleCalendarEventCard(
               .clickable { onAskAiTutor() }
           ) {
             Row(
-              modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+              modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
               verticalAlignment = Alignment.CenterVertically
             ) {
               Icon(Icons.Default.Psychology, contentDescription = null, tint = PaletteDarkText, modifier = Modifier.size(14.dp))
@@ -2238,7 +2243,7 @@ fun GoogleCalendarEventCard(
               .clickable { onToggleAlarm() }
           ) {
             Row(
-              modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+              modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
               verticalAlignment = Alignment.CenterVertically
             ) {
               Icon(
@@ -2268,7 +2273,7 @@ fun GoogleCalendarEventCard(
                 .clickable { onTestAlarm() }
             ) {
               Row(
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
               ) {
                 Icon(
@@ -2298,7 +2303,7 @@ fun GoogleCalendarEventCard(
               .clickable { onSyncCalendar() }
           ) {
             Row(
-              modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+              modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
               verticalAlignment = Alignment.CenterVertically
             ) {
               Icon(Icons.Default.CalendarMonth, contentDescription = "Add to calendar", tint = PaletteDarkText, modifier = Modifier.size(14.dp))
@@ -2568,7 +2573,7 @@ fun SessionEditDialog(
             .clickable { isAlarmEnabled = !isAlarmEnabled }
         ) {
           Row(
-            modifier = Modifier.padding(10.dp),
+            modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
           ) {
             Icon(

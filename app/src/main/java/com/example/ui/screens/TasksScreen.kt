@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -87,6 +88,10 @@ fun TasksScreen(
   }
 
   Scaffold(
+
+    // The app's main Scaffold already applies system bar insets.
+
+    contentWindowInsets = WindowInsets(0, 0, 0, 0),
     floatingActionButton = {
       FloatingActionButton(
         onClick = { showAddDialog = true },
@@ -141,7 +146,7 @@ fun TasksScreen(
           modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp, vertical = 12.dp),
-          verticalArrangement = Arrangement.spacedBy(10.dp)
+          verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
           items(filteredTasks, key = { it.id }) { task ->
             TaskItemCard(
@@ -191,7 +196,7 @@ fun TaskItemCard(
     Row(
       modifier = Modifier
         .fillMaxWidth()
-        .padding(14.dp),
+        .padding(16.dp),
       verticalAlignment = Alignment.CenterVertically
     ) {
       IconButton(onClick = onToggle, modifier = Modifier.size(48.dp)) {
@@ -203,11 +208,11 @@ fun TaskItemCard(
         )
       }
 
-      Spacer(modifier = Modifier.width(6.dp))
+      Spacer(modifier = Modifier.width(8.dp))
 
       Column(modifier = Modifier.weight(1f)) {
         FlowRow(
-          horizontalArrangement = Arrangement.spacedBy(6.dp),
+          horizontalArrangement = Arrangement.spacedBy(8.dp),
           verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
           Surface(
@@ -220,7 +225,7 @@ fun TaskItemCard(
               color = MaterialTheme.colorScheme.onPrimaryContainer,
               maxLines = 1,
               softWrap = false,
-              modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+              modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
             )
           }
           Surface(
@@ -233,7 +238,7 @@ fun TaskItemCard(
               color = priorityColor,
               maxLines = 1,
               softWrap = false,
-              modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+              modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
             )
           }
         }
@@ -284,7 +289,7 @@ fun AddTaskDialog(
     text = {
       Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
       ) {
         OutlinedTextField(
           value = title,
@@ -333,7 +338,7 @@ fun AddTaskDialog(
 
         Row(
           modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.spacedBy(6.dp)
+          horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
           listOf("HIGH", "MEDIUM", "LOW").forEach { p ->
             Button(

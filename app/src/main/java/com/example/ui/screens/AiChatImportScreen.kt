@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -91,6 +92,10 @@ fun AiChatImportScreen(
   var pendingManualNewSubjectCode by remember { mutableStateOf("") }
 
   Scaffold(
+
+    // The app's main Scaffold already applies system bar insets.
+
+    contentWindowInsets = WindowInsets(0, 0, 0, 0),
     containerColor = PaletteCreamIvory,
     topBar = {
       Column(
@@ -363,7 +368,7 @@ private fun ChatLibraryTab(
       singleLine = true
     )
 
-    Spacer(modifier = Modifier.height(10.dp))
+    Spacer(modifier = Modifier.height(12.dp))
 
     // Subject grouping filter row
     Row(
@@ -389,7 +394,7 @@ private fun ChatLibraryTab(
       }
     }
 
-    Spacer(modifier = Modifier.height(6.dp))
+    Spacer(modifier = Modifier.height(8.dp))
 
     Row(
       modifier = Modifier
@@ -403,7 +408,7 @@ private fun ChatLibraryTab(
           onClick = { selectedPlatformFilter = platform },
           label = { Text(platform, fontSize = 11.sp, maxLines = 1, softWrap = false) },
           colors = FilterChipDefaults.filterChipColors(
-            selectedContainerColor = PaletteMediumSage,
+            selectedContainerColor = PaletteDeepSage,
             selectedLabelColor = PaletteCreamIvory,
             containerColor = PalettePaleCeladon.copy(alpha = 0.35f),
             labelColor = PaletteDarkText
@@ -420,12 +425,12 @@ private fun ChatLibraryTab(
       Box(
         modifier = Modifier
           .fillMaxSize()
-          .padding(top = 40.dp),
+          .padding(top = 16.dp),
         contentAlignment = Alignment.TopCenter
       ) {
         Column(
           horizontalAlignment = Alignment.CenterHorizontally,
-          modifier = Modifier.padding(24.dp)
+          modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
         ) {
           Icon(
             Icons.Default.Link,
@@ -465,7 +470,7 @@ private fun ChatLibraryTab(
                 .testTag("empty_state_import_button")
             ) {
               Icon(Icons.Default.Link, contentDescription = null, modifier = Modifier.size(18.dp))
-              Spacer(modifier = Modifier.width(6.dp))
+              Spacer(modifier = Modifier.width(8.dp))
               Text("Import first chat link", fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
             }
           }
@@ -487,7 +492,7 @@ private fun ChatLibraryTab(
             ) {
               Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier
                   .weight(1f)
                   .padding(end = 8.dp)
@@ -518,7 +523,7 @@ private fun ChatLibraryTab(
                   color = PaletteDeepSage,
                   maxLines = 1,
                   softWrap = false,
-                  modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                  modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                 )
               }
             }
@@ -577,8 +582,8 @@ private fun ImportedChatCard(
             .padding(end = 8.dp)
         ) {
           FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
           ) {
             Surface(
               color = PaletteDeepSage,
@@ -591,7 +596,7 @@ private fun ImportedChatCard(
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 softWrap = false,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
               )
             }
 
@@ -608,7 +613,7 @@ private fun ImportedChatCard(
                   fontWeight = FontWeight.SemiBold,
                   maxLines = 1,
                   overflow = TextOverflow.Ellipsis,
-                  modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                  modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                 )
               }
             }
@@ -680,16 +685,16 @@ private fun ImportedChatCard(
       }
 
       if (chat.sourceUrl.isNotBlank()) {
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         Surface(
           color = PaletteCreamIvory,
           shape = RoundedCornerShape(8.dp),
           modifier = Modifier.fillMaxWidth()
         ) {
           Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
           ) {
             Icon(
               Icons.Default.Link,
@@ -733,7 +738,7 @@ private fun ImportedChatCard(
           modifier = Modifier
             .weight(1f)
             .padding(end = 8.dp),
-          horizontalArrangement = Arrangement.spacedBy(10.dp),
+          horizontalArrangement = Arrangement.spacedBy(12.dp),
           verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
           StatPill(icon = Icons.Default.Psychology, label = "${chat.extractedConceptsCount} concepts")
@@ -741,7 +746,7 @@ private fun ImportedChatCard(
           StatPill(icon = Icons.Default.Notes, label = "${chat.wordCount} words")
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
           OutlinedButton(
             onClick = onMoveSubject,
             shape = RoundedCornerShape(10.dp),
@@ -857,7 +862,7 @@ private fun LearningMemoryTab(
       singleLine = true
     )
 
-    Spacer(modifier = Modifier.height(10.dp))
+    Spacer(modifier = Modifier.height(12.dp))
 
     Row(
       modifier = Modifier
@@ -882,7 +887,7 @@ private fun LearningMemoryTab(
       }
     }
 
-    Spacer(modifier = Modifier.height(6.dp))
+    Spacer(modifier = Modifier.height(8.dp))
 
     Row(
       modifier = Modifier
@@ -896,7 +901,7 @@ private fun LearningMemoryTab(
           onClick = { selectedMasteryFilter = m },
           label = { Text(m, fontSize = 11.sp) },
           colors = FilterChipDefaults.filterChipColors(
-            selectedContainerColor = PaletteMediumSage,
+            selectedContainerColor = PaletteDeepSage,
             selectedLabelColor = PaletteCreamIvory,
             containerColor = PalettePaleCeladon.copy(alpha = 0.35f),
             labelColor = PaletteDarkText
@@ -913,7 +918,7 @@ private fun LearningMemoryTab(
       Box(
         modifier = Modifier
           .fillMaxSize()
-          .padding(top = 40.dp),
+          .padding(top = 16.dp),
         contentAlignment = Alignment.TopCenter
       ) {
         Column(
@@ -947,7 +952,7 @@ private fun LearningMemoryTab(
       }
     } else {
       LazyColumn(
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
         modifier = Modifier.fillMaxSize()
       ) {
         items(filteredConcepts, key = { it.id }) { concept ->
@@ -1001,8 +1006,8 @@ private fun ExtractedConceptCard(
             .padding(end = 8.dp)
         ) {
           FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
           ) {
             Surface(
               color = PalettePaleCeladon,
@@ -1015,7 +1020,7 @@ private fun ExtractedConceptCard(
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
               )
             }
 
@@ -1037,12 +1042,12 @@ private fun ExtractedConceptCard(
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 softWrap = false,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
               )
             }
           }
 
-          Spacer(modifier = Modifier.height(6.dp))
+          Spacer(modifier = Modifier.height(8.dp))
 
           Text(
             text = concept.conceptName.ifBlank { concept.topic },
@@ -1106,7 +1111,7 @@ private fun ExtractedConceptCard(
         }
       }
 
-      Spacer(modifier = Modifier.height(10.dp))
+      Spacer(modifier = Modifier.height(12.dp))
 
       Surface(
         color = PaletteCreamIvory,
@@ -1131,7 +1136,7 @@ private fun ExtractedConceptCard(
       }
 
       if (concept.technicalDetails.isNotBlank()) {
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(12.dp))
         Text(
           text = concept.technicalDetails,
           style = MaterialTheme.typography.bodySmall,
@@ -1143,7 +1148,7 @@ private fun ExtractedConceptCard(
       }
 
       if (concept.formulaOrCode.isNotBlank()) {
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(12.dp))
         Surface(
           color = PaletteDarkText,
           shape = RoundedCornerShape(10.dp),
@@ -1156,7 +1161,7 @@ private fun ExtractedConceptCard(
               fontWeight = FontWeight.Bold,
               color = PalettePaleCeladon
             )
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             SelectionContainer {
               Text(
                 text = concept.formulaOrCode,
@@ -1171,7 +1176,7 @@ private fun ExtractedConceptCard(
       }
 
       if (concept.misconceptionsAndCorrections.isNotBlank()) {
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(12.dp))
         Surface(
           color = PalettePaleCeladon.copy(alpha = 0.6f),
           shape = RoundedCornerShape(10.dp),
@@ -1179,7 +1184,7 @@ private fun ExtractedConceptCard(
           modifier = Modifier.fillMaxWidth()
         ) {
           Row(
-            modifier = Modifier.padding(10.dp),
+            modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.Top,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
           ) {
@@ -1208,7 +1213,7 @@ private fun ExtractedConceptCard(
         }
       }
 
-      Spacer(modifier = Modifier.height(14.dp))
+      Spacer(modifier = Modifier.height(16.dp))
 
       Row(
         modifier = Modifier.fillMaxWidth(),
@@ -1335,7 +1340,7 @@ private fun KnowledgeCoverageDashboardTab(
           )
         }
 
-        Spacer(modifier = Modifier.height(18.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
         Row(
           modifier = Modifier.fillMaxWidth(),
@@ -1355,7 +1360,7 @@ private fun KnowledgeCoverageDashboardTab(
             color = PaletteCreamIvory
           )
         }
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         LinearProgressIndicator(
           progress = { (masteryPercentage / 100f).coerceIn(0f, 1f) },
           modifier = Modifier
@@ -1444,7 +1449,7 @@ private fun KnowledgeCoverageDashboardTab(
           fontWeight = FontWeight.Bold,
           color = PaletteDarkText
         )
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         if (concepts.isEmpty()) {
           Text(
@@ -1515,7 +1520,7 @@ private fun DashboardMetricCard(
     colors = CardDefaults.cardColors(containerColor = containerColor),
     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
   ) {
-    Column(modifier = Modifier.padding(14.dp)) {
+    Column(modifier = Modifier.padding(16.dp)) {
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -1530,7 +1535,7 @@ private fun DashboardMetricCard(
           overflow = TextOverflow.Ellipsis,
           modifier = Modifier
             .weight(1f)
-            .padding(end = 6.dp)
+            .padding(end = 8.dp)
         )
         Icon(
           icon,
@@ -1582,7 +1587,7 @@ private fun ImportChatTab(
       .fillMaxSize()
       .verticalScroll(rememberScrollState())
       .padding(16.dp),
-    verticalArrangement = Arrangement.spacedBy(14.dp)
+    verticalArrangement = Arrangement.spacedBy(16.dp)
   ) {
     // Guidance Card
     Card(
@@ -1627,7 +1632,7 @@ private fun ImportChatTab(
         fontWeight = FontWeight.Bold,
         color = PaletteDarkText
       )
-      Spacer(modifier = Modifier.height(6.dp))
+      Spacer(modifier = Modifier.height(8.dp))
       OutlinedTextField(
         value = chatUrl,
         onValueChange = { chatUrl = it },
@@ -1665,8 +1670,8 @@ private fun ImportChatTab(
     // Supported Platforms FlowRow
     FlowRow(
       modifier = Modifier.fillMaxWidth(),
-      horizontalArrangement = Arrangement.spacedBy(6.dp),
-      verticalArrangement = Arrangement.spacedBy(6.dp)
+      horizontalArrangement = Arrangement.spacedBy(8.dp),
+      verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
       Text(
         "Supported links:",
@@ -1687,7 +1692,7 @@ private fun ImportChatTab(
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             softWrap = false,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
           )
         }
       }
@@ -1696,7 +1701,7 @@ private fun ImportChatTab(
     // Quick Sample Link Fillers
     Column(
       modifier = Modifier.fillMaxWidth(),
-      verticalArrangement = Arrangement.spacedBy(6.dp)
+      verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
       Text("Try a sample shared link:", fontSize = 11.sp, color = PaletteDarkText.copy(alpha = 0.65f))
       FlowRow(
@@ -1746,7 +1751,7 @@ private fun ImportChatTab(
         Row(
           modifier = Modifier
             .fillMaxWidth()
-            .padding(14.dp),
+            .padding(16.dp),
           horizontalArrangement = Arrangement.SpaceBetween,
           verticalAlignment = Alignment.CenterVertically
         ) {
@@ -1919,7 +1924,7 @@ private fun ImportChatTab(
             color = PaletteDeepSage,
             trackColor = PalettePaleCeladon
           )
-          Spacer(modifier = Modifier.height(6.dp))
+          Spacer(modifier = Modifier.height(8.dp))
           Text(
             text = progressStatus,
             fontSize = 11.sp,
@@ -2060,7 +2065,7 @@ private fun ExtractionPreviewDialog(
       Column(
         modifier = Modifier
           .fillMaxSize()
-          .padding(18.dp)
+          .padding(20.dp)
       ) {
         Row(
           modifier = Modifier.fillMaxWidth(),
@@ -2090,7 +2095,7 @@ private fun ExtractionPreviewDialog(
           }
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         Column(
           modifier = Modifier
@@ -2105,9 +2110,9 @@ private fun ExtractionPreviewDialog(
               modifier = Modifier.fillMaxWidth()
             ) {
               Row(
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
               ) {
                 Icon(Icons.Default.Link, contentDescription = null, modifier = Modifier.size(14.dp), tint = PaletteDeepSage)
                 Text(
@@ -2297,7 +2302,7 @@ private fun ExtractionPreviewDialog(
                   modifier = Modifier.fillMaxWidth()
                 )
                 if (draft.subtopic.isNotBlank()) {
-                  Spacer(modifier = Modifier.height(6.dp))
+                  Spacer(modifier = Modifier.height(8.dp))
                   Surface(
                     color = PalettePaleCeladon,
                     shape = RoundedCornerShape(6.dp)
@@ -2309,11 +2314,11 @@ private fun ExtractionPreviewDialog(
                       fontWeight = FontWeight.SemiBold,
                       maxLines = 2,
                       overflow = TextOverflow.Ellipsis,
-                      modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                      modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
                   }
                 }
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 Text(
                   text = draft.definition,
                   style = MaterialTheme.typography.bodySmall,
@@ -2321,7 +2326,7 @@ private fun ExtractionPreviewDialog(
                   lineHeight = 17.sp
                 )
                 if (draft.misconceptionsAndCorrections.isNotBlank()) {
-                  Spacer(modifier = Modifier.height(6.dp))
+                  Spacer(modifier = Modifier.height(8.dp))
                   Text(
                     text = "Trap: ${draft.misconceptionsAndCorrections}",
                     fontSize = 11.sp,
@@ -2335,11 +2340,11 @@ private fun ExtractionPreviewDialog(
           }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         Row(
           modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.spacedBy(10.dp)
+          horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
           OutlinedButton(
             onClick = onDiscard,
@@ -2430,7 +2435,7 @@ private fun MoveChatToSubjectDialog(
             .fillMaxWidth()
             .heightIn(max = 260.dp)
             .verticalScroll(rememberScrollState()),
-          verticalArrangement = Arrangement.spacedBy(6.dp)
+          verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
           subjects.forEach { subject ->
             val isChosen = !createNew && selected?.id == subject.id
@@ -2448,7 +2453,7 @@ private fun MoveChatToSubjectDialog(
               Row(
                 modifier = Modifier
                   .fillMaxWidth()
-                  .padding(horizontal = 12.dp, vertical = 10.dp),
+                  .padding(horizontal = 12.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
               ) {
@@ -2485,7 +2490,7 @@ private fun MoveChatToSubjectDialog(
             Row(
               modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .padding(horizontal = 12.dp, vertical = 12.dp),
               verticalAlignment = Alignment.CenterVertically,
               horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -2531,7 +2536,7 @@ private fun MoveChatToSubjectDialog(
 
         Row(
           modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.spacedBy(10.dp)
+          horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
           OutlinedButton(
             onClick = onDismiss,
@@ -2592,7 +2597,7 @@ private fun InspectSourceChatDialog(
       Column(
         modifier = Modifier
           .fillMaxSize()
-          .padding(18.dp)
+          .padding(20.dp)
       ) {
         Row(
           modifier = Modifier.fillMaxWidth(),
@@ -2623,16 +2628,16 @@ private fun InspectSourceChatDialog(
         }
 
         if (chat.sourceUrl.isNotBlank()) {
-          Spacer(modifier = Modifier.height(6.dp))
+          Spacer(modifier = Modifier.height(8.dp))
           Surface(
             color = PalettePaleCeladon.copy(alpha = 0.55f),
             shape = RoundedCornerShape(8.dp),
             modifier = Modifier.fillMaxWidth()
           ) {
             Row(
-              modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+              modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
               verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.spacedBy(6.dp)
+              horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
               Icon(Icons.Default.Link, contentDescription = null, modifier = Modifier.size(14.dp), tint = PaletteDeepSage)
               Text(
@@ -2647,7 +2652,7 @@ private fun InspectSourceChatDialog(
           }
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         Surface(
           color = PaletteMintFoam,
@@ -2659,7 +2664,7 @@ private fun InspectSourceChatDialog(
           SelectionContainer {
             Column(
               modifier = Modifier
-                .padding(14.dp)
+                .padding(16.dp)
                 .verticalScroll(rememberScrollState())
             ) {
               Text(
@@ -2751,7 +2756,7 @@ private fun EditChatDetailsDialog(
 
         Row(
           modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.spacedBy(10.dp)
+          horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
           OutlinedButton(
             onClick = onDismiss,
@@ -2810,7 +2815,7 @@ private fun EditConceptDialog(
       Column(
         modifier = Modifier
           .fillMaxSize()
-          .padding(18.dp)
+          .padding(20.dp)
       ) {
         Text(
           text = "Edit extracted concept",
@@ -2819,13 +2824,13 @@ private fun EditConceptDialog(
           color = PaletteDarkText
         )
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         Column(
           modifier = Modifier
             .weight(1f)
             .verticalScroll(rememberScrollState()),
-          verticalArrangement = Arrangement.spacedBy(10.dp)
+          verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
           OutlinedTextField(
             value = conceptName,
@@ -2874,11 +2879,11 @@ private fun EditConceptDialog(
           )
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         Row(
           modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.spacedBy(10.dp)
+          horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
           OutlinedButton(
             onClick = onDismiss,

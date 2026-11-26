@@ -175,7 +175,7 @@ fun AiTutorScreen(
         Row(
           modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp),
+            .padding(horizontal = 16.dp, vertical = 4.dp),
           horizontalArrangement = Arrangement.SpaceBetween,
           verticalAlignment = Alignment.CenterVertically
         ) {
@@ -185,7 +185,7 @@ fun AiTutorScreen(
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
             modifier = Modifier.padding(vertical = 4.dp)
           ) {
-            Row(modifier = Modifier.padding(3.dp)) {
+            Row(modifier = Modifier.padding(4.dp)) {
               Surface(
                 shape = RoundedCornerShape(20.dp),
                 color = if (selectedTab == TutorTab.CHAT) MaterialTheme.colorScheme.primary else Color.Transparent,
@@ -194,7 +194,7 @@ fun AiTutorScreen(
                   .clip(RoundedCornerShape(20.dp))
               ) {
                 Row(
-                  modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                  modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                   verticalAlignment = Alignment.CenterVertically
                 ) {
                   Icon(
@@ -203,7 +203,7 @@ fun AiTutorScreen(
                     tint = if (selectedTab == TutorTab.CHAT) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(14.dp)
                   )
-                  Spacer(modifier = Modifier.width(6.dp))
+                  Spacer(modifier = Modifier.width(8.dp))
                   Text(
                     text = "Active chat",
                     fontSize = 12.sp,
@@ -221,7 +221,7 @@ fun AiTutorScreen(
                   .clip(RoundedCornerShape(20.dp))
               ) {
                 Row(
-                  modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                  modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                   verticalAlignment = Alignment.CenterVertically
                 ) {
                   Icon(
@@ -230,7 +230,7 @@ fun AiTutorScreen(
                     tint = if (selectedTab == TutorTab.HISTORY) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(14.dp)
                   )
-                  Spacer(modifier = Modifier.width(6.dp))
+                  Spacer(modifier = Modifier.width(8.dp))
                   Text(
                     text = "History (${tutorSessions.size})",
                     fontSize = 12.sp,
@@ -404,7 +404,7 @@ fun AiTutorScreen(
       onDismissRequest = { showSystemInstructionDialog = false },
       title = { Text("AI Tutor Role & Academic Persona", fontWeight = FontWeight.Bold) },
       text = {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
           Text(
             text = "Fine-tune how the AI Tutor explains concepts and approaches problems:",
             style = MaterialTheme.typography.bodySmall,
@@ -559,7 +559,7 @@ private fun ChatTabContent(
         Row(
           modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp),
+            .padding(horizontal = 16.dp, vertical = 4.dp),
           horizontalArrangement = Arrangement.SpaceBetween,
           verticalAlignment = Alignment.CenterVertically
         ) {
@@ -621,7 +621,7 @@ private fun ChatTabContent(
         ) {
           Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier
               .weight(1f)
               .padding(end = 8.dp)
@@ -651,11 +651,11 @@ private fun ChatTabContent(
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
         modifier = Modifier.fillMaxWidth()
       ) {
-      Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
+      Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
         // Where answers come from (also in Settings > AI)
         LazyRow(
           modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.spacedBy(6.dp),
+          horizontalArrangement = Arrangement.spacedBy(8.dp),
           verticalAlignment = Alignment.CenterVertically
         ) {
           items(AiSource.entries) { option ->
@@ -781,7 +781,7 @@ private fun ChatTabContent(
             ) {
               Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
             }
-            Spacer(modifier = Modifier.width(10.dp))
+            Spacer(modifier = Modifier.width(12.dp))
             CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
             Spacer(modifier = Modifier.width(8.dp))
             Text(
@@ -804,7 +804,7 @@ private fun ChatTabContent(
         Row(
           modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+            .padding(horizontal = 12.dp, vertical = 4.dp),
           verticalAlignment = Alignment.CenterVertically
         ) {
           OutlinedTextField(
@@ -904,7 +904,7 @@ private fun HistoryTabContent(
       singleLine = true
     )
 
-    Spacer(modifier = Modifier.height(10.dp))
+    Spacer(modifier = Modifier.height(12.dp))
 
     // Top status row with Clear History action
     Row(
@@ -930,7 +930,7 @@ private fun HistoryTabContent(
       }
     }
 
-    Spacer(modifier = Modifier.height(6.dp))
+    Spacer(modifier = Modifier.height(8.dp))
 
     if (filteredSessions.isEmpty()) {
       // Empty state
@@ -942,7 +942,7 @@ private fun HistoryTabContent(
       ) {
         Column(
           horizontalAlignment = Alignment.CenterHorizontally,
-          verticalArrangement = Arrangement.spacedBy(10.dp),
+          verticalArrangement = Arrangement.spacedBy(12.dp),
           modifier = Modifier.padding(24.dp)
         ) {
           Box(
@@ -973,14 +973,14 @@ private fun HistoryTabContent(
             modifier = Modifier.widthIn(max = 280.dp)
           )
 
-          Spacer(modifier = Modifier.height(6.dp))
+          Spacer(modifier = Modifier.height(8.dp))
 
           Button(
             onClick = onStartNewChat,
             shape = RoundedCornerShape(12.dp)
           ) {
             Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(6.dp))
+            Spacer(modifier = Modifier.width(8.dp))
             Text("Start a new chat")
           }
         }
@@ -988,7 +988,7 @@ private fun HistoryTabContent(
     } else {
       LazyColumn(
         modifier = Modifier.weight(1f),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
       ) {
         items(filteredSessions, key = { it.id }) { session ->
           TutorSessionHistoryCard(
@@ -1042,7 +1042,7 @@ private fun TutorSessionHistoryCard(
     ),
     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
   ) {
-    Column(modifier = Modifier.padding(14.dp)) {
+    Column(modifier = Modifier.padding(16.dp)) {
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -1057,7 +1057,7 @@ private fun TutorSessionHistoryCard(
             text = session.subjectName,
             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
           )
         }
 
@@ -1066,13 +1066,13 @@ private fun TutorSessionHistoryCard(
             Surface(
               shape = RoundedCornerShape(6.dp),
               color = CyanAccent.copy(alpha = 0.15f),
-              modifier = Modifier.padding(end = 6.dp)
+              modifier = Modifier.padding(end = 8.dp)
             ) {
               Text(
                 text = "Web search",
                 style = MaterialTheme.typography.labelSmall,
                 color = CyanAccent,
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
               )
             }
           }
@@ -1107,7 +1107,7 @@ private fun TutorSessionHistoryCard(
         overflow = TextOverflow.Ellipsis
       )
 
-      Spacer(modifier = Modifier.height(10.dp))
+      Spacer(modifier = Modifier.height(12.dp))
 
       // Footer: Actions & Model Pill
       Row(
@@ -1128,7 +1128,7 @@ private fun TutorSessionHistoryCard(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
           )
         }
 
@@ -1210,9 +1210,9 @@ private fun ChatMessageBubble(
         val cleanModelName = message.modelName.ifBlank { "Tutor" }.take(32)
 
         FlowRow(
-          horizontalArrangement = Arrangement.spacedBy(6.dp),
+          horizontalArrangement = Arrangement.spacedBy(8.dp),
           verticalArrangement = Arrangement.spacedBy(4.dp),
-          modifier = Modifier.padding(bottom = 6.dp)
+          modifier = Modifier.padding(bottom = 8.dp)
         ) {
           Surface(
             shape = RoundedCornerShape(6.dp),
@@ -1224,7 +1224,7 @@ private fun ChatMessageBubble(
               color = MaterialTheme.colorScheme.onSurfaceVariant,
               maxLines = 1,
               overflow = TextOverflow.Ellipsis,
-              modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+              modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
             )
           }
 
@@ -1240,10 +1240,10 @@ private fun ChatMessageBubble(
             ) {
               Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
               ) {
                 Icon(Icons.Default.Public, contentDescription = null, tint = CyanAccent, modifier = Modifier.size(10.dp))
-                Spacer(modifier = Modifier.width(3.dp))
+                Spacer(modifier = Modifier.width(4.dp))
                 Text(
                   text = "Sources",
                   style = MaterialTheme.typography.labelSmall,
@@ -1310,7 +1310,7 @@ private fun ChatMessageBubble(
           }
         }
 
-        Column(modifier = Modifier.padding(14.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
           // Render rich formatted response (Code blocks, headings, lists, callouts)
           FormattedTutorResponse(
             content = displayContent,
@@ -1319,7 +1319,7 @@ private fun ChatMessageBubble(
 
           // Grounding Sources & Citations Section
           if (!isUser && message.groundingSources.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             Surface(
               shape = RoundedCornerShape(8.dp),
               color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
@@ -1335,10 +1335,10 @@ private fun ChatMessageBubble(
                     color = MaterialTheme.colorScheme.primary
                   )
                 }
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 FlowRow(
-                  horizontalArrangement = Arrangement.spacedBy(6.dp),
+                  horizontalArrangement = Arrangement.spacedBy(8.dp),
                   verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                   message.groundingSources.take(4).forEach { source ->
@@ -1348,7 +1348,7 @@ private fun ChatMessageBubble(
                       modifier = Modifier.clickable { onOpenUrl(source.url) }
                     ) {
                       Row(
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                       ) {
                         Text(
@@ -1383,8 +1383,8 @@ private fun ChatMessageBubble(
             }
 
             FlowRow(
-              horizontalArrangement = Arrangement.spacedBy(6.dp),
-              verticalArrangement = Arrangement.spacedBy(6.dp)
+              horizontalArrangement = Arrangement.spacedBy(8.dp),
+              verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
               // Action 1: Another Example
               Surface(
@@ -1398,7 +1398,7 @@ private fun ChatMessageBubble(
                 }
               ) {
                 Row(
-                  modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                  modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                   verticalAlignment = Alignment.CenterVertically
                 ) {
                   Text(
@@ -1421,7 +1421,7 @@ private fun ChatMessageBubble(
                 }
               ) {
                 Row(
-                  modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                  modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                   verticalAlignment = Alignment.CenterVertically
                 ) {
                   Text(
@@ -1444,7 +1444,7 @@ private fun ChatMessageBubble(
                 }
               ) {
                 Row(
-                  modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                  modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                   verticalAlignment = Alignment.CenterVertically
                 ) {
                   Text(
@@ -1467,7 +1467,7 @@ private fun ChatMessageBubble(
                 }
               ) {
                 Row(
-                  modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                  modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                   verticalAlignment = Alignment.CenterVertically
                 ) {
                   Text(
@@ -1490,7 +1490,7 @@ private fun ChatMessageBubble(
                 }
               ) {
                 Row(
-                  modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                  modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                   verticalAlignment = Alignment.CenterVertically
                 ) {
                   Text(
@@ -1507,8 +1507,8 @@ private fun ChatMessageBubble(
           if (!isUser && dynamicTopics.isNotEmpty()) {
             Spacer(modifier = Modifier.height(8.dp))
             FlowRow(
-              horizontalArrangement = Arrangement.spacedBy(6.dp),
-              verticalArrangement = Arrangement.spacedBy(6.dp)
+              horizontalArrangement = Arrangement.spacedBy(8.dp),
+              verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
               dynamicTopics.forEach { topic ->
                 Surface(
@@ -1517,7 +1517,7 @@ private fun ChatMessageBubble(
                   modifier = Modifier.clickable { onTopicClick(topic) }
                 ) {
                   Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                   ) {
                     Icon(
@@ -1526,7 +1526,7 @@ private fun ChatMessageBubble(
                       tint = MaterialTheme.colorScheme.primary,
                       modifier = Modifier.size(12.dp)
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
                       text = topic,
                       style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
@@ -1542,7 +1542,7 @@ private fun ChatMessageBubble(
 
       // Timestamp & Copy
       Row(
-        modifier = Modifier.padding(top = 3.dp, end = 4.dp),
+        modifier = Modifier.padding(top = 4.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically
       ) {
         Text(
@@ -1581,7 +1581,7 @@ private fun PromptChip(
       text = text,
       style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
       color = MaterialTheme.colorScheme.onSurface,
-      modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+      modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
     )
   }
 }

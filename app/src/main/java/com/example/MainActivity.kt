@@ -443,7 +443,7 @@ fun StudyPilotApp(viewModel: StudyPilotViewModel) {
             Surface(
               modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 6.dp),
+                .padding(horizontal = 12.dp, vertical = 4.dp),
               shape = RoundedCornerShape(14.dp),
               color = MaterialTheme.colorScheme.errorContainer,
               shadowElevation = 0.dp,
@@ -461,7 +461,7 @@ fun StudyPilotApp(viewModel: StudyPilotViewModel) {
                   tint = MaterialTheme.colorScheme.error,
                   modifier = Modifier.size(22.dp)
                 )
-                Spacer(modifier = Modifier.width(10.dp))
+                Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                   Text(
                     text = "Alarm: ${ringingSession.subjectName}",

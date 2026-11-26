@@ -227,7 +227,7 @@ fun LoginScreen(
               // App Logo & Brand Header
               Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
               ) {
                 Surface(
                   shape = RoundedCornerShape(14.dp),
@@ -269,7 +269,7 @@ fun LoginScreen(
                 Row(
                   modifier = Modifier.padding(16.dp),
                   verticalAlignment = Alignment.CenterVertically,
-                  horizontalArrangement = Arrangement.spacedBy(14.dp)
+                  horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                   Surface(
                     shape = CircleShape,
@@ -317,13 +317,13 @@ fun LoginScreen(
                 title = "AI tutor",
                 desc = "Runs on your phone or your own PC. No account or API key needed."
               )
-              Spacer(modifier = Modifier.height(10.dp))
+              Spacer(modifier = Modifier.height(12.dp))
               AcademicPerkItem(
                 icon = Icons.Default.Speed,
                 title = "Spaced repetition",
                 desc = "Quizzes put the topics you got wrong first."
               )
-              Spacer(modifier = Modifier.height(10.dp))
+              Spacer(modifier = Modifier.height(12.dp))
               AcademicPerkItem(
                 icon = Icons.Default.Laptop,
                 title = "Timetable and alarms",
@@ -453,7 +453,7 @@ fun LoginScreen(
           )
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         Text(
           text = "StudyPilot",
@@ -711,7 +711,7 @@ private fun AuthFormContent(
       }
     }
 
-    Spacer(modifier = Modifier.height(18.dp))
+    Spacer(modifier = Modifier.height(20.dp))
 
     // Form Subheading
     Text(
@@ -733,7 +733,7 @@ private fun AuthFormContent(
           .padding(bottom = 12.dp)
       ) {
         Row(
-          modifier = Modifier.padding(10.dp),
+          modifier = Modifier.padding(12.dp),
           verticalAlignment = Alignment.CenterVertically
         ) {
           Text(
@@ -763,7 +763,7 @@ private fun AuthFormContent(
         )
       )
 
-      Spacer(modifier = Modifier.height(10.dp))
+      Spacer(modifier = Modifier.height(12.dp))
 
       OutlinedTextField(
         value = university,
@@ -781,7 +781,7 @@ private fun AuthFormContent(
         )
       )
 
-      Spacer(modifier = Modifier.height(10.dp))
+      Spacer(modifier = Modifier.height(12.dp))
 
       OutlinedTextField(
         value = studentId,
@@ -799,7 +799,7 @@ private fun AuthFormContent(
         )
       )
 
-      Spacer(modifier = Modifier.height(10.dp))
+      Spacer(modifier = Modifier.height(12.dp))
     }
 
     // Common: Academic Email
@@ -821,7 +821,7 @@ private fun AuthFormContent(
       )
     )
 
-    Spacer(modifier = Modifier.height(10.dp))
+    Spacer(modifier = Modifier.height(12.dp))
 
     // Common: Password
     OutlinedTextField(
@@ -852,7 +852,7 @@ private fun AuthFormContent(
 
     // Sign Up: Confirm Password
     if (authMode == AuthMode.SIGN_UP) {
-      Spacer(modifier = Modifier.height(10.dp))
+      Spacer(modifier = Modifier.height(12.dp))
 
       OutlinedTextField(
         value = confirmPassword,
@@ -881,7 +881,7 @@ private fun AuthFormContent(
       )
     }
 
-    Spacer(modifier = Modifier.height(6.dp))
+    Spacer(modifier = Modifier.height(8.dp))
 
     // Remember Me & Forgot Password Row
     Row(
@@ -929,7 +929,7 @@ private fun AuthFormContent(
       }
     }
 
-    Spacer(modifier = Modifier.height(14.dp))
+    Spacer(modifier = Modifier.height(16.dp))
 
     // Primary Action Button
     Button(
@@ -964,7 +964,7 @@ private fun AuthFormContent(
       }
     }
 
-    Spacer(modifier = Modifier.height(18.dp))
+    Spacer(modifier = Modifier.height(20.dp))
 
     // Divider
     Row(
@@ -1006,7 +1006,7 @@ private fun AuthFormContent(
             Text(text = "G", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
           }
         }
-        Spacer(modifier = Modifier.width(10.dp))
+        Spacer(modifier = Modifier.width(12.dp))
         Text(
           text = "Continue with Google Student SSO",
           fontSize = 12.sp,
@@ -1019,7 +1019,7 @@ private fun AuthFormContent(
       }
     }
 
-    Spacer(modifier = Modifier.height(10.dp))
+    Spacer(modifier = Modifier.height(12.dp))
 
     // Guest / Demo Scholar Access
     OutlinedButton(

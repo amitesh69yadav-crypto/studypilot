@@ -126,7 +126,7 @@ fun DashboardScreen(
       Row(
         modifier = Modifier
           .fillMaxWidth()
-          .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 10.dp),
+          .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
       ) {
@@ -143,7 +143,7 @@ fun DashboardScreen(
               color = MaterialTheme.colorScheme.onBackground
             )
             if (isGuestMode) {
-              Spacer(modifier = Modifier.width(6.dp))
+              Spacer(modifier = Modifier.width(8.dp))
               Text(
                 text = "· Sign in",
                 style = MaterialTheme.typography.bodySmall,
@@ -165,7 +165,7 @@ fun DashboardScreen(
           border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
           Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
           ) {
             Icon(
@@ -187,7 +187,7 @@ fun DashboardScreen(
 
     // 2. Real-Time "What Should I Do Now?" Live Card
     item {
-      Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 5.dp)) {
+      Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
         WhatShouldIDoNowCard(
           status = scheduleStatus,
           onPlanScheduleClick = { onNavigate(Screen.Timetable) },
@@ -219,7 +219,7 @@ fun DashboardScreen(
       Row(
         modifier = Modifier
           .fillMaxWidth()
-          .padding(horizontal = 16.dp, vertical = 5.dp),
+          .padding(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
       ) {
         QuickActionButton(
@@ -254,7 +254,7 @@ fun DashboardScreen(
       Row(
         modifier = Modifier
           .fillMaxWidth()
-          .padding(horizontal = 16.dp, vertical = 5.dp),
+          .padding(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
       ) {
         Surface(
@@ -269,7 +269,7 @@ fun DashboardScreen(
           Row(
             modifier = Modifier
               .fillMaxSize()
-              .padding(horizontal = 14.dp),
+              .padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically
           ) {
             Column {
@@ -299,7 +299,7 @@ fun DashboardScreen(
           Row(
             modifier = Modifier
               .fillMaxSize()
-              .padding(horizontal = 14.dp),
+              .padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically
           ) {
             Column {
@@ -324,7 +324,7 @@ fun DashboardScreen(
       Surface(
         modifier = Modifier
           .fillMaxWidth()
-          .padding(horizontal = 16.dp, vertical = 5.dp),
+          .padding(horizontal = 16.dp, vertical = 4.dp),
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surface,
         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
@@ -332,7 +332,7 @@ fun DashboardScreen(
         Row(
           modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 10.dp),
+            .padding(vertical = 12.dp),
           verticalAlignment = Alignment.CenterVertically
         ) {
           Column(
@@ -426,7 +426,7 @@ fun DashboardScreen(
               text = "No classes scheduled today.",
               style = MaterialTheme.typography.bodySmall,
               color = MaterialTheme.colorScheme.onSurfaceVariant,
-              modifier = Modifier.padding(14.dp)
+              modifier = Modifier.padding(16.dp)
             )
           }
         } else {
@@ -472,7 +472,7 @@ fun DashboardScreen(
               text = "No topics recorded yet.",
               style = MaterialTheme.typography.bodySmall,
               color = MaterialTheme.colorScheme.onSurfaceVariant,
-              modifier = Modifier.padding(14.dp)
+              modifier = Modifier.padding(16.dp)
             )
           }
         } else {
@@ -542,7 +542,7 @@ private fun SessionItemRow(
     Row(
       modifier = Modifier
         .fillMaxWidth()
-        .padding(horizontal = 14.dp, vertical = 12.dp),
+        .padding(horizontal = 16.dp, vertical = 12.dp),
       verticalAlignment = Alignment.CenterVertically
     ) {
       Column(
@@ -565,7 +565,7 @@ private fun SessionItemRow(
 
       Box(
         modifier = Modifier
-          .padding(horizontal = 10.dp)
+          .padding(horizontal = 12.dp)
           .width(1.dp)
           .height(28.dp)
           .background(MaterialTheme.colorScheme.outlineVariant)
@@ -619,7 +619,7 @@ private fun RecentTopicRow(topic: StudyTopic) {
     Row(
       modifier = Modifier
         .fillMaxWidth()
-        .padding(horizontal = 14.dp, vertical = 12.dp),
+        .padding(horizontal = 16.dp, vertical = 12.dp),
       verticalAlignment = Alignment.CenterVertically
     ) {
 
@@ -657,7 +657,7 @@ private fun DashboardTaskRow(task: StudyTask) {
     Row(
       modifier = Modifier
         .fillMaxWidth()
-        .padding(horizontal = 14.dp, vertical = 12.dp),
+        .padding(horizontal = 16.dp, vertical = 12.dp),
       verticalAlignment = Alignment.CenterVertically
     ) {
       Column(modifier = Modifier.weight(1f)) {

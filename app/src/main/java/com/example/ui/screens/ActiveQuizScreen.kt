@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -117,8 +118,13 @@ fun ActiveQuizScreen(
   val isFlagged = quizState.flaggedQuestionIds.contains(currentQuestion.id)
 
   Scaffold(
+
+    // The app's main Scaffold already applies system bar insets.
+
+    contentWindowInsets = WindowInsets(0, 0, 0, 0),
     topBar = {
       TopAppBar(
+        windowInsets = WindowInsets(0, 0, 0, 0),
         title = {
           Column {
             Text(quizState.title, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
@@ -162,14 +168,14 @@ fun ActiveQuizScreen(
         modifier = Modifier
           .weight(1f)
           .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp)
       ) {
         // Question Jump Palette
         item {
           FlowRow(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
           ) {
             quizState.questions.forEachIndexed { idx, q ->
               val isAnswered = quizState.userAnswers.containsKey(q.id) && quizState.userAnswers[q.id]?.isNotBlank() == true
@@ -209,7 +215,7 @@ fun ActiveQuizScreen(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
           ) {
-            Column(modifier = Modifier.padding(18.dp)) {
+            Column(modifier = Modifier.padding(20.dp)) {
               Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -260,12 +266,12 @@ fun ActiveQuizScreen(
                     text = currentQuestion.questionType.replace("_", " "),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                   )
                 }
               }
 
-              Spacer(modifier = Modifier.height(14.dp))
+              Spacer(modifier = Modifier.height(16.dp))
               Text(
                 text = currentQuestion.questionText,
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold, lineHeight = 24.sp),
@@ -298,7 +304,7 @@ fun ActiveQuizScreen(
                     Row(
                       modifier = Modifier
                         .fillMaxWidth()
-                        .padding(14.dp),
+                        .padding(16.dp),
                       verticalAlignment = Alignment.CenterVertically
                     ) {
                       RadioButton(
@@ -349,9 +355,9 @@ fun ActiveQuizScreen(
                 shape = RoundedCornerShape(14.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
               ) {
-                Column(modifier = Modifier.padding(14.dp)) {
+                Column(modifier = Modifier.padding(16.dp)) {
                   Text("Enter your answer:", style = MaterialTheme.typography.labelMedium)
-                  Spacer(modifier = Modifier.height(6.dp))
+                  Spacer(modifier = Modifier.height(8.dp))
                   OutlinedTextField(
                     value = userAnswer,
                     onValueChange = { viewModel.answerCurrentQuestion(it) },
@@ -369,10 +375,10 @@ fun ActiveQuizScreen(
                 shape = RoundedCornerShape(14.dp),
                 colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A))
               ) {
-                Column(modifier = Modifier.padding(14.dp)) {
+                Column(modifier = Modifier.padding(16.dp)) {
                   Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Code, contentDescription = null, tint = CyanAccent, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text("Code Editor / Implementation", style = MaterialTheme.typography.labelSmall, color = CyanAccent)
                   }
                   Spacer(modifier = Modifier.height(8.dp))
@@ -424,7 +430,7 @@ fun ActiveQuizScreen(
             ) {
               if (quizState.isEvaluating) {
                 CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Color.White)
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(8.dp))
                 Text("Grading...")
               } else {
                 Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -494,7 +500,7 @@ fun QuizResultsView(
     modifier = Modifier
       .fillMaxSize()
       .padding(horizontal = 16.dp, vertical = 20.dp),
-    verticalArrangement = Arrangement.spacedBy(14.dp)
+    verticalArrangement = Arrangement.spacedBy(16.dp)
   ) {
     // Score Summary Card
     item {
@@ -535,7 +541,7 @@ fun QuizResultsView(
             color = MaterialTheme.colorScheme.onSurfaceVariant
           )
 
-          Spacer(modifier = Modifier.height(10.dp))
+          Spacer(modifier = Modifier.height(12.dp))
           Text(
             text = "Spaced repetition intervals automatically updated for all tested topics.",
             style = MaterialTheme.typography.labelSmall,
@@ -545,7 +551,7 @@ fun QuizResultsView(
           Spacer(modifier = Modifier.height(16.dp))
           Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
           ) {
             if (correctCount < total) {
               OutlinedButton(
@@ -597,7 +603,7 @@ fun QuizResultsView(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
       ) {
-        Column(modifier = Modifier.padding(14.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
           Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -642,14 +648,14 @@ fun QuizResultsView(
             }
           }
 
-          Spacer(modifier = Modifier.height(6.dp))
+          Spacer(modifier = Modifier.height(8.dp))
           Text(q.questionText, style = MaterialTheme.typography.bodyMedium)
 
           Spacer(modifier = Modifier.height(8.dp))
           Text("Your answer: $userAns", style = MaterialTheme.typography.bodySmall, color = if (isCorrect) EmeraldSuccess else RoseError)
           Text("Correct answer: ${q.correctAnswer}", style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold))
 
-          Spacer(modifier = Modifier.height(6.dp))
+          Spacer(modifier = Modifier.height(8.dp))
           Surface(
             shape = RoundedCornerShape(8.dp),
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)

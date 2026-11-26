@@ -109,7 +109,7 @@ fun SettingsScreen(
       Card(
         modifier = Modifier
           .fillMaxWidth()
-          .padding(horizontal = 16.dp, vertical = 6.dp),
+          .padding(horizontal = 16.dp, vertical = 4.dp),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
@@ -123,7 +123,7 @@ fun SettingsScreen(
           ) {
             Row(
               verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.spacedBy(14.dp),
+              horizontalArrangement = Arrangement.spacedBy(16.dp),
               modifier = Modifier.weight(1f)
             ) {
               Box(
@@ -183,9 +183,9 @@ fun SettingsScreen(
               border = androidx.compose.foundation.BorderStroke(1.dp, badgeColor.copy(alpha = 0.35f))
             ) {
               Row(
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
               ) {
                 Box(
                   modifier = Modifier
@@ -205,7 +205,7 @@ fun SettingsScreen(
             }
           }
 
-          Spacer(modifier = Modifier.height(14.dp))
+          Spacer(modifier = Modifier.height(16.dp))
 
           if (isGuestMode) {
             Button(
@@ -239,7 +239,7 @@ fun SettingsScreen(
               modifier = Modifier.fillMaxWidth()
             ) {
               Row(
-                modifier = Modifier.padding(10.dp),
+                modifier = Modifier.padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
               ) {
@@ -268,7 +268,7 @@ fun SettingsScreen(
             // Account Action Buttons for signed-in user
             Row(
               modifier = Modifier.fillMaxWidth(),
-              horizontalArrangement = Arrangement.spacedBy(10.dp)
+              horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
               FilledTonalButton(
                 onClick = {
@@ -288,7 +288,7 @@ fun SettingsScreen(
                   .heightIn(min = 44.dp)
               ) {
                 Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(8.dp))
                 Text("Edit profile", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
               }
 
@@ -304,7 +304,7 @@ fun SettingsScreen(
                   .heightIn(min = 44.dp)
               ) {
                 Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(8.dp))
                 Text("Sign out", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
               }
             }
@@ -313,7 +313,7 @@ fun SettingsScreen(
 
             Row(
               modifier = Modifier.fillMaxWidth(),
-              horizontalArrangement = Arrangement.spacedBy(10.dp)
+              horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
               FilledTonalButton(
                 onClick = { viewModel.syncCloudData() },
@@ -327,7 +327,7 @@ fun SettingsScreen(
                   .heightIn(min = 44.dp)
               ) {
                 Icon(Icons.Default.Devices, contentDescription = null, modifier = Modifier.size(15.dp), tint = MaterialTheme.colorScheme.primary)
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(8.dp))
                 Text("Cloud sync", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
               }
 
@@ -343,7 +343,7 @@ fun SettingsScreen(
                   .heightIn(min = 44.dp)
               ) {
                 Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(15.dp))
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(8.dp))
                 Text("Delete account", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
               }
             }
@@ -356,7 +356,7 @@ fun SettingsScreen(
               modifier = Modifier.fillMaxWidth()
             ) {
               Row(
-                modifier = Modifier.padding(10.dp),
+                modifier = Modifier.padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
               ) {
@@ -392,7 +392,7 @@ fun SettingsScreen(
       Card(
         modifier = Modifier
           .fillMaxWidth()
-          .padding(horizontal = 16.dp, vertical = 6.dp),
+          .padding(horizontal = 16.dp, vertical = 4.dp),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
@@ -410,7 +410,7 @@ fun SettingsScreen(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
           )
-          Spacer(modifier = Modifier.height(14.dp))
+          Spacer(modifier = Modifier.height(16.dp))
           Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -434,7 +434,7 @@ fun SettingsScreen(
                   .clickable { viewModel.setThemeMode(mode) }
               ) {
                 Row(
-                  modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp),
+                  modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp),
                   verticalAlignment = Alignment.CenterVertically,
                   horizontalArrangement = Arrangement.Center
                 ) {
@@ -444,7 +444,7 @@ fun SettingsScreen(
                     tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(16.dp)
                   )
-                  Spacer(modifier = Modifier.width(6.dp))
+                  Spacer(modifier = Modifier.width(8.dp))
                   Text(
                     text = label,
                     fontSize = 12.sp,
@@ -464,7 +464,7 @@ fun SettingsScreen(
       Card(
         modifier = Modifier
           .fillMaxWidth()
-          .padding(horizontal = 16.dp, vertical = 6.dp),
+          .padding(horizontal = 16.dp, vertical = 4.dp),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
@@ -543,7 +543,7 @@ fun SettingsScreen(
                   ) {
                     Row(
                       verticalAlignment = Alignment.CenterVertically,
-                      horizontalArrangement = Arrangement.spacedBy(10.dp),
+                      horizontalArrangement = Arrangement.spacedBy(12.dp),
                       modifier = Modifier.weight(1f)
                     ) {
                       Box(
@@ -572,7 +572,7 @@ fun SettingsScreen(
                             modifier = Modifier.weight(1f, fill = false)
                           )
                           if (isCurrent) {
-                            Spacer(modifier = Modifier.width(6.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
                             Surface(
                               shape = RoundedCornerShape(6.dp),
                               color = EmeraldSuccess.copy(alpha = 0.15f)
@@ -584,7 +584,7 @@ fun SettingsScreen(
                                 color = EmeraldSuccess,
                                 maxLines = 1,
                                 softWrap = false,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                               )
                             }
                           }
@@ -633,7 +633,7 @@ fun SettingsScreen(
             }
           }
 
-          Spacer(modifier = Modifier.height(10.dp))
+          Spacer(modifier = Modifier.height(12.dp))
 
           OutlinedButton(
             onClick = { viewModel.navigateTo(com.example.ui.viewmodel.Screen.Login) },
@@ -643,7 +643,7 @@ fun SettingsScreen(
               .heightIn(min = 48.dp)
           ) {
             Icon(Icons.Default.PersonAdd, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(6.dp))
+            Spacer(modifier = Modifier.width(8.dp))
             Text(
               text = if (savedAccounts.isEmpty()) "Sign in or create a profile" else "Add another profile",
               fontSize = 12.sp,
@@ -663,12 +663,12 @@ fun SettingsScreen(
       Card(
         modifier = Modifier
           .fillMaxWidth()
-          .padding(horizontal = 16.dp, vertical = 6.dp),
+          .padding(horizontal = 16.dp, vertical = 4.dp),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
       ) {
-        Column(modifier = Modifier.padding(18.dp)) {
+        Column(modifier = Modifier.padding(20.dp)) {
           Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -701,7 +701,7 @@ fun SettingsScreen(
             Row(
               modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 6.dp),
+                .padding(vertical = 8.dp),
               horizontalArrangement = Arrangement.SpaceBetween,
               verticalAlignment = Alignment.CenterVertically
             ) {
@@ -719,7 +719,7 @@ fun SettingsScreen(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                   )
                 }
                 Spacer(modifier = Modifier.width(12.dp))
@@ -746,12 +746,12 @@ fun SettingsScreen(
       Card(
         modifier = Modifier
           .fillMaxWidth()
-          .padding(horizontal = 16.dp, vertical = 6.dp),
+          .padding(horizontal = 16.dp, vertical = 4.dp),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
       ) {
-        Column(modifier = Modifier.padding(18.dp)) {
+        Column(modifier = Modifier.padding(20.dp)) {
           Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Default.Storage, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
             Spacer(modifier = Modifier.width(8.dp))
@@ -765,7 +765,7 @@ fun SettingsScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant
           )
 
-          Spacer(modifier = Modifier.height(14.dp))
+          Spacer(modifier = Modifier.height(16.dp))
           OutlinedButton(
             onClick = { viewModel.seedSampleData() },
             shape = RoundedCornerShape(10.dp),
@@ -776,7 +776,7 @@ fun SettingsScreen(
             Text("Load sample data", fontWeight = FontWeight.SemiBold)
           }
 
-          Spacer(modifier = Modifier.height(10.dp))
+          Spacer(modifier = Modifier.height(12.dp))
           OutlinedButton(
             onClick = { showDeleteSampleDataDialog = true },
             shape = RoundedCornerShape(10.dp),
@@ -787,7 +787,7 @@ fun SettingsScreen(
               .height(44.dp)
           ) {
             Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
-            Spacer(modifier = Modifier.width(6.dp))
+            Spacer(modifier = Modifier.width(8.dp))
             Text("Delete all data", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
           }
         }
@@ -810,7 +810,7 @@ fun SettingsScreen(
       onDismissRequest = { showEditProfileDialog = false },
       title = { Text("Edit profile", fontWeight = FontWeight.Bold) },
       text = {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
           OutlinedTextField(
             value = editName,
             onValueChange = { editName = it },
@@ -964,7 +964,7 @@ fun AddSubjectDialog(
     onDismissRequest = onDismiss,
     title = { Text("Add Subject / Course", fontWeight = FontWeight.Bold) },
     text = {
-      Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+      Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         OutlinedTextField(
           value = code,
           onValueChange = { code = it },

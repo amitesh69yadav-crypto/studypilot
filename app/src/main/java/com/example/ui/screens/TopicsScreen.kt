@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -109,6 +110,10 @@ fun TopicsScreen(
   }
 
   Scaffold(
+
+    // The app's main Scaffold already applies system bar insets.
+
+    contentWindowInsets = WindowInsets(0, 0, 0, 0),
     floatingActionButton = {
       FloatingActionButton(
         onClick = { showAddDialog = true },
@@ -279,7 +284,7 @@ fun TopicCard(
             color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
             modifier = Modifier
               .weight(1f, fill = false)
-              .padding(end = 6.dp)
+              .padding(end = 8.dp)
           ) {
             Text(
               text = topic.subjectName,
@@ -287,7 +292,7 @@ fun TopicCard(
               color = MaterialTheme.colorScheme.onPrimaryContainer,
               maxLines = 1,
               overflow = TextOverflow.Ellipsis,
-              modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+              modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
             )
           }
 
@@ -299,7 +304,7 @@ fun TopicCard(
           }
         }
 
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         Text(
           text = topic.title,
           style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
@@ -366,7 +371,7 @@ fun AddTopicDialog(
     text = {
       Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
       ) {
         // 3 Input Methods Tabs
         TabRow(
@@ -450,7 +455,7 @@ fun AddTopicDialog(
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(12.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                .padding(14.dp),
+                .padding(16.dp),
               horizontalAlignment = Alignment.CenterHorizontally
             ) {
               Icon(Icons.Default.UploadFile, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
@@ -536,7 +541,7 @@ fun TopicDetailDialog(
     text = {
       LazyColumn(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
       ) {
         item {
           Text(
@@ -585,10 +590,10 @@ fun TopicDetailDialog(
               Column(modifier = Modifier.padding(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                   Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(16.dp))
-                  Spacer(modifier = Modifier.width(6.dp))
+                  Spacer(modifier = Modifier.width(8.dp))
                   Text("AI Concept Summary", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.secondary)
                 }
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 Text(topic.aiSummary, style = MaterialTheme.typography.bodySmall)
               }
             }
@@ -632,7 +637,7 @@ fun TopicDetailDialog(
         item {
           Column {
             Text("Manual Mastery Adjustment:", style = MaterialTheme.typography.labelMedium)
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Row(
               modifier = Modifier.fillMaxWidth(),
               horizontalArrangement = Arrangement.spacedBy(8.dp)

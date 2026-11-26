@@ -86,7 +86,7 @@ fun WhatShouldIDoNowCard(
     border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
   ) {
-    Column(modifier = Modifier.padding(14.dp)) {
+    Column(modifier = Modifier.padding(16.dp)) {
       when (status.state) {
         ScheduleState.ACTIVE_NOW -> {
           val active = status.activeSession
@@ -103,7 +103,7 @@ fun WhatShouldIDoNowCard(
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.primary)
                 )
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(
                   text = "In progress",
                   style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
@@ -136,7 +136,7 @@ fun WhatShouldIDoNowCard(
             )
 
             if (active.endTime.isNotBlank()) {
-              Spacer(modifier = Modifier.height(10.dp))
+              Spacer(modifier = Modifier.height(12.dp))
               LinearProgressIndicator(
                 progress = { status.progressFraction },
                 modifier = Modifier
@@ -148,7 +148,7 @@ fun WhatShouldIDoNowCard(
               )
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(16.dp))
             Row(
               modifier = Modifier.fillMaxWidth(),
               horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -167,7 +167,7 @@ fun WhatShouldIDoNowCard(
                   .height(42.dp)
               ) {
                 Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(8.dp))
                 Text("Done", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
               }
 
@@ -218,7 +218,7 @@ fun WhatShouldIDoNowCard(
               }
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Text(
               text = next.topic,
               style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
@@ -235,7 +235,7 @@ fun WhatShouldIDoNowCard(
               overflow = TextOverflow.Ellipsis
             )
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(16.dp))
             Row(
               modifier = Modifier.fillMaxWidth(),
               horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -254,7 +254,7 @@ fun WhatShouldIDoNowCard(
                   .height(42.dp)
               ) {
                 Icon(Icons.Default.Psychology, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(8.dp))
                 Text("Study with AI", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, maxLines = 1)
               }
 
@@ -269,7 +269,7 @@ fun WhatShouldIDoNowCard(
                   .height(42.dp)
               ) {
                 Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(8.dp))
                 Text("Edit", fontWeight = FontWeight.Medium, fontSize = 13.sp)
               }
             }
@@ -289,7 +289,7 @@ fun WhatShouldIDoNowCard(
             color = MaterialTheme.colorScheme.onSurfaceVariant
           )
 
-          Spacer(modifier = Modifier.height(14.dp))
+          Spacer(modifier = Modifier.height(16.dp))
           Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)

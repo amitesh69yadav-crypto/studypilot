@@ -106,7 +106,7 @@ fun QuizScreen(
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
       ) {
-        Column(modifier = Modifier.padding(18.dp)) {
+        Column(modifier = Modifier.padding(20.dp)) {
           Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -149,7 +149,7 @@ fun QuizScreen(
           Spacer(modifier = Modifier.height(16.dp))
           Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
           ) {
             Button(
               onClick = { viewModel.startWeekendQuiz(forceWeakOnly = false) },
@@ -166,7 +166,7 @@ fun QuizScreen(
                 Text("Assembling...", maxLines = 1, softWrap = false)
               } else {
                 Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(8.dp))
                 Text("Start quiz", fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
               }
             }
@@ -203,13 +203,13 @@ fun QuizScreen(
         ) {
           Column(modifier = Modifier.padding(16.dp)) {
             Text("Quiz settings", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Quiz Days
             Text("Scheduled Days:", style = MaterialTheme.typography.labelSmall)
             FlowRow(
               modifier = Modifier.fillMaxWidth(),
-              horizontalArrangement = Arrangement.spacedBy(6.dp),
+              horizontalArrangement = Arrangement.spacedBy(8.dp),
               verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
               listOf("Saturday", "Sunday", "Both").forEach { day ->
@@ -227,7 +227,7 @@ fun QuizScreen(
             Text("Number of Questions:", style = MaterialTheme.typography.labelSmall)
             FlowRow(
               modifier = Modifier.fillMaxWidth(),
-              horizontalArrangement = Arrangement.spacedBy(6.dp),
+              horizontalArrangement = Arrangement.spacedBy(8.dp),
               verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
               listOf(5, 10, 15, 20).forEach { count ->
@@ -245,7 +245,7 @@ fun QuizScreen(
             Text("Difficulty Level:", style = MaterialTheme.typography.labelSmall)
             FlowRow(
               modifier = Modifier.fillMaxWidth(),
-              horizontalArrangement = Arrangement.spacedBy(6.dp),
+              horizontalArrangement = Arrangement.spacedBy(8.dp),
               verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
               listOf("MIXED", "EASY", "MEDIUM", "HARD").forEach { diff ->
@@ -265,7 +265,7 @@ fun QuizScreen(
               modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState()),
-              horizontalArrangement = Arrangement.spacedBy(6.dp)
+              horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
               val sources = listOf(
                 "ALL" to "All Combined",
@@ -309,7 +309,7 @@ fun QuizScreen(
       Card(
         modifier = Modifier
           .fillMaxWidth()
-          .padding(horizontal = 16.dp, vertical = 6.dp),
+          .padding(horizontal = 16.dp, vertical = 4.dp),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
@@ -343,7 +343,7 @@ fun QuizScreen(
             trackColor = MaterialTheme.colorScheme.surfaceVariant
           )
 
-          Spacer(modifier = Modifier.height(14.dp))
+          Spacer(modifier = Modifier.height(16.dp))
           Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
@@ -446,7 +446,7 @@ private fun QuizAttemptItemRow(attempt: QuizAttempt) {
     Row(
       modifier = Modifier
         .fillMaxWidth()
-        .padding(14.dp),
+        .padding(16.dp),
       verticalAlignment = Alignment.CenterVertically
     ) {
       Box(
@@ -462,7 +462,7 @@ private fun QuizAttemptItemRow(attempt: QuizAttempt) {
           color = scoreColor
         )
       }
-      Spacer(modifier = Modifier.width(14.dp))
+      Spacer(modifier = Modifier.width(16.dp))
       Column(modifier = Modifier.weight(1f)) {
         Text(
           text = attempt.title,

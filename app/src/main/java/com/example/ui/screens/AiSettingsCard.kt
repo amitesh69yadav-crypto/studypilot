@@ -70,7 +70,7 @@ fun AiSettingsCard(viewModel: StudyPilotViewModel) {
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
   ) {
-    Column(modifier = Modifier.padding(18.dp)) {
+    Column(modifier = Modifier.padding(20.dp)) {
       Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
           modifier = Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
@@ -100,10 +100,10 @@ fun AiSettingsCard(viewModel: StudyPilotViewModel) {
         }
       }
 
-      HorizontalDivider(Modifier.padding(vertical = 14.dp))
+      HorizontalDivider(Modifier.padding(vertical = 16.dp))
       PhoneModelSection(viewModel)
 
-      HorizontalDivider(Modifier.padding(vertical = 14.dp))
+      HorizontalDivider(Modifier.padding(vertical = 16.dp))
       PcSection(viewModel)
     }
   }
