@@ -383,7 +383,7 @@ fun TopicCard(
           verticalAlignment = Alignment.CenterVertically
         ) {
           Text(
-            text = "Studied: ${topic.dateStudied} • Interval: ${topic.repetitionIntervalDays}d",
+            text = "Studied ${friendlyDate(topic.dateStudied)}",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
@@ -393,7 +393,7 @@ fun TopicCard(
               .padding(end = 8.dp)
           )
           Text(
-            text = "Next: ${topic.nextRevisionDate}",
+            text = "Review ${friendlyDate(topic.nextRevisionDate)}",
             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
             color = MaterialTheme.colorScheme.primary,
             maxLines = 1,
@@ -807,3 +807,9 @@ fun TopicDetailHost(viewModel: StudyPilotViewModel, topic: StudyTopic, onTopic: 
       }
     )
 }
+
+/** "2026-11-28" as "Nov 28", or as it is when it isn't a date. */
+private fun friendlyDate(date: String): String = runCatching {
+  val parsed = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).parse(date)!!
+  java.text.SimpleDateFormat("MMM d", java.util.Locale.getDefault()).format(parsed)
+}.getOrDefault(date)

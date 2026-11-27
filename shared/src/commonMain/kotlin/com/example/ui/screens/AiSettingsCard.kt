@@ -31,7 +31,7 @@ import com.example.ui.theme.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
+import com.example.ui.theme.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import com.example.ui.theme.OutlinedButton
 import androidx.compose.material3.OutlinedTextField

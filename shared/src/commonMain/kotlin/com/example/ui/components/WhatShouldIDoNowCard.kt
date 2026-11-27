@@ -44,7 +44,7 @@ import com.example.ui.theme.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
+import com.example.ui.theme.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import com.example.ui.theme.OutlinedButton
 import androidx.compose.material3.Surface
@@ -180,11 +180,23 @@ fun WhatShouldIDoNowCard(
                   .weight(1f)
                   .height(42.dp)
               ) {
-                Text("AI Tutor", fontWeight = FontWeight.Medium, fontSize = 13.sp)
+                Text("AI Tutor", fontWeight = FontWeight.Medium, fontSize = 13.sp, maxLines = 1)
               }
 
-              IconButton(onClick = { onEditSessionClick(active) }, modifier = Modifier.size(36.dp)) {
-                Icon(Icons.Default.Edit, contentDescription = "Edit", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+              // Same shape and weight as its neighbours, so the row reads as three even choices.
+              OutlinedButton(
+                onClick = { onEditSessionClick(active) },
+                shape = RoundedCornerShape(10.dp),
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                modifier = Modifier
+                  .weight(1f)
+                  .height(42.dp)
+              ) {
+                Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Edit", fontWeight = FontWeight.Medium, fontSize = 13.sp)
               }
             }
           }
@@ -199,7 +211,7 @@ fun WhatShouldIDoNowCard(
               verticalAlignment = Alignment.CenterVertically
             ) {
               Text(
-                text = "Next in ${status.minutesUntilNext}m",
+                text = "Next in ${minutesLabel(status.minutesUntilNext)}",
                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
                 color = MaterialTheme.colorScheme.onSurfaceVariant
               )
@@ -458,4 +470,15 @@ fun ActiveAlarmAlertDialog(
     containerColor = MaterialTheme.colorScheme.surface,
     shape = RoundedCornerShape(16.dp)
   )
+}
+
+/** "45 min", "2 h", "6 h 3 min". */
+private fun minutesLabel(minutes: Int): String {
+  val h = minutes / 60
+  val m = minutes % 60
+  return when {
+    h == 0 -> "$m min"
+    m == 0 -> "$h h"
+    else -> "$h h $m min"
+  }
 }

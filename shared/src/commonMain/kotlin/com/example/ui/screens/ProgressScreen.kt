@@ -35,7 +35,7 @@ import com.example.ui.theme.Button
 import com.example.ui.theme.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
+import com.example.ui.theme.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import com.example.ui.theme.OutlinedButton
 import androidx.compose.material3.Surface
@@ -578,7 +578,7 @@ fun ProgressScreen(
             verticalAlignment = Alignment.CenterVertically
           ) {
             Text(
-              text = "Topic-wise Mastery Breakdown",
+              text = "Mastery by topic",
               style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
               color = MaterialTheme.colorScheme.onSurface,
               modifier = Modifier
@@ -595,28 +595,28 @@ fun ProgressScreen(
           Spacer(modifier = Modifier.height(16.dp))
 
           MasteryProgressRow(
-            label = "Mastered (Interval >= 14d)",
+            label = "Mastered",
             count = masteredCount,
             total = topics.size,
             color = EmeraldSuccess
           )
           Spacer(modifier = Modifier.height(12.dp))
           MasteryProgressRow(
-            label = "Familiar (Interval 3-7d)",
+            label = "Familiar",
             count = familiarCount,
             total = topics.size,
             color = CyanAccent
           )
           Spacer(modifier = Modifier.height(12.dp))
           MasteryProgressRow(
-            label = "Needs Review (Interval 1d)",
+            label = "Needs review",
             count = strugglingTopics.size,
             total = topics.size,
             color = RoseError
           )
           Spacer(modifier = Modifier.height(12.dp))
           MasteryProgressRow(
-            label = "Untested Concepts",
+            label = "Untested",
             count = untestedTopics.size,
             total = topics.size,
             color = AmberAccent
@@ -651,12 +651,12 @@ fun ProgressScreen(
             ) {
               Column(modifier = Modifier.weight(1f)) {
                 Text(
-                  text = "No weak topics requiring revision (0)",
+                  text = "Nothing to review yet",
                   style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
                   color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                  text = "Complete weekend revision quizzes to flag struggling concepts",
+                  text = "Topics you get wrong in quizzes show up here.",
                   style = MaterialTheme.typography.bodySmall,
                   color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

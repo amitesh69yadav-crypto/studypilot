@@ -270,7 +270,7 @@ fun DashboardScreen(
               color = MaterialTheme.colorScheme.onSurface
             )
             Text(
-              text = "${topics.size} topics",
+              text = if (topics.size == 1) "1 topic" else "${topics.size} topics",
               style = MaterialTheme.typography.labelSmall,
               color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -301,7 +301,7 @@ fun DashboardScreen(
               color = MaterialTheme.colorScheme.onSurface
             )
             Text(
-              text = "${extractedConcepts.size} facts",
+              text = if (extractedConcepts.size == 1) "1 fact" else "${extractedConcepts.size} facts",
               style = MaterialTheme.typography.labelSmall,
               color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -316,17 +316,19 @@ fun DashboardScreen(
         .fillMaxWidth()
         .padding(horizontal = 16.dp, vertical = 4.dp),
       shape = RoundedCornerShape(12.dp),
-      color = MaterialTheme.colorScheme.surface,
-      border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+      // On the desktop the tiles stand on their own, not inside another card.
+      color = com.example.ui.theme.pageBackground(MaterialTheme.colorScheme.surface),
+      border = if (com.example.ui.theme.LocalGlass.current != null) null
+        else androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
       Row(
         modifier = Modifier
           .fillMaxWidth()
-          .padding(vertical = 12.dp, horizontal = if (com.example.ui.theme.LocalGlass.current != null) 12.dp else 0.dp),
+          .padding(vertical = if (com.example.ui.theme.LocalGlass.current != null) 0.dp else 12.dp),
         verticalAlignment = Alignment.CenterVertically
       ) {
         Column(
-          modifier = Modifier.weight(1f).statTile { onNavigate(Screen.MyTopics) },
+          modifier = Modifier.weight(1f).statTile(raised = com.example.ui.theme.LocalGlass.current != null) { onNavigate(Screen.MyTopics) },
           horizontalAlignment = Alignment.CenterHorizontally
         ) {
           Text(
@@ -344,7 +346,7 @@ fun DashboardScreen(
         com.example.ui.theme.StatDivider()
 
         Column(
-          modifier = Modifier.weight(1f).statTile { onNavigate(Screen.WeekendQuizzes) },
+          modifier = Modifier.weight(1f).statTile(raised = com.example.ui.theme.LocalGlass.current != null) { onNavigate(Screen.WeekendQuizzes) },
           horizontalAlignment = Alignment.CenterHorizontally
         ) {
           Text(
@@ -362,7 +364,7 @@ fun DashboardScreen(
         com.example.ui.theme.StatDivider()
 
         Column(
-          modifier = Modifier.weight(1f).statTile { onNavigate(Screen.Progress) },
+          modifier = Modifier.weight(1f).statTile(raised = com.example.ui.theme.LocalGlass.current != null) { onNavigate(Screen.Progress) },
           horizontalAlignment = Alignment.CenterHorizontally
         ) {
           Text(
@@ -386,7 +388,7 @@ fun DashboardScreen(
         .padding(vertical = 4.dp)
     ) {
       SectionHeader(
-        title = "Today",
+        title = if (com.example.ui.theme.LocalGlass.current != null) "Schedule" else "Today",
         actionText = "All",
         onActionClick = { onNavigate(Screen.Timetable) }
       )

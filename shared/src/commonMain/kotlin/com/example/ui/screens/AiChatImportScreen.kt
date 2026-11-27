@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import com.example.ui.theme.LinearProgressIndicator
 import com.example.ui.theme.pageBackground
 import com.example.ui.theme.FilterChip
 import com.example.ui.theme.OutlinedButton
@@ -114,6 +115,33 @@ fun AiChatImportScreen(
           .fillMaxWidth()
           .background(pageBackground(PaletteCreamIvory))
       ) {
+        val tabLabel: (Int) -> String = { index ->
+          when (index) {
+            0 -> "Chats (${importedChats.size})"
+            1 -> "Memory (${extractedConcepts.size})"
+            2 -> "Coverage"
+            else -> "Import"
+          }
+        }
+        if (com.example.ui.theme.LocalGlass.current != null) {
+          // Desktop: the same full-width pill tabs as the other pages.
+          com.example.ui.theme.TabRow(selectedTabIndex = selectedTab, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+            tabs.forEachIndexed { index, _ ->
+              Tab(
+                selected = selectedTab == index,
+                onClick = { selectedTab = index },
+                text = {
+                  Text(
+                    tabLabel(index),
+                    fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Medium,
+                    maxLines = 1,
+                    softWrap = false
+                  )
+                }
+              )
+            }
+          }
+        } else
         ScrollableTabRow(
           selectedTabIndex = selectedTab,
           containerColor = pageBackground(PaletteCreamIvory),
@@ -455,7 +483,7 @@ private fun ChatLibraryTab(
           )
           Spacer(modifier = Modifier.height(12.dp))
           Text(
-            text = if (chats.isEmpty()) "No Linked AI Chats Yet" else "No matching linked conversations",
+            text = if (chats.isEmpty()) "No linked chats yet" else "No matching chats",
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             color = PaletteDarkText,
@@ -1334,10 +1362,15 @@ private fun KnowledgeCoverageDashboardTab(
       .padding(16.dp),
     verticalArrangement = Arrangement.spacedBy(16.dp)
   ) {
+    // Solid ink panel with readable text on the desktop; the sage panel on the phone.
+    val heroGlass = com.example.ui.theme.LocalGlass.current
+    val heroBg = heroGlass?.ink ?: PaletteDeepSage
+    val heroText = heroGlass?.onInk ?: PaletteCreamIvory
+    val heroMuted = heroGlass?.onInk?.copy(alpha = 0.72f) ?: PalettePaleCeladon
     Card(
       modifier = Modifier.fillMaxWidth(),
       shape = RoundedCornerShape(18.dp),
-      colors = CardDefaults.cardColors(containerColor = PaletteDeepSage),
+      colors = CardDefaults.cardColors(containerColor = heroBg),
       elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
       Column(modifier = Modifier.padding(20.dp)) {
@@ -1355,19 +1388,19 @@ private fun KnowledgeCoverageDashboardTab(
               text = "Knowledge base",
               style = MaterialTheme.typography.titleLarge,
               fontWeight = FontWeight.Bold,
-              color = PaletteCreamIvory
+              color = heroText
             )
             Text(
               text = "Imported chats",
               style = MaterialTheme.typography.bodySmall,
-              color = PalettePaleCeladon
+              color = heroMuted
             )
           }
           Icon(
             Icons.Default.School,
             contentDescription = null,
             modifier = Modifier.size(36.dp),
-            tint = PaletteCreamIvory
+            tint = heroText
           )
         }
 
@@ -1381,14 +1414,14 @@ private fun KnowledgeCoverageDashboardTab(
           Text(
             text = "Mastery",
             fontSize = 12.sp,
-            color = PaletteCreamIvory,
+            color = heroText,
             fontWeight = FontWeight.Medium
           )
           Text(
             text = "$masteryPercentage%",
             fontSize = 14.sp,
             fontWeight = FontWeight.Bold,
-            color = PaletteCreamIvory
+            color = heroText
           )
         }
         Spacer(modifier = Modifier.height(8.dp))
@@ -1398,8 +1431,8 @@ private fun KnowledgeCoverageDashboardTab(
             .fillMaxWidth()
             .height(8.dp)
             .clip(RoundedCornerShape(4.dp)),
-          color = PaletteCreamIvory,
-          trackColor = PalettePaleCeladon.copy(alpha = 0.4f)
+          color = heroText,
+          trackColor = heroMuted.copy(alpha = 0.4f)
         )
       }
     }
@@ -1416,7 +1449,7 @@ private fun KnowledgeCoverageDashboardTab(
         modifier = Modifier.weight(1f),
         title = "Imported chats",
         value = "$totalChats",
-        subtitle = "Across all AI tools",
+        subtitle = "From all your AI tools",
         icon = Icons.AutoMirrored.Filled.Chat,
         containerColor = PaletteMintFoam
       )
@@ -1424,7 +1457,7 @@ private fun KnowledgeCoverageDashboardTab(
         modifier = Modifier.weight(1f),
         title = "Extracted concepts",
         value = "$totalConcepts",
-        subtitle = "Organized & linked",
+        subtitle = "Facts pulled from chats",
         icon = Icons.Default.Psychology,
         containerColor = PaletteMintFoam
       )
@@ -1435,7 +1468,7 @@ private fun KnowledgeCoverageDashboardTab(
         modifier = Modifier.weight(1f),
         title = "Subjects active",
         value = "$subjectsCovered",
-        subtitle = "Academic courses",
+        subtitle = "With linked chats",
         icon = Icons.Default.MenuBook,
         containerColor = PaletteMintFoam
       )
@@ -1443,7 +1476,7 @@ private fun KnowledgeCoverageDashboardTab(
         modifier = Modifier.weight(1f),
         title = "Topics discovered",
         value = "$topicsDiscovered",
-        subtitle = "Curriculum units",
+        subtitle = "Found in your chats",
         icon = Icons.Default.Category,
         containerColor = PaletteMintFoam
       )
@@ -1462,7 +1495,7 @@ private fun KnowledgeCoverageDashboardTab(
         modifier = Modifier.weight(1f),
         title = "Needs revision",
         value = "${revisionRequired.size}",
-        subtitle = "Prioritized in quiz",
+        subtitle = "Asked first in quizzes",
         icon = Icons.Default.WarningAmber,
         containerColor = if (revisionRequired.isNotEmpty()) Color(0xFFEFE2DB) else PaletteMintFoam
       )
@@ -1639,7 +1672,7 @@ private fun ImportChatTab(
         )
         Column(modifier = Modifier.weight(1f)) {
           Text(
-            text = "Import from Shared AI Link",
+            text = "Import a shared chat link",
             fontWeight = FontWeight.Bold,
             color = PaletteDarkText,
             fontSize = 15.sp

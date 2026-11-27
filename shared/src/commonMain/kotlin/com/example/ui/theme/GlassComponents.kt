@@ -342,11 +342,14 @@ fun statLabel(text: String): String = if (LocalGlass.current != null) text.upper
  * tint covers exactly the tile; on the phone it stays a plain column.
  */
 @Composable
-fun Modifier.statTile(onClick: () -> Unit): Modifier {
+fun Modifier.statTile(raised: Boolean = false, onClick: () -> Unit): Modifier {
   val glass = LocalGlass.current
-  val shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
+  val shape = androidx.compose.foundation.shape.RoundedCornerShape(if (raised) 22.dp else 16.dp)
   return if (glass != null) {
-    this.glassInset(shape, glass).clickable(onClick = onClick).padding(vertical = 10.dp)
+    // Raised tiles stand on the page; recessed ones sit inside a card.
+    (if (raised) this.glass(shape, glass) else this.glassInset(shape, glass))
+      .clickable(onClick = onClick)
+      .padding(vertical = if (raised) 14.dp else 10.dp)
   } else {
     this.clip(androidx.compose.foundation.shape.RoundedCornerShape(10.dp)).clickable(onClick = onClick).padding(vertical = 4.dp)
   }
@@ -363,3 +366,34 @@ fun StatDivider() {
     )
   }
 }
+
+/** A progress bar as one clean track: no gap before the remaining part and no dot at its end. */
+@Composable
+fun LinearProgressIndicator(
+  progress: () -> Float,
+  modifier: Modifier = Modifier,
+  color: Color = androidx.compose.material3.ProgressIndicatorDefaults.linearColor,
+  trackColor: Color = androidx.compose.material3.ProgressIndicatorDefaults.linearTrackColor,
+  strokeCap: androidx.compose.ui.graphics.StrokeCap = androidx.compose.material3.ProgressIndicatorDefaults.LinearStrokeCap
+) = androidx.compose.material3.LinearProgressIndicator(
+  progress = progress,
+  modifier = modifier,
+  color = color,
+  trackColor = trackColor,
+  strokeCap = strokeCap,
+  gapSize = 0.dp,
+  drawStopIndicator = {}
+)
+
+/** The indeterminate bar, also without the gap between its parts. */
+@Composable
+fun LinearProgressIndicator(
+  modifier: Modifier = Modifier,
+  color: Color = androidx.compose.material3.ProgressIndicatorDefaults.linearColor,
+  trackColor: Color = androidx.compose.material3.ProgressIndicatorDefaults.linearTrackColor
+) = androidx.compose.material3.LinearProgressIndicator(
+  modifier = modifier,
+  color = color,
+  trackColor = trackColor,
+  gapSize = 0.dp
+)

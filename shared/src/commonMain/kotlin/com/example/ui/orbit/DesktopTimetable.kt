@@ -100,7 +100,10 @@ fun DesktopTimetable(viewModel: StudyPilotViewModel, showAddDialogOnInit: Boolea
         }
         Spacer(Modifier.width(10.dp))
       }
-      InkPill("Add", glass) { dialog = SessionDialog.New(selected, if (selected == today) nextSlot() else 9 * 60) }
+      // The planner has its own Add button in its header.
+      if (mode != TimetableMode.Planner) {
+        InkPill("Add", glass) { dialog = SessionDialog.New(selected, if (selected == today) nextSlot() else 9 * 60) }
+      }
     }
 
     when (mode) {
