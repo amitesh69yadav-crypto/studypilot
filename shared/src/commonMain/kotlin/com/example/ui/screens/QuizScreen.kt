@@ -382,21 +382,21 @@ fun QuizScreen(
             horizontalArrangement = Arrangement.SpaceBetween
           ) {
             Column(
-              modifier = Modifier.weight(1f),
+              modifier = Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).clickable { viewModel.navigateTo(com.example.ui.viewmodel.Screen.MyTopics) }.padding(vertical = 4.dp),
               horizontalAlignment = Alignment.CenterHorizontally
             ) {
               Text(text = "${testedTopics.size}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
               Text(text = statLabel("Topics tested"), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Column(
-              modifier = Modifier.weight(1f),
+              modifier = Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).clickable { viewModel.navigateTo(com.example.ui.viewmodel.Screen.MyTopics) }.padding(vertical = 4.dp),
               horizontalAlignment = Alignment.CenterHorizontally
             ) {
               Text(text = "${untestedTopics.size}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
               Text(text = statLabel("Untested"), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Column(
-              modifier = Modifier.weight(1f),
+              modifier = Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).clickable { viewModel.navigateTo(com.example.ui.viewmodel.Screen.MyTopics) }.padding(vertical = 4.dp),
               horizontalAlignment = Alignment.CenterHorizontally
             ) {
               Text(text = "${strugglingTopics.size}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)

@@ -110,6 +110,7 @@ fun TasksScreen(
     ) {
       TabRow(
         selectedTabIndex = selectedTab,
+        modifier = Modifier.padding(horizontal = if (com.example.ui.theme.LocalGlass.current != null) 16.dp else 0.dp),
         containerColor = MaterialTheme.colorScheme.surface,
         contentColor = MaterialTheme.colorScheme.primary
       ) {

@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.PlayArrow
 import com.example.ui.theme.Button
@@ -83,6 +84,22 @@ fun SubjectsGrid(
   onQuiz: (SubjectGroup) -> Unit,
   onAddSubject: () -> Unit
 ) {
+  if (groups.isEmpty() && !quizBusy) {
+    com.example.ui.components.EmptyState(
+      icon = Icons.AutoMirrored.Filled.MenuBook,
+      title = "No subjects yet",
+      description = "Add a subject for each course, then file your topics under it. You can quiz yourself on one subject at a time.",
+      actionButton = {
+        Button(onClick = onAddSubject, shape = RoundedCornerShape(12.dp)) {
+          Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+          Spacer(Modifier.width(8.dp))
+          Text("New subject")
+        }
+      },
+      modifier = Modifier.fillMaxSize()
+    )
+    return
+  }
   LazyVerticalGrid(
     columns = GridCells.Adaptive(minSize = 300.dp),
     modifier = Modifier.fillMaxSize(),

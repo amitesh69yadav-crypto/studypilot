@@ -215,12 +215,15 @@ fun EmptyState(
   actionButton: @Composable (() -> Unit)? = null,
   modifier: Modifier = Modifier
 ) {
+  // On the desktop the empty state sits in the middle of the page rather than at its top.
+  val centred = com.example.ui.theme.LocalGlass.current != null
   Column(
     modifier = modifier
+      .then(if (centred) Modifier.fillMaxSize().padding(bottom = 56.dp) else Modifier)
       .fillMaxWidth()
       .padding(horizontal = 24.dp, vertical = 24.dp),
     horizontalAlignment = Alignment.CenterHorizontally,
-    verticalArrangement = Arrangement.Top
+    verticalArrangement = if (centred) Arrangement.Center else Arrangement.Top
   ) {
     Box(
       modifier = Modifier

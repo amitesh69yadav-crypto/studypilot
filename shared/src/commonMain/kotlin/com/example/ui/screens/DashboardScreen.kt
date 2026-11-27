@@ -325,7 +325,7 @@ fun DashboardScreen(
         verticalAlignment = Alignment.CenterVertically
       ) {
         Column(
-          modifier = Modifier.weight(1f),
+          modifier = Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).clickable { onNavigate(Screen.MyTopics) }.padding(vertical = 4.dp),
           horizontalAlignment = Alignment.CenterHorizontally
         ) {
           Text(
@@ -348,7 +348,7 @@ fun DashboardScreen(
         )
 
         Column(
-          modifier = Modifier.weight(1f),
+          modifier = Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).clickable { onNavigate(Screen.WeekendQuizzes) }.padding(vertical = 4.dp),
           horizontalAlignment = Alignment.CenterHorizontally
         ) {
           Text(
@@ -371,7 +371,7 @@ fun DashboardScreen(
         )
 
         Column(
-          modifier = Modifier.weight(1f),
+          modifier = Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).clickable { onNavigate(Screen.Progress) }.padding(vertical = 4.dp),
           horizontalAlignment = Alignment.CenterHorizontally
         ) {
           Text(
@@ -514,7 +514,6 @@ fun DashboardScreen(
           modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
           title = "Today's orbit"
         )
-        whatNow()
         todaySessions()
         recentTopics()
       }
@@ -523,6 +522,7 @@ fun DashboardScreen(
         verticalArrangement = Arrangement.spacedBy(6.dp)
       ) {
         quickActions()
+        whatNow()
         hub()
         stats()
         if (pendingTasks.isNotEmpty()) deadlines()

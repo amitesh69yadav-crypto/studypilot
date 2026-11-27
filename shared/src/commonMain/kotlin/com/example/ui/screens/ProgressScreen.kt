@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.clickable
 import com.example.platform.LocalPlatformActions
 import com.example.platform.PlatformBackHandler
 import androidx.compose.foundation.Canvas
@@ -227,7 +228,7 @@ fun ProgressScreen(
             subtitle = "$masteredCount mastered",
             icon = Icons.Default.Book,
             iconTint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f).clip(RoundedCornerShape(22.dp)).clickable { viewModel.navigateTo(com.example.ui.viewmodel.Screen.MyTopics) }
           )
           StatCard(
             title = "Quizzes completed",
@@ -235,7 +236,7 @@ fun ProgressScreen(
             subtitle = if (attempts.isEmpty()) "none yet" else "average $averageScore%",
             icon = Icons.Default.Quiz,
             iconTint = EmeraldSuccess,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f).clip(RoundedCornerShape(22.dp)).clickable { viewModel.navigateTo(com.example.ui.viewmodel.Screen.WeekendQuizzes) }
           )
         }
 
@@ -249,7 +250,7 @@ fun ProgressScreen(
             subtitle = if (studyStreak == 1) "day in a row" else "days in a row",
             icon = Icons.Default.LocalFireDepartment,
             iconTint = AmberAccent,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f).clip(RoundedCornerShape(22.dp)).clickable { viewModel.navigateTo(com.example.ui.viewmodel.Screen.Timetable) }
           )
           StatCard(
             title = "Needs review",
@@ -257,7 +258,7 @@ fun ProgressScreen(
             subtitle = "${untestedTopics.size} untested",
             icon = Icons.Default.Warning,
             iconTint = RoseError,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f).clip(RoundedCornerShape(22.dp)).clickable { viewModel.navigateTo(com.example.ui.viewmodel.Screen.WeekendQuizzes) }
           )
         }
       }

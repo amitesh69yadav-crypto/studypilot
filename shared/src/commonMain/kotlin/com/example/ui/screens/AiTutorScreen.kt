@@ -163,7 +163,7 @@ fun AiTutorScreen(
   ) {
     // 1. Top Mode Selector Bar (Chat vs History tabs)
     Surface(
-      color = MaterialTheme.colorScheme.surface,
+      color = com.example.ui.theme.pageBackground(MaterialTheme.colorScheme.surface),
       shadowElevation = 0.dp,
       modifier = Modifier.fillMaxWidth()
     ) {
@@ -649,7 +649,7 @@ private fun ChatTabContent(
     // Answer source picker (collapsible)
     AnimatedVisibility(visible = isHeaderExpanded) {
       Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+        color = com.example.ui.theme.pageBackground(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
         modifier = Modifier.fillMaxWidth()
       ) {
       Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {

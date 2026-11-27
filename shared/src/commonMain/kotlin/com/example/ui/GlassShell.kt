@@ -79,16 +79,19 @@ fun GlassShell(
   Box(Modifier.fillMaxSize()) {
     Row(Modifier.fillMaxSize()) {
       Sidebar(viewModel, currentScreen, pendingTaskCount, glass)
-      Column(
-        Modifier
-          .weight(1f)
-          .fillMaxHeight()
-          .padding(start = 28.dp, end = 28.dp, top = 22.dp)
-      ) {
-        PageHeader(viewModel, currentScreen, glass)
-        Spacer(Modifier.height(14.dp))
-        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-          Box(Modifier.fillMaxSize().widthIn(max = 1120.dp)) { content() }
+      // Header and page share one centred column, so their edges line up at any window width.
+      Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.TopCenter) {
+        Column(
+          Modifier
+            .widthIn(max = 1240.dp)
+            .fillMaxWidth()
+            .fillMaxHeight()
+            .padding(start = 28.dp, end = 28.dp, top = 22.dp)
+        ) {
+          // Pages inset their content by 16dp; the header matches.
+          Box(Modifier.padding(horizontal = 16.dp)) { PageHeader(viewModel, currentScreen, glass) }
+          Spacer(Modifier.height(18.dp))
+          Box(Modifier.weight(1f).fillMaxWidth()) { content() }
         }
       }
     }
