@@ -28,7 +28,7 @@ Files that are not in the repo:
 | File | Needed for | Without it |
 | --- | --- | --- |
 | `app/google-services.json` | Google sign-in and cloud backup | Builds and runs; Firebase features are off |
-| `debug.keystore` | Debug signing (AI Studio provides it) | Create one: `keytool -genkeypair -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -validity 10000 -dname "CN=Android Debug"` |
+| `debug.keystore` | Debug signing (kept out of the repo) | Create one: `keytool -genkeypair -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -validity 10000 -dname "CN=Android Debug"` |
 
 ## How accounts work
 
