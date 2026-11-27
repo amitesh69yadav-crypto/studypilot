@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.foundation.layout.widthIn
 import com.example.platform.PlatformBackHandler
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -376,7 +377,7 @@ fun TopicCard(
 
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-          text = topic.descriptionNotes.take(120) + if (topic.descriptionNotes.length > 120) "..." else "",
+          text = notesPreview(topic.descriptionNotes),
           style = MaterialTheme.typography.bodySmall,
           color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -622,7 +623,7 @@ fun TopicDetailDialog(
       ) {
         item {
           Text(
-            text = "Recorded ${topic.dateStudied}",
+            text = "Recorded ${friendlyDate(topic.dateStudied)}",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
           )
@@ -670,7 +671,7 @@ fun TopicDetailDialog(
             Column(modifier = Modifier.padding(12.dp)) {
               Text("Lecture notes", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge)
               Spacer(modifier = Modifier.height(4.dp))
-              Text(topic.descriptionNotes, style = MaterialTheme.typography.bodyMedium)
+              LectureNotes(topic.descriptionNotes)
             }
           }
         }
@@ -684,9 +685,16 @@ fun TopicDetailDialog(
             Column(modifier = Modifier.padding(12.dp)) {
               Text("Spaced repetition schedule", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
               Spacer(modifier = Modifier.height(4.dp))
-              Text("• Current Interval: ${topic.repetitionIntervalDays} days", style = MaterialTheme.typography.bodySmall)
-              Text("• Next Revision Due: ${topic.nextRevisionDate}", style = MaterialTheme.typography.bodySmall)
-              Text("• Times Tested: ${topic.timesTested} (${topic.timesCorrect} correct)", style = MaterialTheme.typography.bodySmall)
+              Text(
+                "Review " + if (topic.repetitionIntervalDays <= 1) "every day" else "every ${topic.repetitionIntervalDays} days",
+                style = MaterialTheme.typography.bodySmall
+              )
+              if (topic.nextRevisionDate.isNotBlank()) Text("Next review ${friendlyDate(topic.nextRevisionDate)}", style = MaterialTheme.typography.bodySmall)
+              Text(
+                if (topic.timesTested == 0) "Not tested yet"
+                else "Tested ${com.example.ui.components.countOf(topic.timesTested, "time")}, ${topic.timesCorrect} right",
+                style = MaterialTheme.typography.bodySmall
+              )
             }
           }
         }
@@ -818,3 +826,50 @@ private fun friendlyDate(date: String): String = runCatching {
   val parsed = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).parse(date)!!
   java.text.SimpleDateFormat("MMM d", java.util.Locale.getDefault()).format(parsed)
 }.getOrDefault(date)
+
+/**
+ * Notes as they were saved, often question-and-answer pairs from an imported chat ("Q: … A: …") with
+ * Markdown in the answers. Each question becomes a bold heading and each answer is rendered as
+ * formatted text: headings, bold, lists and code.
+ */
+@Composable
+private fun LectureNotes(notes: String) {
+  val parts = remember(notes) { splitQuestionsAndAnswers(notes) }
+  Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    parts.forEachIndexed { i, (question, answer) ->
+      if (i > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+      Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (question != null) {
+          Text(question, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold))
+        }
+        if (answer.isNotBlank()) com.example.ui.components.FormattedTutorResponse(answer)
+      }
+    }
+  }
+}
+
+/** Splits notes into (question, answer) pairs on lines starting "Q:"; plain notes come back as one part. */
+private fun splitQuestionsAndAnswers(notes: String): List<Pair<String?, String>> {
+  val parts = mutableListOf<Pair<String?, StringBuilder>>()
+  for (line in notes.lines()) {
+    val trimmed = line.trimStart()
+    when {
+      trimmed.startsWith("Q:", ignoreCase = false) -> parts += trimmed.removePrefix("Q:").trim().replaceFirstChar { it.uppercase() } to StringBuilder()
+      else -> {
+        if (parts.isEmpty()) parts += null to StringBuilder()
+        val text = if (trimmed.startsWith("A:")) trimmed.removePrefix("A:").trimStart() else line
+        parts.last().second.appendLine(text)
+      }
+    }
+  }
+  return parts.map { (q, a) -> q to a.toString().trim() }.filter { it.first != null || it.second.isNotBlank() }
+}
+
+/** A one-glance line from the notes: no "Q:"/"A:" labels or Markdown marks, cut at about 120 characters. */
+private fun notesPreview(notes: String): String {
+  val plain = notes.lines()
+    .map { it.trim().removePrefix("Q:").removePrefix("A:").trim().trimStart('#', '*', '-', ' ').replace("**", "").replace("__", "") }
+    .filter { it.isNotBlank() }
+    .joinToString(" · ")
+  return if (plain.length > 120) plain.take(118).trimEnd() + "…" else plain
+}

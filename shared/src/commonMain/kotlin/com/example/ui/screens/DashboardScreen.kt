@@ -534,11 +534,8 @@ fun DashboardScreen(
       modifier = Modifier.fillMaxSize(),
       contentPadding = PaddingValues(bottom = 24.dp)
     ) {
-      item { greeting() }
-      item { whatNow() }
-      item { quickActions() }
       if (glassStyle) {
-        // Phone, glass style: today's orbit, full width, right after what's on now.
+        // Phone, glass style: today's orbit leads the page.
         item {
           com.example.ui.orbit.OrbitCard(
             viewModel = viewModel,
@@ -548,6 +545,9 @@ fun DashboardScreen(
           )
         }
       }
+      item { greeting() }
+      item { whatNow() }
+      item { quickActions() }
       item { hub() }
       item { stats() }
       item { todaySessions() }

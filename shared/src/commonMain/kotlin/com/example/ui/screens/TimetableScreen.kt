@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.runtime.LaunchedEffect
 import com.example.ui.components.rememberDatePicker
 import com.example.platform.LocalPlatformActions
 import com.example.platform.PlatformBackHandler
@@ -149,7 +150,11 @@ private val PalettePaleCeladon: Color
 @Composable
 fun TimetableScreen(
   viewModel: StudyPilotViewModel,
-  showAddDialogOnInit: Boolean = false
+  showAddDialogOnInit: Boolean = false,
+  /** The day to show, when another screen picks it (the Planner view of the glass timetable). */
+  externalDate: String? = null,
+  /** Leaves out this screen's own title, Add button and calendar, for when its host shows them. */
+  embedded: Boolean = false
 ) {
   val actions = LocalPlatformActions.current
   val sessions by viewModel.sessions.collectAsState()
@@ -167,7 +172,8 @@ fun TimetableScreen(
 
   val realToday = remember { dateFormat.format(Date()) }
   // Selected day to manage (defaults to today)
-  var selectedDate by remember { mutableStateOf(realToday) }
+  var selectedDate by remember { mutableStateOf(externalDate ?: realToday) }
+  LaunchedEffect(externalDate) { if (externalDate != null) selectedDate = externalDate }
   val pickSelectedDate = rememberDatePicker { selectedDate = it }
 
   // Tabs: 0: Selected Day, 1: Schedule Formats (Templates), 2: Full Agenda (All)
@@ -246,21 +252,25 @@ fun TimetableScreen(
     // The app's main Scaffold already applies system bar insets.
 
     contentWindowInsets = WindowInsets(0, 0, 0, 0),
-    containerColor = PaletteCreamIvory
+    containerColor = com.example.ui.theme.pageBackground(PaletteCreamIvory)
   ) { padding ->
     Column(
       modifier = Modifier
         .fillMaxSize()
-        .background(PaletteCreamIvory)
+        .background(com.example.ui.theme.pageBackground(PaletteCreamIvory))
         .padding(padding)
     ) {
-      // Header bar
+      // Header bar (on the desktop and in the glass style: just the tabs, straight on the backdrop)
       Surface(
-        color = PaletteCreamIvory,
-        border = androidx.compose.foundation.BorderStroke(0.5.dp, PaletteMediumSage.copy(alpha = 0.4f)),
+        color = com.example.ui.theme.pageBackground(PaletteCreamIvory),
+        border = if (com.example.ui.theme.LocalGlass.current != null) null
+          else androidx.compose.foundation.BorderStroke(0.5.dp, PaletteMediumSage.copy(alpha = 0.4f)),
         modifier = Modifier.fillMaxWidth()
       ) {
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+          // Embedded in the desktop-style timetable, the page header already has the date, its arrows,
+          // a date picker and Add, so this title, Add button and calendar are left out.
+          if (!embedded) {
           // Top title row + Non-overlapping primary "+ Add" action
           Row(
             modifier = Modifier.fillMaxWidth(),
@@ -679,6 +689,7 @@ fun TimetableScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
 
+          } // end of the standalone header
           // 3. Clean Segmented Navigation Tabs:
           // [Day Schedule] | [Format Templates] | [Agenda (All)]
           TabRow(
@@ -687,7 +698,7 @@ fun TimetableScreen(
             contentColor = PaletteDarkText,
             modifier = Modifier
               .fillMaxWidth()
-              .clip(RoundedCornerShape(10.dp))
+              .then(if (com.example.ui.theme.LocalGlass.current != null) Modifier else Modifier.clip(RoundedCornerShape(10.dp)))
           ) {
             Tab(
               selected = selectedTab == 0,

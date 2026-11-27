@@ -77,6 +77,8 @@ fun DesktopTimetable(viewModel: StudyPilotViewModel, showAddDialogOnInit: Boolea
   var dialog by remember { mutableStateOf<SessionDialog?>(if (showAddDialogOnInit) SessionDialog.New(todayDate(), nextSlot()) else null) }
   val today = todayDate()
   val week = remember(selected) { weekOf(selected) }
+  // The date in the header opens a calendar, for jumping to any month or year.
+  val pickDate = com.example.ui.components.rememberDatePicker { selected = it }
 
   // On a phone: the view switch and Add on one row, the date and its arrows on the next.
   val compactToolbar: @Composable () -> Unit = {
@@ -84,31 +86,33 @@ fun DesktopTimetable(viewModel: StudyPilotViewModel, showAddDialogOnInit: Boolea
       Row(verticalAlignment = Alignment.CenterVertically) {
         SegmentedPills(TimetableMode.entries.map { it.label }, mode.ordinal, glass) { mode = TimetableMode.entries[it] }
         Spacer(Modifier.weight(1f))
-        if (mode != TimetableMode.Planner) {
-          InkPill("Add", glass) { dialog = SessionDialog.New(selected, if (selected == today) nextSlot() else 9 * 60) }
-        }
+        InkPill("Add", glass) { dialog = SessionDialog.New(selected, if (selected == today) nextSlot() else 9 * 60) }
+
       }
-      if (mode != TimetableMode.Planner) {
-        val step = if (mode == TimetableMode.Week) 7 else 1
-        Row(verticalAlignment = Alignment.CenterVertically) {
-          GlassCircleButton(Icons.Default.ChevronLeft, if (step == 7) "Previous week" else "Previous day", glass) { selected = shiftDate(selected, -step) }
-          Text(
-            if (mode == TimetableMode.Week) weekRangeLabel(week) else longDate(selected),
-            fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = glass.text,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            modifier = Modifier.weight(1f),
-            maxLines = 1
-          )
-          val away = if (mode == TimetableMode.Week) today !in week else selected != today
-          if (away) {
-            GlassPill(if (mode == TimetableMode.Week) "This week" else "Today", glass) { selected = today }
-            Spacer(Modifier.width(8.dp))
-          }
-          GlassCircleButton(Icons.Default.ChevronRight, if (step == 7) "Next week" else "Next day", glass) { selected = shiftDate(selected, step) }
+      val step = if (mode == TimetableMode.Week) 7 else 1
+      Row(verticalAlignment = Alignment.CenterVertically) {
+        GlassCircleButton(Icons.Default.ChevronLeft, if (step == 7) "Previous week" else "Previous day", glass) { selected = shiftDate(selected, -step) }
+        Text(
+          if (mode == TimetableMode.Week) weekRangeLabel(week) else longDate(selected),
+          fontSize = 14.sp,
+          fontWeight = FontWeight.SemiBold,
+          color = glass.text,
+          textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+          modifier = Modifier
+            .weight(1f)
+            .clip(CircleShape)
+            .clickable { pickDate(selected) }
+            .padding(vertical = 8.dp),
+          maxLines = 1
+        )
+        val away = if (mode == TimetableMode.Week) today !in week else selected != today
+        if (away) {
+          GlassPill(if (mode == TimetableMode.Week) "This week" else "Today", glass) { selected = today }
+          Spacer(Modifier.width(8.dp))
         }
+        GlassCircleButton(Icons.Default.ChevronRight, if (step == 7) "Next week" else "Next day", glass) { selected = shiftDate(selected, step) }
       }
+
     }
   }
 
@@ -119,33 +123,36 @@ fun DesktopTimetable(viewModel: StudyPilotViewModel, showAddDialogOnInit: Boolea
       Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
         SegmentedPills(TimetableMode.entries.map { it.label }, mode.ordinal, glass) { mode = TimetableMode.entries[it] }
       }
-      if (mode != TimetableMode.Planner) {
-        val step = if (mode == TimetableMode.Week) 7 else 1
-        GlassCircleButton(Icons.Default.ChevronLeft, if (step == 7) "Previous week" else "Previous day", glass) {
-          selected = shiftDate(selected, -step)
-        }
-        Text(
-          if (mode == TimetableMode.Week) weekRangeLabel(week) else longDate(selected),
-          fontSize = 15.sp,
-          fontWeight = FontWeight.SemiBold,
-          color = glass.text,
-          modifier = Modifier.padding(horizontal = 14.dp).widthIn(min = 170.dp),
-          maxLines = 1
-        )
-        GlassCircleButton(Icons.Default.ChevronRight, if (step == 7) "Next week" else "Next day", glass) {
-          selected = shiftDate(selected, step)
-        }
-        val away = if (mode == TimetableMode.Week) today !in week else selected != today
-        if (away) {
-          Spacer(Modifier.width(8.dp))
-          GlassPill(if (mode == TimetableMode.Week) "This week" else "Today", glass) { selected = today }
-        }
-        Spacer(Modifier.width(10.dp))
+      val step = if (mode == TimetableMode.Week) 7 else 1
+      GlassCircleButton(Icons.Default.ChevronLeft, if (step == 7) "Previous week" else "Previous day", glass) {
+        selected = shiftDate(selected, -step)
       }
-      // The planner has its own Add button in its header.
-      if (mode != TimetableMode.Planner) {
-        InkPill("Add", glass) { dialog = SessionDialog.New(selected, if (selected == today) nextSlot() else 9 * 60) }
+      Text(
+        if (mode == TimetableMode.Week) weekRangeLabel(week) else longDate(selected),
+        fontSize = 15.sp,
+        fontWeight = FontWeight.SemiBold,
+        color = glass.text,
+        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        modifier = Modifier
+          .padding(horizontal = 6.dp)
+          .widthIn(min = 170.dp)
+          .clip(CircleShape)
+          .clickable { pickDate(selected) }
+          .padding(horizontal = 8.dp, vertical = 8.dp),
+        maxLines = 1
+      )
+      GlassCircleButton(Icons.Default.ChevronRight, if (step == 7) "Next week" else "Next day", glass) {
+        selected = shiftDate(selected, step)
       }
+      val away = if (mode == TimetableMode.Week) today !in week else selected != today
+      if (away) {
+        Spacer(Modifier.width(8.dp))
+        GlassPill(if (mode == TimetableMode.Week) "This week" else "Today", glass) { selected = today }
+      }
+      Spacer(Modifier.width(10.dp))
+
+      InkPill("Add", glass) { dialog = SessionDialog.New(selected, if (selected == today) nextSlot() else 9 * 60) }
+
   }
   }
   androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -195,7 +202,7 @@ fun DesktopTimetable(viewModel: StudyPilotViewModel, showAddDialogOnInit: Boolea
           }
         }
       }
-      TimetableMode.Planner -> Box(Modifier.weight(1f)) { TimetableScreen(viewModel) }
+      TimetableMode.Planner -> Box(Modifier.weight(1f)) { TimetableScreen(viewModel, externalDate = selected, embedded = true) }
     }
   }
   }
