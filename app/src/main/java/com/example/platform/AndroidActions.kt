@@ -69,7 +69,7 @@ class AndroidActions(private val context: Context) : PlatformActions {
 
   override val googleSignIn: (suspend () -> PlatformActions.GoogleAccount?) = suspend {
     // default_web_client_id is generated from google-services.json, which isn't checked in,
-    // so look it up by name and fall back to the OAuth client from firebase-applet-config.json.
+    // so look it up by name and fall back to the app's OAuth client ID.
     @Suppress("DiscouragedApi")
     val generatedId = context.resources.getIdentifier("default_web_client_id", "string", context.packageName)
     val serverClientId = if (generatedId != 0) {
