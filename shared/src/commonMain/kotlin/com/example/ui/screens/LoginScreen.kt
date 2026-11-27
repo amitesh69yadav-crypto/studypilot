@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import com.example.shared.resources.Res
 import com.example.shared.resources.studypilot_logo
 import com.example.platform.LocalPlatformActions
@@ -642,6 +643,16 @@ private fun AuthFormContent(
       .padding(24.dp),
     horizontalAlignment = Alignment.CenterHorizontally
   ) {
+    // A way out for someone who opened this page but doesn't want an account: back to the app as a guest.
+    Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+      androidx.compose.material3.TextButton(onClick = onGuestSignInClick, modifier = Modifier.testTag("login_back_button")) {
+        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(6.dp))
+        Text("Back to app")
+      }
+      Spacer(Modifier.weight(1f))
+      Text("No account needed", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
     // Mode Switcher Tabs
     Surface(
       shape = RoundedCornerShape(12.dp),

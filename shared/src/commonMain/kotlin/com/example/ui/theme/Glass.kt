@@ -271,14 +271,16 @@ private fun DrawScope.drawBloom(b: Bloom) {
  * The desktop's hover and press feedback: a soft rounded tint over the element instead of the grey
  * Material ripple, darker on light glass and lighter on dark glass.
  */
-data class GlassIndication(val dark: Boolean) : androidx.compose.foundation.IndicationNodeFactory {
+data class GlassIndication(val dark: Boolean, val behindChildren: Boolean = false) : androidx.compose.foundation.IndicationNodeFactory {
   override fun create(interactionSource: androidx.compose.foundation.interaction.InteractionSource): androidx.compose.ui.node.DelegatableNode =
-    GlassIndicationNode(interactionSource, dark)
+    GlassIndicationNode(interactionSource, dark, behindChildren)
 }
 
 private class GlassIndicationNode(
   private val source: androidx.compose.foundation.interaction.InteractionSource,
-  private val dark: Boolean
+  private val dark: Boolean,
+  /** Tint under the element's children, for a card whose buttons have their own hover. */
+  private val behindChildren: Boolean
 ) : Modifier.Node(), androidx.compose.ui.node.DrawModifierNode {
   private var hovered = false
   private var pressed = false
@@ -302,7 +304,7 @@ private class GlassIndicationNode(
   }
 
   override fun androidx.compose.ui.graphics.drawscope.ContentDrawScope.draw() {
-    drawContent()
+    if (!behindChildren) drawContent()
     val alpha = when {
       pressed -> if (dark) 0.16f else 0.12f
       hovered || focused -> if (dark) 0.10f else 0.075f
@@ -315,5 +317,6 @@ private class GlassIndicationNode(
         cornerRadius = androidx.compose.ui.geometry.CornerRadius(radius)
       )
     }
+    if (behindChildren) drawContent()
   }
 }

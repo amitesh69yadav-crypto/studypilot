@@ -1123,7 +1123,8 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
       ChatMessage(
         role = "model",
         text = "Ask a question about any topic, or pick a subject above to focus the tutor.",
-        modelName = ""
+        modelName = "",
+        isWelcome = true
       )
     )
   )
@@ -1176,7 +1177,8 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
             "Ask a question about any topic, or pick a subject above to focus the tutor."
           },
           modelName = "",
-          relatedTopics = initialLinkTopics
+          relatedTopics = initialLinkTopics,
+          isWelcome = true
         )
       )
     }

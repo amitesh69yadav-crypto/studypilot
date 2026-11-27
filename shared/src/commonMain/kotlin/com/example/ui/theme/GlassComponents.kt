@@ -1,5 +1,8 @@
 package com.example.ui.theme
 
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -269,12 +272,40 @@ fun TabRow(
     androidx.compose.material3.TabRow(selectedTabIndex, modifier, containerColor, contentColor, indicator, divider, tabs)
     return
   }
-  androidx.compose.foundation.layout.Box(modifier.glassInset(CircleShape, glass).padding(horizontal = 6.dp)) {
+  var hoverX by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<Float?>(null) }
+  val density = androidx.compose.ui.platform.LocalDensity.current
+  androidx.compose.foundation.layout.Box(
+    modifier
+      .glassInset(CircleShape, glass)
+      .padding(horizontal = 6.dp)
+      .pointerInput(Unit) {
+        awaitPointerEventScope {
+          while (true) {
+            val event = awaitPointerEvent()
+            hoverX = if (event.type == androidx.compose.ui.input.pointer.PointerEventType.Exit) null
+            else event.changes.firstOrNull()?.position?.x
+          }
+        }
+      }
+  ) {
+    androidx.compose.runtime.CompositionLocalProvider(androidx.compose.material3.LocalRippleConfiguration provides null) {
     androidx.compose.material3.TabRow(
       selectedTabIndex = selectedTabIndex,
       containerColor = Color.Transparent,
       contentColor = glass.text,
       indicator = { tabPositions ->
+        // A soft pill under the tab the pointer is over, the same tint as hover everywhere else.
+        val x = hoverX?.let { with(density) { it.toDp() } }
+        val hovered = x?.let { px -> tabPositions.firstOrNull { px >= it.left && px < it.right } }
+        if (hovered != null) {
+          androidx.compose.foundation.layout.Box(
+            androidx.compose.material3.TabRowDefaults.run { Modifier.tabIndicatorOffset(hovered) }
+              .fillMaxHeight()
+              .padding(vertical = 5.dp, horizontal = 3.dp)
+              .clip(CircleShape)
+              .background((if (glass.dark) Color.White else Color.Black).copy(alpha = if (glass.dark) 0.10f else 0.075f))
+          )
+        }
         if (selectedTabIndex < tabPositions.size) {
           androidx.compose.foundation.layout.Box(
             androidx.compose.material3.TabRowDefaults.run { Modifier.tabIndicatorOffset(tabPositions[selectedTabIndex]) }
@@ -290,6 +321,7 @@ fun TabRow(
       divider = {},
       tabs = tabs
     )
+    }
   }
 }
 

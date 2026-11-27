@@ -10,7 +10,9 @@ data class ChatMessage(
   val groundingSources: List<GroundingSource> = emptyList(),
   val searchQueries: List<String> = emptyList(),
   val isError: Boolean = false,
-  val relatedTopics: List<String> = emptyList()
+  val relatedTopics: List<String> = emptyList(),
+  /** The tutor's opening line, which gets no follow-up buttons since there's nothing to follow up. */
+  val isWelcome: Boolean = false
 )
 
 data class GroundingSource(

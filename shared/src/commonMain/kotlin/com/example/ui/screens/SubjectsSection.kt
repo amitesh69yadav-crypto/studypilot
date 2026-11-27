@@ -1,5 +1,8 @@
 package com.example.ui.screens
 
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -147,13 +150,25 @@ fun SubjectsGrid(
 
 @Composable
 private fun SubjectCard(group: SubjectGroup, quizBusy: Boolean, onClick: () -> Unit, onQuiz: () -> Unit) {
+  val quizHover = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+  val quizHovered by quizHover.collectIsHoveredAsState()
+  val cardSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
   Card(
-    modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+    modifier = Modifier.fillMaxWidth(),
     shape = RoundedCornerShape(16.dp),
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
   ) {
-    Column(Modifier.padding(16.dp)) {
+    Column(
+      Modifier
+        .fillMaxWidth()
+        .clickable(
+          interactionSource = cardSource,
+          indication = if (quizHovered) null else com.example.ui.theme.LocalGlass.current?.let { com.example.ui.theme.GlassIndication(it.dark, behindChildren = true) } ?: androidx.compose.foundation.LocalIndication.current,
+          onClick = onClick
+        )
+        .padding(16.dp)
+    ) {
       Row(verticalAlignment = Alignment.CenterVertically) {
         SubjectDot(group)
         Spacer(Modifier.width(12.dp))
@@ -175,6 +190,7 @@ private fun SubjectCard(group: SubjectGroup, quizBusy: Boolean, onClick: () -> U
       OutlinedButton(
         onClick = onQuiz,
         enabled = group.topics.isNotEmpty() && !quizBusy,
+        interactionSource = quizHover,
         shape = RoundedCornerShape(10.dp),
         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
       ) {

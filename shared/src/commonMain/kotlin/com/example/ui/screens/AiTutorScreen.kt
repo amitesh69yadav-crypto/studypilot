@@ -1367,7 +1367,7 @@ private fun ChatMessageBubble(
           }
 
           // 1. Quick Action Follow-Up Buttons ("Another Example", "Example in Code", "Summarize", "Explain Example")
-          if (!isUser) {
+          if (!isUser && !message.isWelcome) {
             Spacer(modifier = Modifier.height(12.dp))
 
             val linkedChatTitle = remember(message.groundingSources, importedChats) {
@@ -1505,7 +1505,7 @@ private fun ChatMessageBubble(
           }
 
           // 2. Related Domain-Specific Subtopic Buttons Section (Only Buttons, Domain-Specific)
-          if (!isUser && dynamicTopics.isNotEmpty()) {
+          if (!isUser && !message.isWelcome && dynamicTopics.isNotEmpty()) {
             Spacer(modifier = Modifier.height(8.dp))
             FlowRow(
               horizontalArrangement = Arrangement.spacedBy(8.dp),

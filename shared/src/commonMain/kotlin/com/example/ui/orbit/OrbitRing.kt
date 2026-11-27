@@ -335,23 +335,6 @@ fun OrbitRing(
       )
       drawOrbitTrack(g.center, g.outer, g.thickness, glass)
 
-      // Hour ticks just inside the band, longer at the quarters of the day.
-      for (h in 0 until 24) {
-        val deg = degreesOf(h * 60f)
-        val len = when {
-          h % 6 == 0 -> 8 * density
-          h % 3 == 0 -> 5 * density
-          else -> 3 * density
-        }
-        drawLine(
-          glass.muted.copy(alpha = if (h % 3 == 0) 0.55f else 0.3f),
-          pointAt(g.center, g.inner - 4 * density, deg),
-          pointAt(g.center, g.inner - 4 * density - len, deg),
-          strokeWidth = (if (h % 6 == 0) 1.6f else 1.2f) * density,
-          cap = StrokeCap.Round
-        )
-      }
-
       val pMid = g.plannedMid(split)
       val pWidth = g.plannedWidth(split, density)
       val iconSize = min(pWidth * 0.5f, 18 * density)
