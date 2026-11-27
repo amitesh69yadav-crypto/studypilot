@@ -904,10 +904,14 @@ class StudyPilotRepository(
   // --- Which questions a quiz gets ---
 
   /**
-   * A model works through requests one at a time; sending a quiz's worth at once leaves the last ones
-   * waiting past the timeout. Two at a time keeps the model busy without that.
+   * A model on the PC or phone works through requests one at a time; sending a quiz's worth at once
+   * leaves the last ones waiting past the timeout, so two at a time. A cloud model answers many
+   * requests in parallel, so a quiz's topics are written together there.
    */
-  private val modelSlots = kotlinx.coroutines.sync.Semaphore(2)
+  private val localModelSlots = kotlinx.coroutines.sync.Semaphore(2)
+  private val cloudModelSlots = kotlinx.coroutines.sync.Semaphore(6)
+  private suspend fun modelSlots() =
+    if (ai.backend(com.example.data.ai.AiTask.ANSWER)?.label?.startsWith("Cloud") == true) cloudModelSlots else localModelSlots
 
   /** Questions served this session (newest last), so leaving a quiz early still moves on to new ones. */
   private val recentlyServed = LinkedHashSet<String>()
@@ -1003,7 +1007,7 @@ class StudyPilotRepository(
   ): List<QuizQuestion> {
     val known = existing.mapTo(HashSet()) { LocalAiEngine.questionKey(it) } + asked
     val avoid = existing.map { it.questionText }
-    val fromModel = modelSlots.withPermit {
+    val fromModel = modelSlots().withPermit {
       // A few spare, since some come back as repeats of what the student already had.
       val ask = if (avoid.isEmpty()) count else (count + 2).coerceAtMost(6)
       if (concept != null) {

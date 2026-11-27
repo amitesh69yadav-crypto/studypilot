@@ -93,6 +93,9 @@ data class ActiveQuizState(
   val isEvaluating: Boolean = false
 )
 
+/** When this device's cloud keys last changed, for sharing with the paired device. */
+private const val KEYS_UPDATED_AT = "keys_updated_at"
+
 class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
 
   val repository: StudyPilotRepository = StudyPilotRepository(
@@ -133,7 +136,8 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
   val pcModel: StateFlow<String> = _pcModel.asStateFlow()
 
   // Cloud chatbot keys. Each provider keeps its own key and model in a separate store that isn't
-  // backed up, transferred to a new phone or synced to the PC, so a shared copy of the app has no key.
+  // backed up or transferred to a new phone. It is shared only with the paired PC or phone, encrypted
+  // with the pairing (KeyShare), so a key saved on one device works on both.
   private val keyPrefs = platform.prefs("studypilot_keys").also { keys ->
     // Keys used to live with the other AI settings.
     aiPrefs.getString("cloud_api_key", null)?.takeIf { it.isNotBlank() }?.let { old ->
@@ -634,6 +638,12 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
     )
 
   init {
+    // Lets the phone-PC sync carry cloud keys (see KeyShare).
+    com.example.data.sync.KeyShare.export = ::exportCloudKeys
+    com.example.data.sync.KeyShare.import = ::importCloudKeys
+  }
+
+  init {
     repository.ai.source = _aiSource.value
     repository.ai.pc.baseUrl = _pcUrl.value
     repository.ai.pc.preferredModel = _pcModel.value
@@ -800,9 +810,54 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
     _cloudModel.value = keyPrefs.getString("model_${provider.name}", "") ?: ""
     _cloudModels.value = emptyList()
     _cloudStatus.value = null
-    keyPrefs.edit { putString("provider", provider.name) }
+    keyPrefs.edit { putString("provider", provider.name); putLong(KEYS_UPDATED_AT, System.currentTimeMillis()) }
     applyCloudConfig()
     checkCloud()
+  }
+
+  /** This device's cloud keys for the paired device, or null when none were ever set here. */
+  private fun exportCloudKeys(): JSONObject? {
+    val keys = JSONObject(); val models = JSONObject()
+    CloudProvider.entries.forEach { p ->
+      keyPrefs.getString("key_${p.name}", null)?.takeIf { it.isNotBlank() }?.let { keys.put(p.name, it) }
+      keyPrefs.getString("model_${p.name}", null)?.takeIf { it.isNotBlank() }?.let { models.put(p.name, it) }
+    }
+    // Keys saved before sharing existed have no time; they count as the oldest change.
+    val updatedAt = keyPrefs.getLong(KEYS_UPDATED_AT, if (keys.length() > 0) 1L else 0L)
+    if (updatedAt == 0L) return null
+    return JSONObject()
+      .put("updatedAt", updatedAt)
+      .put("provider", _cloudProvider.value.name)
+      .put("keys", keys)
+      .put("models", models)
+      .put("customBaseUrl", keyPrefs.getString("custom_base_url", "") ?: "")
+  }
+
+  /** Takes the paired device's keys when they changed more recently than this device's. */
+  private fun importCloudKeys(incoming: JSONObject): Boolean {
+    val theirs = incoming.optLong("updatedAt", 0L)
+    val mine = keyPrefs.getLong(KEYS_UPDATED_AT, if (_providersWithKeys.value.isNotEmpty()) 1L else 0L)
+    if (theirs <= mine) return false
+    val keys = incoming.optJSONObject("keys") ?: JSONObject()
+    val models = incoming.optJSONObject("models") ?: JSONObject()
+    val provider = CloudProvider.byName(incoming.optString("provider"))
+    keyPrefs.edit {
+      CloudProvider.entries.forEach { p ->
+        putString("key_${p.name}", keys.optString(p.name, ""))
+        putString("model_${p.name}", models.optString(p.name, ""))
+      }
+      putString("provider", provider.name)
+      putString("custom_base_url", incoming.optString("customBaseUrl", ""))
+      putLong(KEYS_UPDATED_AT, theirs)
+    }
+    _cloudProvider.value = provider
+    _cloudKey.value = keys.optString(provider.name, "")
+    _cloudModel.value = models.optString(provider.name, "")
+    _cloudBaseUrl.value = incoming.optString("customBaseUrl", "")
+    _providersWithKeys.value = CloudProvider.entries.filter { keys.optString(it.name, "").isNotBlank() }.toSet()
+    applyCloudConfig()
+    checkCloud()
+    return true
   }
 
   /** Saves the key and model for the chosen provider (and its address, for "Other"), then checks the key. */
@@ -816,6 +871,7 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
       putString("key_${provider.name}", _cloudKey.value)
       putString("model_${provider.name}", _cloudModel.value)
       if (provider == CloudProvider.CUSTOM) putString("custom_base_url", _cloudBaseUrl.value)
+      putLong(KEYS_UPDATED_AT, System.currentTimeMillis())
     }
     _providersWithKeys.value = if (_cloudKey.value.isBlank()) _providersWithKeys.value - provider else _providersWithKeys.value + provider
     applyCloudConfig()

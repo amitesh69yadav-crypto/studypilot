@@ -136,6 +136,8 @@ class SyncHost(private val engine: SyncEngine, private val prefs: KeyValueStore,
     val applied = engine.apply(body.optJSONArray("changes") ?: JSONArray(), fromDevice = deviceId)
     val incomingAccounts = body.optJSONObject("accounts")
     val accountsChanged = incomingAccounts?.let { engine.mergeAccounts(it) } ?: false
+    // Cloud chatbot keys, encrypted with this phone's pairing token; the newer side wins.
+    KeyShare.receive(body.optString("keys", ""), token!!)
 
     // A since from another copy of this database (it was reset) means nothing; send everything.
     val since = if (body.optString("epoch") == engine.deviceId) body.optLong("since", 0L) else 0L
@@ -160,6 +162,7 @@ class SyncHost(private val engine: SyncEngine, private val prefs: KeyValueStore,
       .put("seq", seq)
       .put("changes", changes)
       .put("accounts", engine.accountsPayload())
+      .put("keys", KeyShare.sealed(token) ?: JSONObject.NULL)
       .put("hostName", hostName)
   }
 
@@ -285,6 +288,7 @@ class SyncClient(private val engine: SyncEngine, private val prefs: KeyValueStor
         .put("since", prefs.getLong("pulled", 0L))
         .put("changes", engine.changesSince(pushedFrom, mySeq, excludeDevice = hostId))
         .put("accounts", engine.accountsPayload())
+        .put("keys", KeyShare.sealed(token) ?: JSONObject.NULL)
       val (status, reply) = post(address, "/sync", token, body)
       if (status == 401) {
         unpair()
@@ -294,6 +298,7 @@ class SyncClient(private val engine: SyncEngine, private val prefs: KeyValueStor
       if (status != 200) error(reply.optString("error", "PC answered $status"))
       val epoch = reply.getString("epoch")
       val applied = engine.apply(reply.optJSONArray("changes") ?: JSONArray(), fromDevice = epoch)
+      KeyShare.receive(reply.optString("keys", ""), token)
       val peerAccounts = reply.optJSONObject("accounts")
       val accountsChanged = peerAccounts?.let { engine.mergeAccounts(it) } ?: false
       val now = System.currentTimeMillis()
