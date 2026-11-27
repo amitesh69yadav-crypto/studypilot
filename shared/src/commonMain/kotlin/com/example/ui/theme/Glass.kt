@@ -108,6 +108,13 @@ val DarkGlass = GlassColors(
 val LocalGlass = staticCompositionLocalOf<GlassColors?> { null }
 
 /**
+ * True in the PC app. The glass style runs on both the PC and the phone, so things that only make
+ * sense with a mouse and a big window (the sidebar, header controls, finding a PC on the network)
+ * check this rather than the style.
+ */
+val LocalIsDesktop = staticCompositionLocalOf { false }
+
+/**
  * The sage palette the timetable and chat screens are drawn with. On the phone these are the original
  * fixed colours; on the desktop they follow the glass theme, light or dark.
  */

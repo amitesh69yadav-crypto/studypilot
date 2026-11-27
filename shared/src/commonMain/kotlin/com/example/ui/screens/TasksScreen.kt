@@ -120,17 +120,17 @@ fun TasksScreen(
           Tab(
             selected = selectedTab == 0,
             onClick = { selectedTab = 0 },
-            text = { Text("All (${tasks.size})", fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal) }
+            text = { Text("All (${tasks.size})", fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal, maxLines = 1, softWrap = false, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) }
           )
           Tab(
             selected = selectedTab == 1,
             onClick = { selectedTab = 1 },
-            text = { Text("Exams (${tasks.count { it.type == "EXAM" }})", fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal) }
+            text = { Text("Exams (${tasks.count { it.type == "EXAM" }})", fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal, maxLines = 1, softWrap = false, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) }
           )
           Tab(
             selected = selectedTab == 2,
             onClick = { selectedTab = 2 },
-            text = { Text("Assignments (${tasks.count { it.type == "ASSIGNMENT" }})", fontWeight = if (selectedTab == 2) FontWeight.Bold else FontWeight.Normal) }
+            text = { Text("Assignments (${tasks.count { it.type == "ASSIGNMENT" }})", fontWeight = if (selectedTab == 2) FontWeight.Bold else FontWeight.Normal, maxLines = 1, softWrap = false, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) }
           )
         }
       }

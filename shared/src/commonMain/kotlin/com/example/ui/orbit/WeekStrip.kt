@@ -59,7 +59,10 @@ fun WeekOrbitStrip(
     grow.snapTo(0f)
     grow.animateTo(1f, tween(600, easing = com.example.ui.theme.EaseOutStrong))
   }
-  Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+  androidx.compose.foundation.layout.BoxWithConstraints(modifier.fillMaxWidth()) {
+  // On a phone each day is narrow: shorter labels and just the hours in the middle.
+  val compact = maxWidth < 560.dp
+  Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(if (compact) 2.dp else 6.dp)) {
     week.forEach { date ->
       val blocks = remember(sessions, date) { blocksOn(sessions, date) }
       val planned = remember(blocks) { coveredMinutes(blocks) }
@@ -80,11 +83,11 @@ fun WeekOrbitStrip(
           .hoverable(hover)
           .pointerHoverIcon(PointerIcon.Hand)
           .clickable(interactionSource = hover, indication = null) { onSelect(date) }
-          .padding(vertical = 12.dp, horizontal = 6.dp),
+          .padding(vertical = if (compact) 8.dp else 12.dp, horizontal = if (compact) 2.dp else 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally
       ) {
         Text(
-          if (isToday) "${weekdayShort(date)} · TODAY" else weekdayShort(date),
+          if (isToday && !compact) "${weekdayShort(date)} · TODAY" else weekdayShort(date),
           fontSize = 10.5.sp,
           fontWeight = FontWeight.Bold,
           letterSpacing = 1.1.sp,
@@ -92,7 +95,7 @@ fun WeekOrbitStrip(
           maxLines = 1
         )
         Text(
-          monthDay(date),
+          if (compact) date.takeLast(2).trimStart('0') else monthDay(date),
           fontSize = 12.5.sp,
           fontWeight = FontWeight.SemiBold,
           color = if (isToday) accent else glass.text,
@@ -114,16 +117,17 @@ fun WeekOrbitStrip(
           Canvas(Modifier.fillMaxSize()) { drawMiniOrbit(blocks, glass, grow.value) }
           Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-              if (planned == 0) "—" else formatDuration(planned),
-              fontSize = 13.sp,
+              if (planned == 0) "—" else if (compact) "${(planned + 30) / 60}h" else formatDuration(planned),
+              fontSize = if (compact) 11.sp else 13.sp,
               fontWeight = FontWeight.Bold,
               color = glass.text,
               maxLines = 1
             )
-            Text("planned", fontSize = 10.sp, color = glass.muted, modifier = Modifier.padding(top = 0.dp))
+            if (!compact) Text("planned", fontSize = 10.sp, color = glass.muted)
           }
         }
       }
     }
+  }
   }
 }

@@ -99,7 +99,7 @@ questions to the tutor, and the key points of its answers.
 
 ### Desktop look
 
-The desktop uses its own "glass" style (`AppStyle.Glass`; the phone keeps `Classic`): frosted, see-through
+The app uses a "glass" style (`AppStyle.Glass`) on both the PC and the phone: frosted, see-through
 panels with a light rim over a painted backdrop, a serif for page titles, small spaced capitals for
 labels, pill-shaped buttons, chips and tab tracks, and a near-black pill for the main action. The
 window has a sidebar (pages, tools and a streak card) and a page header with the title, a one-line
@@ -114,6 +114,15 @@ How it's built (`shared/.../ui/theme/Glass.kt`, `GlassComponents.kt`, `ui/GlassS
 screens use drop-in `Card`, `Button`, `OutlinedButton`, `FilterChip` and `TabRow` that are the
 Material components on the phone and glass on the desktop, and the sage palette the timetable and
 chat screens use is read from the theme, so those screens follow light and dark on the desktop too.
+
+### On the phone
+
+The phone has the same design, laid out for a phone: the page title in the serif with round glass
+buttons, a floating glass navigation bar, and the same fonts (bundled in `app/src/main/res/font`) and
+backdrops (Settings > Appearance). Today is one column with the orbit under what's on now. The
+Timetable opens on the Day view; the Week grid scrolls sideways. On touch, sessions on the ring and in
+the week grid are picked up with a long press, so a swipe still scrolls the page. Things only the PC
+needs check `LocalIsDesktop`, not the style.
 
 ### Orbit and week views
 

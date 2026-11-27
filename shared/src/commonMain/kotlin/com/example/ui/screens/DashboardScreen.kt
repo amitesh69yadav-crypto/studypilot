@@ -495,8 +495,12 @@ fun DashboardScreen(
     }
   }
 
-  if (LocalAppStyle.current == AppStyle.Glass) {
-    // Desktop: the page header already shows the date and the streak, so the greeting is left out.
+  val glassStyle = LocalAppStyle.current == AppStyle.Glass
+  androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+  val twoColumns = glassStyle && maxWidth >= 720.dp
+  if (twoColumns) {
+    // Wide glass layout (the PC): the page header already shows the date and the streak, so the
+    // greeting is left out.
     Row(
       modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
       horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -533,12 +537,24 @@ fun DashboardScreen(
       item { greeting() }
       item { whatNow() }
       item { quickActions() }
+      if (glassStyle) {
+        // Phone, glass style: today's orbit, full width, right after what's on now.
+        item {
+          com.example.ui.orbit.OrbitCard(
+            viewModel = viewModel,
+            date = com.example.ui.orbit.todayDate(),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            title = "Today's orbit"
+          )
+        }
+      }
       item { hub() }
       item { stats() }
       item { todaySessions() }
       item { recentTopics() }
       if (pendingTasks.isNotEmpty()) item { deadlines() }
     }
+  }
   }
 
   if (showQuickAlarmDialog) {

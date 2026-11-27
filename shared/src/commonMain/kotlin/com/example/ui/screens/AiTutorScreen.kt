@@ -798,7 +798,7 @@ private fun ChatTabContent(
 
     // Input Bar
     Surface(
-      color = MaterialTheme.colorScheme.surface,
+      color = com.example.ui.theme.pageBackground(MaterialTheme.colorScheme.surface),
       shadowElevation = 0.dp,
       modifier = Modifier.fillMaxWidth()
     ) {

@@ -1,5 +1,16 @@
 package com.example
 
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Box
+import com.example.ui.theme.MeshBackground
+import com.example.ui.theme.BackdropPicker
+import com.example.ui.theme.Backdrop
+import com.example.ui.theme.AppStyle
+import com.example.platform.phoneFonts
+import com.example.platform.LocalAppearanceExtras
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
@@ -68,12 +79,29 @@ class MainActivity : ComponentActivity() {
       }
       val actions = remember { AndroidActions(this) }
       val platform = AndroidPlatform.get(application)
+
+      // The same painted backdrops as the PC: one for light mode, one for dark, both remembered.
+      val uiPrefs = remember { platform.prefs("studypilot_ui_prefs") }
+      var lightBackdrop by remember { mutableStateOf(Backdrop.byName(uiPrefs.getString("backdrop_light", null), Backdrop.OliveMist)) }
+      var darkBackdrop by remember { mutableStateOf(Backdrop.byName(uiPrefs.getString("backdrop_dark", null), Backdrop.DarkForest)) }
+      val backdrop = if (isDark) darkBackdrop else lightBackdrop
+      val pickBackdrop: (Backdrop) -> Unit = { picked ->
+        if (picked.dark) darkBackdrop = picked else lightBackdrop = picked
+        uiPrefs.edit { putString(if (picked.dark) "backdrop_dark" else "backdrop_light", picked.name) }
+        viewModel.setThemeMode(if (picked.dark) "dark" else "light")
+      }
+
       CompositionLocalProvider(
         LocalPlatformActions provides actions,
-        LocalDeviceSyncCard provides { PcSyncCard(platform.syncClient) }
+        LocalDeviceSyncCard provides { PcSyncCard(platform.syncClient) },
+        LocalAppearanceExtras provides { BackdropPicker(current = backdrop, onPick = pickBackdrop) }
       ) {
-        StudyPilotTheme(darkTheme = isDark) {
-          StudyPilotApp(viewModel = viewModel)
+        // The phone uses the same glass design as the PC, laid out for a phone.
+        StudyPilotTheme(darkTheme = isDark, style = AppStyle.Glass, fonts = phoneFonts()) {
+          Box(Modifier.fillMaxSize()) {
+            MeshBackground(backdrop)
+            StudyPilotApp(viewModel = viewModel)
+          }
         }
       }
     }

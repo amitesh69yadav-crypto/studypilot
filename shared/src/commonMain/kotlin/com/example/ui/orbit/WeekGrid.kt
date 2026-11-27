@@ -285,6 +285,13 @@ fun WeekGrid(
                           break
                         }
                         total += change.positionChange()
+                        if (!started && down.type == androidx.compose.ui.input.pointer.PointerType.Touch &&
+                          change.uptimeMillis - down.uptimeMillis < viewConfiguration.longPressTimeoutMillis &&
+                          total.getDistance() > viewConfiguration.touchSlop
+                        ) {
+                          // A finger that moves straight away is scrolling the grid, not picking up the block.
+                          break
+                        }
                         if (!started && mode != null) {
                           // Resizing waits for real vertical travel; moving for travel in any direction.
                           val travelled = if (mode == DragMode.Move) total.getDistance() else kotlin.math.abs(total.y)

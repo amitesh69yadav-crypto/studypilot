@@ -1,5 +1,7 @@
 package com.example.desktop
 
+import com.example.ui.theme.BackdropPicker
+import com.example.ui.theme.LocalIsDesktop
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -92,7 +94,8 @@ fun main() {
       CompositionLocalProvider(
         LocalPlatformActions provides actions,
         LocalDeviceSyncCard provides { PhonePairingCard(platform.syncHost, serverRunning = server != null) },
-        LocalAppearanceExtras provides { BackdropPicker(current = backdrop, onPick = pickBackdrop) }
+        LocalAppearanceExtras provides { BackdropPicker(current = backdrop, onPick = pickBackdrop) },
+        LocalIsDesktop provides true
       ) {
         StudyPilotTheme(darkTheme = dark, style = AppStyle.Glass, fonts = desktopFonts()) {
           Box(Modifier.fillMaxSize()) {

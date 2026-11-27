@@ -204,7 +204,10 @@ private fun OrbitPanel(
     }
     Spacer(Modifier.height(6.dp))
     Text(
-      if (view == OrbitView.Planned) "Drag a plan to move it; drag its coloured ends to resize. Click an empty part of the ring to add one."
+      if (view == OrbitView.Planned) {
+        if (com.example.ui.theme.LocalIsDesktop.current) "Drag a plan to move it; drag its coloured ends to resize. Click an empty part of the ring to add one."
+        else "Press and hold a plan to move it; hold its coloured ends to resize. Tap an empty part of the ring to add one."
+      }
       else "Done sessions in colour; the rest of the plan is faded.",
       fontSize = 12.sp,
       color = glass.muted

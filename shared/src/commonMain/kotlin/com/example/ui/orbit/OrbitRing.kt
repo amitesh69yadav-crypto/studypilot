@@ -1,5 +1,6 @@
 package com.example.ui.orbit
 
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.BlendMode
@@ -211,6 +212,8 @@ fun OrbitRing(
   plan: ColorPlan = remember(blocks) { colorPlanFor(blocks) }
 ) {
   val split = layers == OrbitLayers.Layers
+  // On a phone the ring sits in a scrolling page, so arcs are picked up with a long press.
+  val touchFirst = !com.example.ui.theme.LocalIsDesktop.current
   val canEdit = onRetime != null && view == OrbitView.Planned
   val now by produceState(nowMinutes()) {
     while (true) {
@@ -289,17 +292,21 @@ fun OrbitRing(
             }
           }
         }
-        .pointerInput(view, split, canEdit) {
+        .pointerInput(view, split, canEdit, touchFirst) {
           if (!canEdit) return@pointerInput
-          detectDragGestures(
-            onDragStart = { pos ->
+          val pickUp: suspend androidx.compose.ui.input.pointer.PointerInputScope.(
+            (Offset) -> Unit, (androidx.compose.ui.input.pointer.PointerInputChange, Offset) -> Unit, () -> Unit, () -> Unit
+          ) -> Unit = if (touchFirst) { s, d, e, c -> detectDragGesturesAfterLongPress(onDragStart = s, onDrag = d, onDragEnd = e, onDragCancel = c) }
+          else { s, d, e, c -> detectDragGestures(onDragStart = s, onDrag = d, onDragEnd = e, onDragCancel = c) }
+          pickUp(
+            { pos ->
               val area = Size(size.width.toFloat(), size.height.toFloat())
               drag = hitTest(pos, area, density)?.let { (block, mode) ->
                 RingDrag(block, mode, minuteAt(pos, RingGeometry(area, density).center), 0f)
               }
             },
-            onDrag = { change, _ ->
-              val d = drag ?: return@detectDragGestures
+            { change, _ ->
+              val d = drag ?: return@pickUp
               change.consume()
               val area = Size(size.width.toFloat(), size.height.toFloat())
               val minute = minuteAt(change.position, RingGeometry(area, density).center)
@@ -309,14 +316,14 @@ fun OrbitRing(
               if (diff < -DAY_MINUTES / 2) diff += DAY_MINUTES
               drag = d.copy(last = minute, delta = d.delta + diff)
             },
-            onDragEnd = {
+            {
               drag?.let { d ->
                 val (s, e) = d.span()
                 if (s != d.block.start || e != d.block.end) currentRetime?.invoke(d.block, s, e)
               }
               drag = null
             },
-            onDragCancel = { drag = null }
+            { drag = null }
           )
         }
     ) {

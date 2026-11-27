@@ -404,7 +404,7 @@ private fun PcSection(viewModel: StudyPilotViewModel) {
       )
     ) { Text("Save and test") }
     // Looking for a PC on the network only makes sense from the phone.
-    if (com.example.ui.theme.LocalGlass.current == null) OutlinedButton(onClick = { viewModel.findPc() }, enabled = !checking) { Text("Find") }
+    if (!com.example.ui.theme.LocalIsDesktop.current) OutlinedButton(onClick = { viewModel.findPc() }, enabled = !checking) { Text("Find") }
     if (checking) CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
   }
   status?.let {

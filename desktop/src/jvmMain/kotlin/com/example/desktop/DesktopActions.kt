@@ -36,5 +36,24 @@ class DesktopActions : PlatformActions {
 
   override fun addToCalendar(session: TimetableSession) = openUrl(ScheduleLogic.getGoogleCalendarWebUrl(session))
 
+  /** Asks where to save with the Windows Save dialog, writes the file, then opens it. */
+  override fun saveFile(fileName: String, mimeType: String, bytes: ByteArray) {
+    val dialog = java.awt.FileDialog(null as java.awt.Frame?, "Save report", java.awt.FileDialog.SAVE).apply {
+      directory = System.getProperty("user.home") + java.io.File.separator + "Documents"
+      file = fileName
+      isVisible = true
+    }
+    val name = dialog.file ?: return
+    val ext = fileName.substringAfterLast('.', "")
+    val target = java.io.File(dialog.directory, if (ext.isNotEmpty() && !name.endsWith(".$ext", ignoreCase = true)) "$name.$ext" else name)
+    try {
+      target.writeBytes(bytes)
+      showMessage("Saved ${target.name}")
+      runCatching { Desktop.getDesktop().open(target) }
+    } catch (e: Exception) {
+      showMessage("Couldn't save the file: ${e.message ?: "unknown error"}")
+    }
+  }
+
   override val googleSignIn: (suspend () -> PlatformActions.GoogleAccount?)? = null
 }

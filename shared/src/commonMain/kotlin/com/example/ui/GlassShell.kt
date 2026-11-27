@@ -1,5 +1,8 @@
 package com.example.ui
 
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.ui.graphics.graphicsLayer
 import com.example.ui.theme.pressable
 import androidx.compose.runtime.rememberUpdatedState
@@ -327,4 +330,98 @@ fun HeaderControls(content: @Composable () -> Unit): Boolean {
     onDispose { slot.value = null }
   }
   return true
+}
+
+/** The phone's page header in the glass style: the page title in the serif and round glass buttons. */
+@Composable
+fun GlassPhoneTopBar(viewModel: StudyPilotViewModel, current: Screen, showBack: Boolean, pendingTaskCount: Int) {
+  val glass = LocalGlass.current ?: return
+  val user by viewModel.currentUser.collectAsState()
+  val (title, _) = pageTitle(current)
+  Row(
+    verticalAlignment = Alignment.CenterVertically,
+    modifier = Modifier
+      .fillMaxWidth()
+      .statusBarsPadding()
+      .padding(start = 20.dp, end = 16.dp, top = 10.dp, bottom = 6.dp)
+  ) {
+    if (showBack) {
+      GlassCircleButton(Icons.AutoMirrored.Filled.ArrowBack, "Back", glass) { viewModel.navigateTo(Screen.Dashboard) }
+      Spacer(Modifier.width(12.dp))
+    }
+    Text(
+      title,
+      style = MaterialTheme.typography.displaySmall.copy(fontSize = 30.sp, lineHeight = 36.sp),
+      color = glass.text,
+      maxLines = 1,
+      overflow = TextOverflow.Ellipsis,
+      modifier = Modifier.weight(1f)
+    )
+    Box {
+      GlassCircleButton(Icons.AutoMirrored.Filled.Assignment, "Tasks", glass) { viewModel.navigateTo(Screen.Tasks) }
+      if (pendingTaskCount > 0 && current != Screen.Tasks) {
+        Box(
+          Modifier.align(Alignment.TopEnd).size(16.dp).clip(CircleShape).background(glass.ink),
+          contentAlignment = Alignment.Center
+        ) {
+          Text(if (pendingTaskCount > 9) "9+" else pendingTaskCount.toString(), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = glass.onInk)
+        }
+      }
+    }
+    Spacer(Modifier.width(8.dp))
+    Box(
+      Modifier
+        .size(40.dp)
+        .pressable({ viewModel.navigateTo(Screen.Settings) }) { glass(CircleShape, glass, if (current == Screen.Settings) glass.selected else glass.fill) },
+      contentAlignment = Alignment.Center
+    ) {
+      Text(user.avatarInitials, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = glass.text)
+    }
+  }
+}
+
+/** The phone's navigation: a floating glass bar with the selected page on a lighter pill. */
+@Composable
+fun GlassPhoneNavBar(items: List<Triple<Screen, String, ImageVector>>, current: Screen, onSelect: (Screen) -> Unit) {
+  val glass = LocalGlass.current ?: return
+  Box(
+    Modifier
+      .fillMaxWidth()
+      .navigationBarsPadding()
+      .padding(start = 14.dp, end = 14.dp, top = 6.dp, bottom = 10.dp)
+  ) {
+    Row(
+      Modifier
+        .fillMaxWidth()
+        .height(64.dp)
+        .glass(RoundedCornerShape(32.dp), glass)
+        .padding(6.dp),
+      verticalAlignment = Alignment.CenterVertically
+    ) {
+      items.forEach { (screen, label, icon) ->
+        val selected = screen == current
+        Column(
+          Modifier
+            .weight(1f)
+            .fillMaxHeight()
+            .pressable({ onSelect(screen) }) {
+              clip(RoundedCornerShape(26.dp)).then(if (selected) Modifier.background(glass.selected) else Modifier)
+            },
+          horizontalAlignment = Alignment.CenterHorizontally,
+          verticalArrangement = Arrangement.Center
+        ) {
+          Icon(icon, contentDescription = label, tint = if (selected) glass.text else glass.muted, modifier = Modifier.size(20.dp))
+          Spacer(Modifier.height(2.dp))
+          Text(
+            label,
+            fontSize = 10.5.sp,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            color = if (selected) glass.text else glass.muted,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+          )
+        }
+      }
+    }
+  }
 }

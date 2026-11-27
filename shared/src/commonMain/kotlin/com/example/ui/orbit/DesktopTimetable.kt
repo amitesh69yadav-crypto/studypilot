@@ -1,5 +1,7 @@
 package com.example.ui.orbit
 
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.horizontalScroll
 import com.example.ui.theme.pressable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -68,11 +70,47 @@ fun DesktopTimetable(viewModel: StudyPilotViewModel, showAddDialogOnInit: Boolea
     return
   }
   val (sessions, save) = rememberEditableSessions(viewModel)
-  var mode by rememberSaveable { mutableStateOf(TimetableMode.Week) }
+  val isDesktop = com.example.ui.theme.LocalIsDesktop.current
+  // The PC opens on the week grid; a phone on the day, where the orbit fits the screen.
+  var mode by rememberSaveable { mutableStateOf(if (isDesktop) TimetableMode.Week else TimetableMode.Day) }
   var selected by rememberSaveable { mutableStateOf(todayDate()) }
   var dialog by remember { mutableStateOf<SessionDialog?>(if (showAddDialogOnInit) SessionDialog.New(todayDate(), nextSlot()) else null) }
   val today = todayDate()
   val week = remember(selected) { weekOf(selected) }
+
+  // On a phone: the view switch and Add on one row, the date and its arrows on the next.
+  val compactToolbar: @Composable () -> Unit = {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+      Row(verticalAlignment = Alignment.CenterVertically) {
+        SegmentedPills(TimetableMode.entries.map { it.label }, mode.ordinal, glass) { mode = TimetableMode.entries[it] }
+        Spacer(Modifier.weight(1f))
+        if (mode != TimetableMode.Planner) {
+          InkPill("Add", glass) { dialog = SessionDialog.New(selected, if (selected == today) nextSlot() else 9 * 60) }
+        }
+      }
+      if (mode != TimetableMode.Planner) {
+        val step = if (mode == TimetableMode.Week) 7 else 1
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          GlassCircleButton(Icons.Default.ChevronLeft, if (step == 7) "Previous week" else "Previous day", glass) { selected = shiftDate(selected, -step) }
+          Text(
+            if (mode == TimetableMode.Week) weekRangeLabel(week) else longDate(selected),
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = glass.text,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            modifier = Modifier.weight(1f),
+            maxLines = 1
+          )
+          val away = if (mode == TimetableMode.Week) today !in week else selected != today
+          if (away) {
+            GlassPill(if (mode == TimetableMode.Week) "This week" else "Today", glass) { selected = today }
+            Spacer(Modifier.width(8.dp))
+          }
+          GlassCircleButton(Icons.Default.ChevronRight, if (step == 7) "Next week" else "Next day", glass) { selected = shiftDate(selected, step) }
+        }
+      }
+    }
+  }
 
   // View switch, week navigation and Add. On the desktop they sit in the page header beside the title.
   val toolbar: @Composable () -> Unit = {
@@ -110,8 +148,10 @@ fun DesktopTimetable(viewModel: StudyPilotViewModel, showAddDialogOnInit: Boolea
       }
   }
   }
+  androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+  val narrow = maxWidth < 700.dp
   Column(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-    if (!com.example.ui.HeaderControls { toolbar() }) toolbar()
+    if (narrow) compactToolbar() else if (!com.example.ui.HeaderControls { toolbar() }) toolbar()
 
     when (mode) {
       TimetableMode.Week -> Column(
@@ -120,7 +160,10 @@ fun DesktopTimetable(viewModel: StudyPilotViewModel, showAddDialogOnInit: Boolea
           .fillMaxWidth()
           .padding(bottom = 16.dp)
           .glass(RoundedCornerShape(26.dp), glass)
+          // On a phone the seven days keep a readable width and the grid scrolls sideways.
+          .then(if (narrow) Modifier.horizontalScroll(rememberScrollState()) else Modifier)
       ) {
+       Column(if (narrow) Modifier.width(58.dp + 104.dp * 7).fillMaxHeight() else Modifier.fillMaxSize()) {
         WeekGridHeader(sessions, week, glass)
         HorizontalDivider(color = glass.insetRim)
         WeekGrid(
@@ -135,19 +178,26 @@ fun DesktopTimetable(viewModel: StudyPilotViewModel, showAddDialogOnInit: Boolea
           onAdd = { date, minute -> dialog = SessionDialog.New(date, minute) },
           modifier = Modifier.weight(1f).padding(top = 4.dp)
         )
+       }
       }
       TimetableMode.Day -> Column(
         Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
       ) {
         WeekOrbitStrip(sessions, week, selected, glass, onSelect = { selected = it })
-        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-          OrbitCard(viewModel, selected, Modifier.weight(1.55f))
-          DayAgenda(viewModel, sessions, selected, glass, Modifier.weight(1f)) { dialog = SessionDialog.Edit(it) }
+        if (narrow) {
+          OrbitCard(viewModel, selected, Modifier.fillMaxWidth())
+          DayAgenda(viewModel, sessions, selected, glass, Modifier.fillMaxWidth()) { dialog = SessionDialog.Edit(it) }
+        } else {
+          Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            OrbitCard(viewModel, selected, Modifier.weight(1.55f))
+            DayAgenda(viewModel, sessions, selected, glass, Modifier.weight(1f)) { dialog = SessionDialog.Edit(it) }
+          }
         }
       }
       TimetableMode.Planner -> Box(Modifier.weight(1f)) { TimetableScreen(viewModel) }
     }
+  }
   }
   SessionDialogHost(viewModel, dialog) { dialog = null }
 }

@@ -362,7 +362,12 @@ fun StudyPilotApp(viewModel: StudyPilotViewModel) {
         contentWindowInsets = WindowInsets.safeDrawing,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-      if (currentScreen != Screen.ActiveQuiz && currentScreen != Screen.Login) {
+      if (LocalAppStyle.current == AppStyle.Glass) {
+        // Phone, glass style: the serif page title and round glass buttons over the backdrop.
+        if (currentScreen != Screen.ActiveQuiz && currentScreen != Screen.Login) {
+          com.example.ui.GlassPhoneTopBar(viewModel, currentScreen, showBack = isSubScreen, pendingTaskCount = pendingTaskCount)
+        }
+      } else if (currentScreen != Screen.ActiveQuiz && currentScreen != Screen.Login) {
         CenterAlignedTopAppBar(
           title = {
             Text(
@@ -455,7 +460,15 @@ fun StudyPilotApp(viewModel: StudyPilotViewModel) {
       }
     },
     bottomBar = {
-      if (!isWideScreen && currentScreen != Screen.ActiveQuiz && currentScreen != Screen.Login) {
+      if (LocalAppStyle.current == AppStyle.Glass) {
+        if (!isWideScreen && currentScreen != Screen.ActiveQuiz && currentScreen != Screen.Login) {
+          com.example.ui.GlassPhoneNavBar(
+            items = navItems.map { (screen, label, icon) -> Triple(screen, if (screen == Screen.Dashboard) "Today" else label, icon) },
+            current = currentScreen,
+            onSelect = { viewModel.navigateTo(it) }
+          )
+        }
+      } else if (!isWideScreen && currentScreen != Screen.ActiveQuiz && currentScreen != Screen.Login) {
         NavigationBar(
           containerColor = MaterialTheme.colorScheme.surface,
           contentColor = MaterialTheme.colorScheme.primary,
