@@ -292,8 +292,9 @@ class StudyPilotUnitTest {
     }
 
     val summary = com.example.data.ai.LocalAiEngine.summarizeMaterial(topic.title, topic.descriptionNotes)
-    assertTrue(summary.contains("Executive Summary"))
-    assertTrue(summary.contains("Key Theoretical Takeaways"))
+    // The built-in summary gives the gist and the main points, without Q:/A: labels or Markdown marks.
+    assertTrue(summary.startsWith("**In short:**"))
+    assertTrue(!summary.contains("Q:") && !summary.contains("###"))
   }
 
   @Test
