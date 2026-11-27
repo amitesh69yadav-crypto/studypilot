@@ -877,7 +877,7 @@ fun TimetableScreen(
                         ) {
                           Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
                           Spacer(modifier = Modifier.width(4.dp))
-                          Text("+ Custom Slot", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+                          Text("+ Custom slot", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
                         }
                       }
                     }
@@ -1064,8 +1064,8 @@ fun TimetableScreen(
               item {
                 EmptyState(
                   icon = Icons.AutoMirrored.Filled.FormatListBulleted,
-                  title = "No custom formats yet",
-                  description = "Create formats for your academic routines, exam deep work days, or weekend revisions.",
+                  title = "No templates yet",
+                  description = "Save a day's layout, like a lab day or a revision day, and reuse it.",
                   actionButton = {
                     Button(
                       onClick = { showCreateNewFormatDialog = true },
@@ -1075,7 +1075,7 @@ fun TimetableScreen(
                       ),
                       shape = RoundedCornerShape(10.dp)
                     ) {
-                      Text("Create format", fontWeight = FontWeight.Bold)
+                      Text("Create template", fontWeight = FontWeight.Bold)
                     }
                   }
                 )
@@ -1130,7 +1130,7 @@ fun TimetableScreen(
                 EmptyState(
                   icon = Icons.Default.CalendarMonth,
                   title = "No events scheduled",
-                  description = "Your schedule agenda is currently empty.",
+                  description = "Add a session or apply a template.",
                   actionButton = {
                     Button(
                       onClick = { showAddDialog = true },
@@ -1525,7 +1525,7 @@ fun CopyDayScheduleDialog(
         verticalArrangement = Arrangement.spacedBy(12.dp)
       ) {
         Text(
-          text = "Replicate all scheduled lecture slots and study alarms from one date to another date.",
+          text = "Copy every session and alarm from one day to another.",
           fontSize = 12.sp,
           color = PaletteDarkText
         )
@@ -1534,7 +1534,7 @@ fun CopyDayScheduleDialog(
         OutlinedTextField(
           value = currentSourceDate,
           onValueChange = { currentSourceDate = it },
-          label = { Text("Source Date (Copy From)", color = PaletteDarkText) },
+          label = { Text("From", color = PaletteDarkText) },
           shape = RoundedCornerShape(10.dp),
           modifier = Modifier.fillMaxWidth()
         )
@@ -1543,7 +1543,7 @@ fun CopyDayScheduleDialog(
         OutlinedTextField(
           value = targetDate,
           onValueChange = { targetDate = it },
-          label = { Text("Target Date (Copy To)", color = PaletteDarkText) },
+          label = { Text("To", color = PaletteDarkText) },
           trailingIcon = {
             IconButton(onClick = {
               pickTargetDate(targetDate)
@@ -1566,7 +1566,7 @@ fun CopyDayScheduleDialog(
           )
           Spacer(modifier = Modifier.width(4.dp))
           Text(
-            text = "Clear target date before copying",
+            text = "Clear the other day first",
             fontSize = 12.sp,
             fontWeight = FontWeight.Medium,
             color = PaletteDarkText
@@ -1631,7 +1631,7 @@ fun ApplyFormatDialog(
         )
 
         if (formats.isEmpty()) {
-          Text("No formats saved yet. Create a format first!", color = PaletteDarkText, fontWeight = FontWeight.Bold)
+          Text("No templates yet. Make one first.", color = PaletteDarkText, fontWeight = FontWeight.Bold)
         } else {
           formats.forEach { format ->
             val isSelected = selectedFormat?.id == format.id
@@ -1707,7 +1707,7 @@ fun SaveDayAsFormatDialog(
   AlertDialog(
     onDismissRequest = onDismiss,
     title = {
-      Text("Save Day as Reusable Format", fontWeight = FontWeight.Bold, color = PaletteDarkText)
+      Text("Save day as template", fontWeight = FontWeight.Bold, color = PaletteDarkText)
     },
     text = {
       Column(
@@ -1732,7 +1732,7 @@ fun SaveDayAsFormatDialog(
         OutlinedTextField(
           value = description,
           onValueChange = { description = it },
-          label = { Text("Description (Optional)", color = PaletteDarkText) },
+          label = { Text("Description (optional)", color = PaletteDarkText) },
           shape = RoundedCornerShape(10.dp),
           modifier = Modifier.fillMaxWidth()
         )
@@ -1808,7 +1808,7 @@ fun CreateNewFormatDialog(
           modifier = Modifier.fillMaxWidth()
         )
 
-        Text("Select Base Template Layout:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = PaletteDarkText)
+        Text("Start from", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = PaletteDarkText)
 
         // Preset 0: Academic 3-Lecture
         Surface(
@@ -1977,7 +1977,7 @@ fun CreateNewFormatDialog(
         ),
         shape = RoundedCornerShape(10.dp)
       ) {
-        Text("Save new format", fontWeight = FontWeight.Bold)
+        Text("Save template", fontWeight = FontWeight.Bold)
       }
     },
     dismissButton = {
@@ -2218,7 +2218,7 @@ fun SessionEditDialog(
         verticalArrangement = Arrangement.spacedBy(8.dp)
       ) {
         Text(
-          text = "Category Type:",
+          text = "Type",
           style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
           color = PaletteDarkText
         )
@@ -2279,7 +2279,7 @@ fun SessionEditDialog(
               value = selectedSubject?.name ?: "No Subject (Optional)",
               onValueChange = {},
               readOnly = true,
-              label = { Text("Academic Subject (Optional)", color = PaletteDarkText) },
+              label = { Text("Subject (optional)", color = PaletteDarkText) },
               trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedDropdown) },
               shape = RoundedCornerShape(10.dp),
               modifier = Modifier
@@ -2292,7 +2292,7 @@ fun SessionEditDialog(
               onDismissRequest = { expandedDropdown = false }
             ) {
               DropdownMenuItem(
-                text = { Text("No Subject (General / Alarm)", color = PaletteDarkText, fontWeight = FontWeight.SemiBold) },
+                text = { Text("No subject", color = PaletteDarkText, fontWeight = FontWeight.SemiBold) },
                 onClick = {
                   selectedSubject = null
                   expandedDropdown = false
@@ -2312,7 +2312,7 @@ fun SessionEditDialog(
         } else {
           // Routine Chip Quick Preset Selectors
           Text(
-            text = "Routine Preset Suggestions:",
+            text = "Suggestions",
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
             color = PaletteDarkText
@@ -2381,7 +2381,7 @@ fun SessionEditDialog(
               .testTag("schedule_start_time_picker")
           )
           com.example.ui.components.TimeScrollPickerField(
-            label = "End Time (Optional)",
+            label = "End time (optional)",
             timeValue = endTime,
             onTimeChange = { endTime = it },
             emptyText = "Alarm Only",
@@ -2403,7 +2403,7 @@ fun SessionEditDialog(
         OutlinedTextField(
           value = location,
           onValueChange = { location = it },
-          label = { Text("Campus / Location (Optional)", color = PaletteDarkText) },
+          label = { Text("Location (optional)", color = PaletteDarkText) },
           placeholder = { Text("Optional (e.g. Room 101, Home)") },
           shape = RoundedCornerShape(10.dp),
           modifier = Modifier

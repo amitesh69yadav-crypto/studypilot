@@ -404,7 +404,7 @@ fun DashboardScreen(
           elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
           Text(
-            text = "No classes scheduled today.",
+            text = "Nothing scheduled today.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,

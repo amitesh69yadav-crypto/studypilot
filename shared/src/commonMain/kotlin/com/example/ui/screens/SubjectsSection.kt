@@ -230,7 +230,7 @@ fun SubjectHeader(group: SubjectGroup, quizBusy: Boolean, onBack: () -> Unit, on
         ) {
           Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
           Spacer(Modifier.width(8.dp))
-          Text(if (quizBusy) "Assembling..." else "Quiz this subject", fontWeight = FontWeight.SemiBold, maxLines = 1)
+          Text(if (quizBusy) "Writing quiz..." else "Quiz this subject", fontWeight = FontWeight.SemiBold, maxLines = 1)
         }
         OutlinedButton(onClick = onAddTopic, shape = RoundedCornerShape(12.dp), modifier = Modifier.heightIn(min = 48.dp)) {
           Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))

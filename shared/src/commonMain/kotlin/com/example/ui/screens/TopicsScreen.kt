@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.layout.widthIn
 import com.example.platform.PlatformBackHandler
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -145,15 +146,19 @@ fun TopicsScreen(
       PlatformBackHandler(enabled = openGroup != null) { openSubjectId = null }
 
       if (openGroup == null) {
-        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-          listOf(false to "Subjects", true to "All topics").forEachIndexed { index, (all, label) ->
-            SegmentedButton(
-              selected = showAllTopics == all,
-              onClick = { showAllTopics = all },
-              shape = SegmentedButtonDefaults.itemShape(index, 2)
-            ) { Text(label) }
+        // On the desktop these sit in the page header beside the title.
+        val viewSwitch: @Composable () -> Unit = {
+          SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+            listOf(false to "Subjects", true to "All topics").forEachIndexed { index, (all, label) ->
+              SegmentedButton(
+                selected = showAllTopics == all,
+                onClick = { showAllTopics = all },
+                shape = SegmentedButtonDefaults.itemShape(index, 2)
+              ) { Text(label) }
+            }
           }
         }
+        if (!com.example.ui.HeaderControls { androidx.compose.foundation.layout.Box(Modifier.widthIn(max = 560.dp)) { viewSwitch() } }) viewSwitch()
       }
 
       when {
@@ -500,7 +505,7 @@ fun AddTopicDialog(
         OutlinedTextField(
           value = title,
           onValueChange = { title = it },
-          label = { Text("Topic Title (e.g. Graph Algorithms)") },
+          label = { Text("Topic (e.g. Graph Algorithms)") },
           shape = RoundedCornerShape(12.dp),
           modifier = Modifier.fillMaxWidth(),
           singleLine = true
@@ -549,7 +554,7 @@ fun AddTopicDialog(
             OutlinedTextField(
               value = pastedNotes,
               onValueChange = { pastedNotes = it },
-              label = { Text("Paste Lecture Slides or Text Here") },
+              label = { Text("Paste notes or slide text") },
               shape = RoundedCornerShape(12.dp),
               modifier = Modifier.fillMaxWidth(),
               minLines = 4,
@@ -697,7 +702,7 @@ fun TopicDetailDialog(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                   Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(16.dp))
                   Spacer(modifier = Modifier.width(8.dp))
-                  Text("AI Concept Summary", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.secondary)
+                  Text("AI summary", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.secondary)
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(topic.aiSummary, style = MaterialTheme.typography.bodySmall)
@@ -717,7 +722,7 @@ fun TopicDetailDialog(
             if (isAiLoading) {
               CircularProgressIndicator(modifier = Modifier.size(18.dp), color = MaterialTheme.colorScheme.onPrimary)
               Spacer(modifier = Modifier.width(8.dp))
-              Text("Analyzing Material...")
+              Text("Summarizing...")
             } else {
               Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
               Spacer(modifier = Modifier.width(8.dp))
@@ -735,14 +740,14 @@ fun TopicDetailDialog(
           ) {
             Icon(Icons.Default.Psychology, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Ask AI Tutor about this Topic")
+            Text("Ask the tutor about this")
           }
         }
 
         // Manual Spaced Repetition Overrides
         item {
           Column {
-            Text("Manual Mastery Adjustment:", style = MaterialTheme.typography.labelMedium)
+            Text("Set mastery", style = MaterialTheme.typography.labelMedium)
             Spacer(modifier = Modifier.height(8.dp))
             Row(
               modifier = Modifier.fillMaxWidth(),

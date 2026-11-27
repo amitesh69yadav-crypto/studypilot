@@ -931,7 +931,7 @@ fun SettingsScreen(
     AlertDialog(
       onDismissRequest = { showDeleteSampleDataDialog = false },
       icon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
-      title = { Text("Delete All Sample Data?", fontWeight = FontWeight.Bold) },
+      title = { Text("Delete all data?", fontWeight = FontWeight.Bold) },
       text = {
         Text("Delete all subjects, sessions, tasks and topics in this profile? This can't be undone, and sample data won't come back on its own.")
       },
@@ -966,7 +966,7 @@ fun AddSubjectDialog(
 
   AlertDialog(
     onDismissRequest = onDismiss,
-    title = { Text("Add Subject / Course", fontWeight = FontWeight.Bold) },
+    title = { Text("Add subject", fontWeight = FontWeight.Bold) },
     text = {
       Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         OutlinedTextField(

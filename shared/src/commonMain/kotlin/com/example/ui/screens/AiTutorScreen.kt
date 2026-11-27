@@ -158,23 +158,13 @@ fun AiTutorScreen(
     }
   }
 
-  Column(
-    modifier = Modifier.fillMaxSize()
-  ) {
-    // 1. Top Mode Selector Bar (Chat vs History tabs)
-    Surface(
-      color = com.example.ui.theme.pageBackground(MaterialTheme.colorScheme.surface),
-      shadowElevation = 0.dp,
-      modifier = Modifier.fillMaxWidth()
+  // Chat / History and the tutor's buttons. On the desktop they sit in the page header.
+  val tutorTopBar: @Composable (inHeader: Boolean) -> Unit = { inHeader ->
+    Row(
+      modifier = if (inHeader) Modifier else Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+      horizontalArrangement = if (inHeader) Arrangement.spacedBy(12.dp) else Arrangement.SpaceBetween,
+      verticalAlignment = Alignment.CenterVertically
     ) {
-      Column {
-        Row(
-          modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
-          horizontalArrangement = Arrangement.SpaceBetween,
-          verticalAlignment = Alignment.CenterVertically
-        ) {
           // Tab Switcher Buttons (Symmetrical Pill Switcher)
           Surface(
             shape = RoundedCornerShape(24.dp),
@@ -283,6 +273,20 @@ fun AiTutorScreen(
             }
           }
         }
+  }
+  val topBarInHeader = com.example.ui.HeaderControls { tutorTopBar(true) }
+
+  Column(
+    modifier = Modifier.fillMaxSize()
+  ) {
+    // 1. Top Mode Selector Bar (Chat vs History tabs)
+    Surface(
+      color = com.example.ui.theme.pageBackground(MaterialTheme.colorScheme.surface),
+      shadowElevation = 0.dp,
+      modifier = Modifier.fillMaxWidth()
+    ) {
+      Column {
+        if (!topBarInHeader) tutorTopBar(false)
 
         // 2. Subject Scoping Selector (collapsible to maximize chat space)
         AnimatedVisibility(visible = isHeaderExpanded || selectedTab == TutorTab.HISTORY) {
@@ -394,11 +398,11 @@ fun AiTutorScreen(
     var editedInstruction by remember { mutableStateOf(systemInstruction) }
     AlertDialog(
       onDismissRequest = { showSystemInstructionDialog = false },
-      title = { Text("AI Tutor Role & Academic Persona", fontWeight = FontWeight.Bold) },
+      title = { Text("Tutor style", fontWeight = FontWeight.Bold) },
       text = {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
           Text(
-            text = "Fine-tune how the AI Tutor explains concepts and approaches problems:",
+            text = "How should the tutor explain things?",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
           )
@@ -473,7 +477,7 @@ fun AiTutorScreen(
             showSystemInstructionDialog = false
           }
         ) {
-          Text("Save persona")
+          Text("Save style")
         }
       },
       dismissButton = {
@@ -488,9 +492,9 @@ fun AiTutorScreen(
   if (showClearHistoryDialog) {
     AlertDialog(
       onDismissRequest = { showClearHistoryDialog = false },
-      title = { Text("Clear All Tutor History?", fontWeight = FontWeight.Bold) },
+      title = { Text("Clear tutor history?", fontWeight = FontWeight.Bold) },
       text = {
-        Text("This will permanently delete all past saved tutor conversations across all subjects.")
+        Text("This deletes every saved tutor chat for all subjects. It can't be undone.")
       },
       confirmButton = {
         Button(

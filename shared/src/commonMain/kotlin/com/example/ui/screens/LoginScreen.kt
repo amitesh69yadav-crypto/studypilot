@@ -762,7 +762,7 @@ private fun AuthFormContent(
       OutlinedTextField(
         value = university,
         onValueChange = onUniversityChange,
-        label = { Text("University / College *") },
+        label = { Text("University or college *") },
         leadingIcon = { Icon(Icons.Default.School, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
         singleLine = true,
         shape = RoundedCornerShape(12.dp),
@@ -780,7 +780,7 @@ private fun AuthFormContent(
       OutlinedTextField(
         value = studentId,
         onValueChange = onStudentIdChange,
-        label = { Text("Student ID (Optional)") },
+        label = { Text("Student ID (optional)") },
         leadingIcon = { Icon(Icons.Default.Badge, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
         singleLine = true,
         shape = RoundedCornerShape(12.dp),
@@ -800,7 +800,7 @@ private fun AuthFormContent(
     OutlinedTextField(
       value = email,
       onValueChange = onEmailChange,
-      label = { Text("Email Address *") },
+      label = { Text("Email *") },
       placeholder = { Text("name@university.edu") },
       leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
       singleLine = true,
@@ -851,7 +851,7 @@ private fun AuthFormContent(
       OutlinedTextField(
         value = confirmPassword,
         onValueChange = onConfirmPasswordChange,
-        label = { Text("Confirm Password *") },
+        label = { Text("Confirm password *") },
         leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
         trailingIcon = {
           IconButton(onClick = onToggleConfirmPasswordVisibility) {
@@ -967,7 +967,7 @@ private fun AuthFormContent(
     ) {
       HorizontalDivider(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.outlineVariant)
       Text(
-        text = "  OR INSTANT ACCESS  ",
+        text = "  OR  ",
         fontSize = 10.sp,
         fontWeight = FontWeight.Bold,
         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1002,7 +1002,7 @@ private fun AuthFormContent(
         }
         Spacer(modifier = Modifier.width(12.dp))
         Text(
-          text = "Continue with Google Student SSO",
+          text = "Continue with Google",
           fontSize = 12.sp,
           fontWeight = FontWeight.SemiBold,
           color = MaterialTheme.colorScheme.onSurface,

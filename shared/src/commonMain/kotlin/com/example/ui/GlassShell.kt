@@ -1,5 +1,12 @@
 package com.example.ui
 
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.MutableState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -89,9 +96,13 @@ fun GlassShell(
             .padding(start = 28.dp, end = 28.dp, top = 22.dp)
         ) {
           // Pages inset their content by 16dp; the header matches.
-          Box(Modifier.padding(horizontal = 16.dp)) { PageHeader(viewModel, currentScreen, glass) }
+          // Pages can hand controls up into the header; they're cleared when the page leaves.
+          val headerControls = remember(currentScreen) { mutableStateOf<(@Composable () -> Unit)?>(null) }
+          Box(Modifier.padding(horizontal = 16.dp)) { PageHeader(viewModel, currentScreen, glass, headerControls.value) }
           Spacer(Modifier.height(18.dp))
-          Box(Modifier.weight(1f).fillMaxWidth()) { content() }
+          Box(Modifier.weight(1f).fillMaxWidth()) {
+            CompositionLocalProvider(LocalHeaderControls provides headerControls) { content() }
+          }
         }
       }
     }
@@ -215,17 +226,24 @@ private fun NavItem(entry: NavEntry, selected: Boolean, glass: GlassColors, badg
 }
 
 @Composable
-private fun PageHeader(viewModel: StudyPilotViewModel, current: Screen, glass: GlassColors) {
+private fun PageHeader(viewModel: StudyPilotViewModel, current: Screen, glass: GlassColors, controls: (@Composable () -> Unit)?) {
   val user by viewModel.currentUser.collectAsState()
   val (title, subtitle) = pageTitle(current)
   Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-    Column(Modifier.weight(1f)) {
+    // With page controls beside it the title only takes the room it needs; otherwise it fills the row.
+    Column(if (controls == null) Modifier.weight(1f) else Modifier.widthIn(max = 380.dp)) {
       Text(title, style = MaterialTheme.typography.displaySmall, color = glass.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-      Text(subtitle, style = MaterialTheme.typography.bodySmall, color = glass.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+      Text(subtitle, style = MaterialTheme.typography.bodySmall, color = glass.muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
+    }
+    // A page's own controls (tabs, view switch, week navigation) use the free space beside the title.
+    if (controls != null) {
+      Spacer(Modifier.width(24.dp))
+      Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { controls() }
+      Spacer(Modifier.width(16.dp))
     }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-      // Today's date, as a glass pill.
-      Row(
+      // Today's date, as a glass pill, when the page leaves room for it.
+      if (controls == null) Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
           .height(40.dp)
@@ -280,4 +298,22 @@ private fun pageTitle(screen: Screen): Pair<String, String> = when (screen) {
   Screen.Settings -> "Settings" to "Profile, appearance, AI, and your phone."
   Screen.ActiveQuiz -> "Quiz" to ""
   Screen.Login -> "Sign in" to ""
+}
+
+/** Where a page can put controls into the desktop page header; null on the phone. */
+val LocalHeaderControls = staticCompositionLocalOf<MutableState<(@Composable () -> Unit)?>?> { null }
+
+/**
+ * Shows [content] in the page header beside the title, on the desktop. Returns false when there's no
+ * header to put it in (the phone), so the page draws the controls itself.
+ */
+@Composable
+fun HeaderControls(content: @Composable () -> Unit): Boolean {
+  val slot = LocalHeaderControls.current ?: return false
+  val latest by rememberUpdatedState(content)
+  DisposableEffect(slot) {
+    slot.value = { latest() }
+    onDispose { slot.value = null }
+  }
+  return true
 }

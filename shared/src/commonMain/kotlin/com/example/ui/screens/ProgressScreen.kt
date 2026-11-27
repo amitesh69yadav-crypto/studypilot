@@ -728,12 +728,12 @@ fun ProgressScreen(
             ) {
               Column(modifier = Modifier.weight(1f)) {
                 Text(
-                  text = "All recorded syllabus topics tested (0 queued)",
+                  text = "Every topic has been tested",
                   style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
                   color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                  text = "Record new lecture notes in My Topics to prepare them for quizzes",
+                  text = "New topics show up here until they've been in a quiz.",
                   style = MaterialTheme.typography.bodySmall,
                   color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -803,7 +803,7 @@ fun ProgressScreen(
       text = {
         Column {
           Text(
-            "Copy your verified academic learning report to the clipboard or share with tutors:",
+            "Copy your progress report, or share it with a tutor:",
             style = MaterialTheme.typography.bodyMedium
           )
           Spacer(modifier = Modifier.height(12.dp))

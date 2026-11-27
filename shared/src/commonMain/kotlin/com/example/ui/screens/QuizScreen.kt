@@ -196,7 +196,7 @@ fun QuizScreen(
               if (isAiLoading) {
                 CircularProgressIndicator(modifier = Modifier.size(18.dp), color = MaterialTheme.colorScheme.onPrimary)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Assembling...", maxLines = 1, softWrap = false)
+                Text("Writing quiz...", maxLines = 1, softWrap = false)
               } else {
                 Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
@@ -239,7 +239,7 @@ fun QuizScreen(
             Spacer(modifier = Modifier.height(12.dp))
 
             // Quiz Days
-            Text("Scheduled Days:", style = MaterialTheme.typography.labelSmall)
+            Text("Days", style = MaterialTheme.typography.labelSmall)
             FlowRow(
               modifier = Modifier.fillMaxWidth(),
               horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -257,7 +257,7 @@ fun QuizScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
             // Question Count
-            Text("Number of Questions:", style = MaterialTheme.typography.labelSmall)
+            Text("Questions", style = MaterialTheme.typography.labelSmall)
             FlowRow(
               modifier = Modifier.fillMaxWidth(),
               horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -275,7 +275,7 @@ fun QuizScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
             // Difficulty
-            Text("Difficulty Level:", style = MaterialTheme.typography.labelSmall)
+            Text("Difficulty", style = MaterialTheme.typography.labelSmall)
             FlowRow(
               modifier = Modifier.fillMaxWidth(),
               horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -293,7 +293,7 @@ fun QuizScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
             // Question Source Selection
-            Text("Question Source:", style = MaterialTheme.typography.labelSmall)
+            Text("Questions from", style = MaterialTheme.typography.labelSmall)
             Row(
               modifier = Modifier
                 .fillMaxWidth()
@@ -326,7 +326,7 @@ fun QuizScreen(
             ) {
               Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
                 Text("Prioritize weak topics", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
-                Text("Give overdue and struggling concepts higher weight", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Ask more about overdue topics and ones you get wrong", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
               }
               Switch(
                 checked = quizConfig.prioritizeWeakTopics,

@@ -110,7 +110,7 @@ fun ActiveQuizScreen(
 
   if (currentQuestion == null) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-      Text("No questions in active session")
+      Text("This quiz has no questions.")
     }
     return
   }
@@ -380,7 +380,7 @@ fun ActiveQuizScreen(
                   Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Code, contentDescription = null, tint = CyanAccent, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Code Editor / Implementation", style = MaterialTheme.typography.labelSmall, color = CyanAccent)
+                    Text("Your code", style = MaterialTheme.typography.labelSmall, color = CyanAccent)
                   }
                   Spacer(modifier = Modifier.height(8.dp))
                   OutlinedTextField(
@@ -457,8 +457,8 @@ fun ActiveQuizScreen(
   if (showExitConfirmDialog) {
     AlertDialog(
       onDismissRequest = { showExitConfirmDialog = false },
-      title = { Text("Quit Active Quiz?") },
-      text = { Text("Your in-progress answers will not be recorded in your revision history until submitted.") },
+      title = { Text("Quit this quiz?") },
+      text = { Text("Answers you haven't submitted won't be saved.") },
       confirmButton = {
         Button(
           onClick = {
@@ -544,7 +544,7 @@ fun QuizResultsView(
 
           Spacer(modifier = Modifier.height(12.dp))
           Text(
-            text = "Spaced repetition intervals automatically updated for all tested topics.",
+            text = "Review dates updated for every topic in this quiz.",
             style = MaterialTheme.typography.labelSmall,
             color = EmeraldSuccess
           )

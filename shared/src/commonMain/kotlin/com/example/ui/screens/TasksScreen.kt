@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -108,34 +109,38 @@ fun TasksScreen(
         .fillMaxSize()
         .padding(padding)
     ) {
-      TabRow(
-        selectedTabIndex = selectedTab,
-        modifier = Modifier.padding(horizontal = if (com.example.ui.theme.LocalGlass.current != null) 16.dp else 0.dp),
-        containerColor = MaterialTheme.colorScheme.surface,
-        contentColor = MaterialTheme.colorScheme.primary
-      ) {
-        Tab(
-          selected = selectedTab == 0,
-          onClick = { selectedTab = 0 },
-          text = { Text("All (${tasks.size})", fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal) }
-        )
-        Tab(
-          selected = selectedTab == 1,
-          onClick = { selectedTab = 1 },
-          text = { Text("Exams (${tasks.count { it.type == "EXAM" }})", fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal) }
-        )
-        Tab(
-          selected = selectedTab == 2,
-          onClick = { selectedTab = 2 },
-          text = { Text("Assignments (${tasks.count { it.type == "ASSIGNMENT" }})", fontWeight = if (selectedTab == 2) FontWeight.Bold else FontWeight.Normal) }
-        )
+      // On the desktop these sit in the page header beside the title.
+      val taskTabs: @Composable () -> Unit = {
+        TabRow(
+          selectedTabIndex = selectedTab,
+          modifier = Modifier.padding(horizontal = if (com.example.ui.theme.LocalGlass.current != null) 16.dp else 0.dp),
+          containerColor = MaterialTheme.colorScheme.surface,
+          contentColor = MaterialTheme.colorScheme.primary
+        ) {
+          Tab(
+            selected = selectedTab == 0,
+            onClick = { selectedTab = 0 },
+            text = { Text("All (${tasks.size})", fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal) }
+          )
+          Tab(
+            selected = selectedTab == 1,
+            onClick = { selectedTab = 1 },
+            text = { Text("Exams (${tasks.count { it.type == "EXAM" }})", fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal) }
+          )
+          Tab(
+            selected = selectedTab == 2,
+            onClick = { selectedTab = 2 },
+            text = { Text("Assignments (${tasks.count { it.type == "ASSIGNMENT" }})", fontWeight = if (selectedTab == 2) FontWeight.Bold else FontWeight.Normal) }
+          )
+        }
       }
+      if (!com.example.ui.HeaderControls { androidx.compose.foundation.layout.Box(Modifier.widthIn(max = 560.dp)) { taskTabs() } }) taskTabs()
 
       if (filteredTasks.isEmpty()) {
         EmptyState(
           icon = Icons.AutoMirrored.Filled.EventNote,
           title = "No deadlines scheduled",
-          description = "Keep track of midterm exams, finals, laboratory reports, and assignment submissions.",
+          description = "Add exams, lab reports and assignments with their due dates.",
           actionButton = {
             Button(onClick = { showAddDialog = true }, shape = RoundedCornerShape(12.dp)) {
               Text("Add deadline")
@@ -286,7 +291,7 @@ fun AddTaskDialog(
 
   AlertDialog(
     onDismissRequest = onDismiss,
-    title = { Text("Add Assignment or Exam", fontWeight = FontWeight.Bold) },
+    title = { Text("Add a deadline", fontWeight = FontWeight.Bold) },
     text = {
       Column(
         modifier = Modifier.fillMaxWidth(),
@@ -311,7 +316,7 @@ fun AddTaskDialog(
         OutlinedTextField(
           value = dueDate,
           onValueChange = { dueDate = it },
-          label = { Text("Due Date (YYYY-MM-DD)") },
+          label = { Text("Due date (YYYY-MM-DD)") },
           shape = RoundedCornerShape(12.dp),
           modifier = Modifier.fillMaxWidth()
         )

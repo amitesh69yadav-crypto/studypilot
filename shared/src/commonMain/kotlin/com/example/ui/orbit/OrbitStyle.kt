@@ -127,7 +127,8 @@ fun colorPlanFor(blocks: List<DayBlock>): ColorPlan {
   }
   val shaded = HashSet<DayBlock>()
   for ((i, b) in real.withIndex()) {
-    val previous = real.subList(0, i).lastOrNull { groupLabel(it.session) == groupLabel(b.session) && near(it, b) }
+    // Within the hour counts as next to each other, so two sessions of one subject never read as one.
+    val previous = real.subList(0, i).lastOrNull { groupLabel(it.session) == groupLabel(b.session) && near(it, b, gap = 60) }
     if (previous != null && previous !in shaded) shaded.add(b)
   }
   return ColorPlan(assigned, shaded)

@@ -359,7 +359,7 @@ fun ActiveAlarmAlertDialog(
         Spacer(modifier = Modifier.width(12.dp))
         Column {
           Text(
-            text = "EVENT STARTING NOW!",
+            text = "Starting now",
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
             color = MaterialTheme.colorScheme.error
           )

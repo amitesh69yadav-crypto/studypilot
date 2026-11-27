@@ -360,13 +360,13 @@ fun QuickMobileAlarmDialog(
         verticalArrangement = Arrangement.spacedBy(12.dp)
       ) {
         Text(
-          text = "Select when your alarm should ring based on your mobile device clock.",
+          text = "Pick when the alarm rings.",
           style = MaterialTheme.typography.bodySmall,
           color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
         Text(
-          text = "Quick Offset Preset:",
+          text = "Quick pick",
           style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
           color = MaterialTheme.colorScheme.onSurface
         )
@@ -415,7 +415,7 @@ fun QuickMobileAlarmDialog(
             onClick = { isCustomTime = true }
           )
           Text(
-            text = "Or Set Exact Mobile Time (Time Scroller)",
+            text = "Or set an exact time",
             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
             color = MaterialTheme.colorScheme.onSurface
           )

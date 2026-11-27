@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.layout.WindowInsets
@@ -125,22 +126,26 @@ fun AiChatImportScreen(
         }
         if (com.example.ui.theme.LocalGlass.current != null) {
           // Desktop: the same full-width pill tabs as the other pages.
-          com.example.ui.theme.TabRow(selectedTabIndex = selectedTab, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-            tabs.forEachIndexed { index, _ ->
-              Tab(
-                selected = selectedTab == index,
-                onClick = { selectedTab = index },
-                text = {
-                  Text(
-                    tabLabel(index),
-                    fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Medium,
-                    maxLines = 1,
-                    softWrap = false
-                  )
-                }
-              )
+          // On the desktop these sit in the page header beside the title.
+          val chatTabs: @Composable () -> Unit = {
+            com.example.ui.theme.TabRow(selectedTabIndex = selectedTab, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+              tabs.forEachIndexed { index, _ ->
+                Tab(
+                  selected = selectedTab == index,
+                  onClick = { selectedTab = index },
+                  text = {
+                    Text(
+                      tabLabel(index),
+                      fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Medium,
+                      maxLines = 1,
+                      softWrap = false
+                    )
+                  }
+                )
+              }
             }
           }
+          if (!com.example.ui.HeaderControls { androidx.compose.foundation.layout.Box(Modifier.widthIn(max = 560.dp)) { chatTabs() } }) chatTabs()
         } else
         ScrollableTabRow(
           selectedTabIndex = selectedTab,
@@ -687,7 +692,7 @@ private fun ImportedChatCard(
             onDismissRequest = { showMenu = false }
           ) {
             DropdownMenuItem(
-              text = { Text("Inspect source log") },
+              text = { Text("View source") },
               leadingIcon = { Icon(Icons.Default.Visibility, contentDescription = null) },
               onClick = {
                 showMenu = false
@@ -703,7 +708,7 @@ private fun ImportedChatCard(
               }
             )
             DropdownMenuItem(
-              text = { Text("Reprocess knowledge") },
+              text = { Text("Extract concepts again") },
               leadingIcon = { Icon(Icons.Default.Autorenew, contentDescription = null) },
               onClick = {
                 showMenu = false
@@ -902,7 +907,7 @@ private fun LearningMemoryTab(
       modifier = Modifier
         .fillMaxWidth()
         .testTag("learning_memory_search"),
-      placeholder = { Text("Search academic concepts, formulas, definitions...", color = PaletteDarkText.copy(alpha = 0.5f)) },
+      placeholder = { Text("Search concepts, formulas, definitions...", color = PaletteDarkText.copy(alpha = 0.5f)) },
       leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = PaletteDeepSage) },
       trailingIcon = {
         if (searchQuery.isNotEmpty()) {
@@ -1134,7 +1139,7 @@ private fun ExtractedConceptCard(
             onDismissRequest = { showMenu = false }
           ) {
             DropdownMenuItem(
-              text = { Text("Drill with 5-Question Quiz") },
+              text = { Text("Quiz me (5 questions)") },
               leadingIcon = { Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = PaletteDeepSage) },
               onClick = {
                 showMenu = false
@@ -1517,7 +1522,7 @@ private fun KnowledgeCoverageDashboardTab(
 
         if (concepts.isEmpty()) {
           Text(
-            text = "No concepts to display yet. Import conversations to populate.",
+            text = "No concepts yet. Import a chat to fill this in.",
             fontSize = 12.sp,
             color = PaletteDarkText.copy(alpha = 0.6f)
           )
@@ -1825,7 +1830,7 @@ private fun ImportChatTab(
               text = when (subjectMode) {
                 "CREATE_NEW" -> if (newSubjectName.isNotBlank()) "New subject: $newSubjectName" else "Create New Subject Manually"
                 "EXISTING" -> selectedSubject?.let { "${it.code}: ${it.name}" } ?: "Auto-group from linked chat"
-                else -> "Auto-group from linked chat (Recommended)"
+                else -> "Pick from the chat (recommended)"
               },
               fontSize = 13.sp,
               fontWeight = FontWeight.SemiBold,
@@ -1843,7 +1848,7 @@ private fun ImportChatTab(
         onDismissRequest = { subjectDropdownExpanded = false }
       ) {
         DropdownMenuItem(
-          text = { Text("Auto-group from linked chat (Recommended)") },
+          text = { Text("Pick from the chat (recommended)") },
           onClick = {
             subjectMode = "AUTO"
             selectedSubject = null
@@ -1851,7 +1856,7 @@ private fun ImportChatTab(
           }
         )
         DropdownMenuItem(
-          text = { Text("+ Create New Subject Manually", fontWeight = FontWeight.Bold, color = PaletteDeepSage) },
+          text = { Text("+ New subject", fontWeight = FontWeight.Bold, color = PaletteDeepSage) },
           onClick = {
             subjectMode = "CREATE_NEW"
             selectedSubject = null
@@ -1882,7 +1887,7 @@ private fun ImportChatTab(
         OutlinedTextField(
           value = newSubjectName,
           onValueChange = { newSubjectName = it },
-          label = { Text("New Subject Name *") },
+          label = { Text("Subject name *") },
           placeholder = { Text("e.g. Algorithms") },
           singleLine = true,
           shape = RoundedCornerShape(12.dp),
@@ -1922,8 +1927,8 @@ private fun ImportChatTab(
       modifier = Modifier
         .fillMaxWidth()
         .testTag("import_chat_title_input"),
-      label = { Text("Conversation Title (Optional)") },
-      placeholder = { Text("Auto-extracted from link or enter custom title") },
+      label = { Text("Title (optional)") },
+      placeholder = { Text("Taken from the link, or type your own") },
       singleLine = true,
       shape = RoundedCornerShape(12.dp),
       colors = OutlinedTextFieldDefaults.colors(
@@ -1940,7 +1945,7 @@ private fun ImportChatTab(
       modifier = Modifier
         .fillMaxWidth()
         .testTag("import_tags_input"),
-      label = { Text("Tags (Optional)") },
+      label = { Text("Tags (optional)") },
       placeholder = { Text("e.g. #midterm, #graphs, #revision") },
       singleLine = true,
       shape = RoundedCornerShape(12.dp),
@@ -2034,7 +2039,7 @@ private fun ImportChatTab(
           strokeWidth = 2.dp
         )
         Spacer(modifier = Modifier.width(8.dp))
-        Text("Fetching & Grouping...", fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+        Text("Importing...", fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
       } else {
         Icon(
           Icons.Default.Link,
@@ -2262,7 +2267,7 @@ private fun ExtractionPreviewDialog(
                 }
               )
               DropdownMenuItem(
-                text = { Text("+ Create New Subject Manually", fontWeight = FontWeight.Bold, color = PaletteDeepSage) },
+                text = { Text("+ New subject", fontWeight = FontWeight.Bold, color = PaletteDeepSage) },
                 onClick = {
                   subjectMode = "CREATE_NEW"
                   subjectDropdownExpanded = false
@@ -2565,7 +2570,7 @@ private fun MoveChatToSubjectDialog(
                 modifier = Modifier.size(18.dp)
               )
               Text(
-                text = "+ Create New Subject",
+                text = "+ New subject",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 color = if (createNew) PaletteCreamIvory else PaletteDarkText
@@ -2582,7 +2587,7 @@ private fun MoveChatToSubjectDialog(
             OutlinedTextField(
               value = newName,
               onValueChange = { newName = it },
-              label = { Text("New Subject Name *") },
+              label = { Text("Subject name *") },
               singleLine = true,
               shape = RoundedCornerShape(12.dp),
               modifier = Modifier.weight(2f)
@@ -2928,7 +2933,7 @@ private fun EditConceptDialog(
           OutlinedTextField(
             value = technicalDetails,
             onValueChange = { technicalDetails = it },
-            label = { Text("Detailed Explanation / Mechanics") },
+            label = { Text("Explanation") },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
             minLines = 3
@@ -2936,7 +2941,7 @@ private fun EditConceptDialog(
           OutlinedTextField(
             value = misconceptions,
             onValueChange = { misconceptions = it },
-            label = { Text("Common Exam Trap / Misconception") },
+            label = { Text("Common mistake") },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
             minLines = 2

@@ -73,7 +73,8 @@ fun DesktopTimetable(viewModel: StudyPilotViewModel, showAddDialogOnInit: Boolea
   val today = todayDate()
   val week = remember(selected) { weekOf(selected) }
 
-  Column(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+  // View switch, week navigation and Add. On the desktop they sit in the page header beside the title.
+  val toolbar: @Composable () -> Unit = {
     Row(verticalAlignment = Alignment.CenterVertically) {
       SegmentedPills(TimetableMode.entries.map { it.label }, mode.ordinal, glass) { mode = TimetableMode.entries[it] }
       Spacer(Modifier.weight(1f))
@@ -104,7 +105,10 @@ fun DesktopTimetable(viewModel: StudyPilotViewModel, showAddDialogOnInit: Boolea
       if (mode != TimetableMode.Planner) {
         InkPill("Add", glass) { dialog = SessionDialog.New(selected, if (selected == today) nextSlot() else 9 * 60) }
       }
-    }
+  }
+  }
+  Column(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    if (!com.example.ui.HeaderControls { toolbar() }) toolbar()
 
     when (mode) {
       TimetableMode.Week -> Column(
