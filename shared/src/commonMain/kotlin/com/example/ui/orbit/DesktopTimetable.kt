@@ -119,6 +119,9 @@ fun DesktopTimetable(viewModel: StudyPilotViewModel, showAddDialogOnInit: Boolea
 
   // View switch, week navigation and Add. On the desktop they sit in the page header beside the title.
   val toolbar: @Composable () -> Unit = {
+    // In a smaller window the controls tighten (a shorter date, a round Add) rather than wrapping.
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+    val tight = maxWidth < 640.dp
     Row(verticalAlignment = Alignment.CenterVertically) {
       // The view switch sits in the middle of the free space between the title and the week controls.
       Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
@@ -129,32 +132,45 @@ fun DesktopTimetable(viewModel: StudyPilotViewModel, showAddDialogOnInit: Boolea
         selected = shiftDate(selected, -step)
       }
       Text(
-        if (mode == TimetableMode.Week) weekRangeLabel(week) else longDate(selected),
+        when {
+          mode == TimetableMode.Week && tight -> "${monthDay(week.first())} – ${week.last().takeLast(2).trimStart('0')}"
+          mode == TimetableMode.Week -> weekRangeLabel(week)
+          tight -> "${weekdayShort(selected).lowercase().replaceFirstChar { it.uppercase() }}, ${monthDay(selected)}"
+          else -> longDate(selected)
+        },
         fontSize = 15.sp,
         fontWeight = FontWeight.SemiBold,
         color = glass.text,
         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         modifier = Modifier
-          .padding(horizontal = 6.dp)
-          .widthIn(min = 170.dp)
+          .padding(horizontal = 4.dp)
+          .widthIn(min = if (tight) 96.dp else 170.dp)
           .clip(CircleShape)
           .clickable { pickDate(selected) }
           .padding(horizontal = 8.dp, vertical = 8.dp),
-        maxLines = 1
+        maxLines = 1,
+        softWrap = false
       )
       GlassCircleButton(Icons.Default.ChevronRight, if (step == 7) "Next week" else "Next day", glass) {
         selected = shiftDate(selected, step)
       }
       val away = if (mode == TimetableMode.Week) today !in week else selected != today
-      if (away) {
+      if (away && !tight) {
         Spacer(Modifier.width(8.dp))
         GlassPill(if (mode == TimetableMode.Week) "This week" else "Today", glass) { selected = today }
       }
       Spacer(Modifier.width(10.dp))
-
-      InkPill("Add", glass) { dialog = SessionDialog.New(selected, if (selected == today) nextSlot() else 9 * 60) }
-
-  }
+      val add = { dialog = SessionDialog.New(selected, if (selected == today) nextSlot() else 9 * 60) }
+      if (tight) {
+        Box(
+          Modifier.size(40.dp).pressable(add) { clip(CircleShape).background(glass.ink) },
+          contentAlignment = Alignment.Center
+        ) { Icon(Icons.Default.Add, contentDescription = "Add", tint = glass.onInk, modifier = Modifier.size(20.dp)) }
+      } else {
+        InkPill("Add", glass, add)
+      }
+    }
+    }
   }
   androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
   val narrow = maxWidth < 700.dp

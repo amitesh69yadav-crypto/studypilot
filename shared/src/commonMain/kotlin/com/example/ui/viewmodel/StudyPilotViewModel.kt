@@ -1942,6 +1942,23 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
     }
   }
 
+  /** Summarises a topic's notes (with a model when one is set up) and keeps the summary on the topic. */
+  fun summarizeAndSaveTopic(topic: StudyTopic, onComplete: (StudyTopic) -> Unit) {
+    viewModelScope.launch {
+      _isAiLoading.value = true
+      try {
+        // The model gets clean sentences rather than "Q:/A:" labels and Markdown marks.
+        val notes = com.example.data.ai.LocalAiEngine.plainNotes(topic.descriptionNotes).joinToString("\n")
+        val summary = repository.summarizeMaterial(topic.title, notes)
+        val updated = topic.copy(aiSummary = summary)
+        repository.updateTopic(updated)
+        onComplete(updated)
+      } finally {
+        _isAiLoading.value = false
+      }
+    }
+  }
+
   fun deleteTopic(id: Long) {
     viewModelScope.launch {
       repository.deleteTopic(id, userId = _currentUser.value.id)

@@ -713,14 +713,14 @@ fun TopicDetailDialog(
                   Text("AI summary", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.secondary)
                 }
                 Spacer(modifier = Modifier.height(8.dp))
-                Text(topic.aiSummary, style = MaterialTheme.typography.bodySmall)
+                com.example.ui.components.FormattedTutorResponse(topic.aiSummary)
               }
             }
           }
         }
 
-        // AI Summarize Action Button
-        item {
+        // AI Summarize Action Button: only until the topic has a summary.
+        if (topic.aiSummary.isNullOrBlank()) item {
           Button(
             onClick = onSummarizeAi,
             enabled = !isAiLoading,
@@ -806,9 +806,7 @@ fun TopicDetailHost(viewModel: StudyPilotViewModel, topic: StudyTopic, onTopic: 
       isAiLoading = isAiLoading,
       onDismiss = { onTopic(null) },
       onSummarizeAi = {
-        viewModel.summarizeTopicWithAi(topic.title, topic.descriptionNotes) { summary ->
-          onTopic(topic.copy(aiSummary = summary))
-        }
+        viewModel.summarizeAndSaveTopic(topic) { onTopic(it) }
       },
       onUpdateMastery = { newMastery ->
         viewModel.updateTopicMastery(topic, newMastery)

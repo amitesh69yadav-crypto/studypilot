@@ -131,7 +131,7 @@ fun GlassShell(
 private class NavEntry(val screen: Screen, val label: String, val icon: ImageVector)
 
 private val mainPages = listOf(
-  NavEntry(Screen.Dashboard, "Today", Icons.Default.WbSunny),
+  NavEntry(Screen.Dashboard, "Dashboard", Icons.Default.WbSunny),
   NavEntry(Screen.Timetable, "Timetable", Icons.Default.Schedule),
   NavEntry(Screen.MyTopics, "Topics", Icons.Default.Book),
   NavEntry(Screen.WeekendQuizzes, "Quizzes", Icons.Default.AutoAwesome),
@@ -246,7 +246,7 @@ private fun PageHeader(viewModel: StudyPilotViewModel, current: Screen, glass: G
   // In a smaller window the page's controls move to their own row under the title, rather than being
   // squeezed until their labels wrap.
   androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
-    if (controls != null && maxWidth < 1040.dp) {
+    if (controls != null && maxWidth < 760.dp) {
       Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         PageHeaderRow(viewModel, current, glass, null)
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { controls() }
@@ -317,7 +317,7 @@ fun GlassCircleButton(icon: ImageVector, description: String, glass: GlassColors
 }
 
 private fun pageTitle(screen: Screen): Pair<String, String> = when (screen) {
-  Screen.Dashboard -> "Today" to "What's on now, what's next, and what you've learned lately."
+  Screen.Dashboard -> "Dashboard" to "What's on now, what's next, and what you've learned lately."
   Screen.Timetable -> "Timetable" to "Classes, study blocks and alarms, day by day."
   Screen.MyTopics -> "Topics" to "What you've studied, filed under your subjects."
   Screen.WeekendQuizzes -> "Quizzes" to "Multiple choice from everything you've stored, new questions each time."
@@ -359,7 +359,7 @@ fun GlassPhoneTopBar(viewModel: StudyPilotViewModel, current: Screen, showBack: 
     modifier = Modifier
       .fillMaxWidth()
       .statusBarsPadding()
-      .padding(start = 20.dp, end = 16.dp, top = 10.dp, bottom = 6.dp)
+      .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 6.dp)
   ) {
     if (showBack) {
       GlassCircleButton(Icons.AutoMirrored.Filled.ArrowBack, "Back", glass) { viewModel.navigateTo(Screen.Dashboard) }

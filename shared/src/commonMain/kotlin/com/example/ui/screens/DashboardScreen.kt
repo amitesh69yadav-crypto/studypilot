@@ -535,7 +535,8 @@ fun DashboardScreen(
       contentPadding = PaddingValues(bottom = 24.dp)
     ) {
       if (glassStyle) {
-        // Phone, glass style: today's orbit leads the page.
+        // Phone, glass style: the welcome line, then today's orbit, then the rest.
+        item { greeting() }
         item {
           com.example.ui.orbit.OrbitCard(
             viewModel = viewModel,
@@ -545,7 +546,7 @@ fun DashboardScreen(
           )
         }
       }
-      item { greeting() }
+      if (!glassStyle) item { greeting() }
       item { whatNow() }
       item { quickActions() }
       item { hub() }

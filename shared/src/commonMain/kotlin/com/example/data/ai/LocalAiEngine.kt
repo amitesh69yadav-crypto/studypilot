@@ -682,34 +682,47 @@ object LocalAiEngine {
   // -------------------------------------------------------------
   // 5. LOCAL SUMMARIZER & EVALUATOR
   // -------------------------------------------------------------
+  /**
+   * Notes as plain sentences: drops "Q:"/"A:" labels and Markdown marks (headings, bold, list bullets,
+   * code fences), so a summary is built from the content rather than its formatting.
+   */
+  fun plainNotes(rawContent: String): List<String> =
+    rawContent.lines()
+      .map { line ->
+        line.trim()
+          .removePrefix("Q:").removePrefix("A:").trim()
+          .trimStart('#', '>', '-', '*', '•', ' ')
+          .replace(Regex("""\*\*|__|`+"""), "")
+          .replace(Regex("""(?<![A-Za-z0-9])\*(?!\s)|(?<!\s)\*(?![A-Za-z0-9])"""), "")
+          .trim()
+      }
+      .filter { it.isNotBlank() && !it.startsWith("```") }
+
+  /** A short summary without a model: the gist in a sentence or two, then the main points. */
   fun summarizeMaterial(title: String, rawContent: String): String {
-    val lines = rawContent.lines().filter { it.isNotBlank() }
-    val cleanTitle = title.ifBlank { "Study Material" }
+    val lines = plainNotes(rawContent)
+    val cleanTitle = title.ifBlank { "these notes" }
+    if (lines.isEmpty()) return "There isn't enough in the notes for $cleanTitle to summarise yet."
+
+    // The gist: the first two sentences of the first substantial line.
+    val firstBody = lines.firstOrNull { it.length > 60 } ?: lines.first()
+    val sentences = Regex("""(?<=[.!?])\s+""").split(firstBody).filter { it.isNotBlank() }
+    val gist = sentences.take(2).joinToString(" ").let { if (it.length > 320) it.take(317).trimEnd() + "…" else it }
+
+    // Main points: short headings and list items, then other sentences, without repeating the gist.
+    val points = lines
+      .filter { it != firstBody && it.length in 12..220 && !it.endsWith(":") }
+      .map { p -> Regex("""(?<=[.!?])\s+""").split(p).first().let { if (it.length > 160) it.take(157).trimEnd() + "…" else it } }
+      .distinctBy { it.lowercase() }
+      .take(5)
 
     return buildString {
-      append("### 📌 Executive Summary: $cleanTitle\n\n")
-      append("**Core Concept**:\n")
-      if (lines.isNotEmpty()) {
-        append(lines.take(2).joinToString(" ").take(220))
-        append("...\n\n")
-      } else {
-        append("Mastery of $cleanTitle requires understanding foundational definitions, structural principles, and quantitative applications.\n\n")
+      append("**In short:** ").append(gist).append('\n')
+      if (points.isNotEmpty()) {
+        append("\n**Key points**\n")
+        points.forEach { append("- ").append(it).append('\n') }
       }
-
-      append("#### 💡 Key Theoretical Takeaways:\n")
-      if (lines.size >= 3) {
-        lines.take(5).forEach { l ->
-          append("• **Key Point**: ${l.take(120)}\n")
-        }
-      } else {
-        append("• **Foundational Axiom**: Establishes structural bounds and basic system assumptions.\n")
-        append("• **Operational Mechanics**: Governs state transitions and algorithmic efficiency.\n")
-        append("• **Analytical Evaluation**: Employs verification tests and performance benchmarks.\n")
-      }
-
-      append("\n🎯 **Exam Problem Focus**:\n")
-      append("Pay close attention to boundary conditions, unit conversions, and step-by-step mathematical proofs during exams.")
-    }
+    }.trim()
   }
 
   fun evaluateAnswer(question: QuizQuestion, userAnswer: String): EvaluationResult {

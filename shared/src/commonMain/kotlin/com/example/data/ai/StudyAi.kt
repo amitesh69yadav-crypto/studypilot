@@ -172,10 +172,15 @@ class StudyAi(
 
   suspend fun summarizeMaterial(title: String, rawContent: String): String {
     val prompt = """
-      Summarize these study notes on "$title" in under 250 words:
-      1. The core idea in 2-3 sentences.
-      2. 3-4 key definitions or takeaways.
-      3. One typical exam question on it.
+      Summarize these study notes on "$title" in under 200 words, about what the notes actually say.
+      Use exactly this Markdown shape and no other headings, numbering or labels:
+
+      **In short:** two or three plain sentences with the core idea.
+
+      **Key points**
+      - three to five short points, one line each
+
+      **Likely exam question:** one question.
 
       Notes:
       $rawContent

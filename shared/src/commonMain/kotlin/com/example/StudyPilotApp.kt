@@ -463,7 +463,7 @@ fun StudyPilotApp(viewModel: StudyPilotViewModel) {
       if (LocalAppStyle.current == AppStyle.Glass) {
         if (!isWideScreen && currentScreen != Screen.ActiveQuiz && currentScreen != Screen.Login) {
           com.example.ui.GlassPhoneNavBar(
-            items = navItems.map { (screen, label, icon) -> Triple(screen, if (screen == Screen.Dashboard) "Today" else label, icon) },
+            items = navItems.map { (screen, label, icon) -> Triple(screen, label, icon) },
             current = currentScreen,
             onSelect = { viewModel.navigateTo(it) }
           )
