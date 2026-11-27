@@ -176,7 +176,7 @@ object ScheduleLogic {
     return cal.timeInMillis
   }
 
-  private fun parseRecurringDays(raw: String): Set<Int> {
+  fun parseRecurringDays(raw: String): Set<Int> {
     if (raw.isBlank()) return emptySet()
     val byPrefix = mapOf(
       "sun" to Calendar.SUNDAY, "mon" to Calendar.MONDAY, "tue" to Calendar.TUESDAY,

@@ -508,6 +508,12 @@ fun DashboardScreen(
         modifier = Modifier.weight(1.35f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
       ) {
+        com.example.ui.orbit.OrbitCard(
+          viewModel = viewModel,
+          date = com.example.ui.orbit.todayDate(),
+          modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+          title = "Today's orbit"
+        )
         whatNow()
         todaySessions()
         recentTopics()

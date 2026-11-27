@@ -1,0 +1,425 @@
+package com.example.ui.orbit
+
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.VectorPainter
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.ui.theme.GlassColors
+import kotlinx.coroutines.delay
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.hypot
+import kotlin.math.min
+import kotlin.math.sin
+
+/** What the ring shows: everything planned, or only what was done. */
+enum class OrbitView { Planned, Actual }
+
+/** One band for everything, or the plan outside and what was done inside. */
+enum class OrbitLayers { Unified, Layers }
+
+private data class RingDrag(val block: DayBlock, val mode: DragMode, val last: Float, val delta: Float) {
+  fun span(): Pair<Int, Int> = dragged(block, mode, delta.toInt(), step = 5, wrap = true)
+}
+
+/** Sizes of the ring, all in pixels, for a canvas of [size]. */
+private class RingGeometry(size: Size, density: Float) {
+  val center = Offset(size.width / 2f, size.height / 2f)
+  val outer = min(size.width, size.height) / 2f - 6f * density
+  val thickness = outer * 0.26f
+  val inner = outer - thickness
+
+  /** Planned arcs: the whole band, or its outer part when the layers are split. */
+  fun plannedMid(layers: Boolean) = if (layers) outer - thickness * 0.29f else outer - thickness / 2f
+  fun plannedWidth(layers: Boolean, density: Float) = if (layers) thickness * 0.5f else thickness - 7f * density
+  val actualMid get() = inner + thickness * 0.22f
+  fun actualWidth(density: Float) = thickness * 0.36f - 2f * density
+}
+
+private fun degreesOf(minute: Float) = minute / 4f - 90f
+
+private fun pointAt(center: Offset, radius: Float, degrees: Float): Offset {
+  val a = Math.toRadians(degrees.toDouble())
+  return Offset(center.x + radius * cos(a).toFloat(), center.y + radius * sin(a).toFloat())
+}
+
+/** The minute of the day under [pos], 00:00 at the top and running clockwise. */
+private fun minuteAt(pos: Offset, center: Offset): Float {
+  val deg = Math.toDegrees(atan2((pos.y - center.y).toDouble(), (pos.x - center.x).toDouble())).toFloat()
+  return (((deg + 90f) % 360f) + 360f) % 360f * 4f
+}
+
+/** Angle, in degrees, taken up by a round end of an arc [width] wide at [radius]. */
+private fun capDegrees(width: Float, radius: Float) = Math.toDegrees((width / 2f / radius).toDouble()).toFloat()
+
+/**
+ * Draws one block as a pastel arc with round ends; one too short for its ends is a dot. [progress]
+ * grows the arcs in when the ring first appears.
+ */
+private fun DrawScope.drawBlockArc(
+  start: Int,
+  end: Int,
+  center: Offset,
+  radius: Float,
+  width: Float,
+  color: Color,
+  progress: Float = 1f,
+  outline: Color? = null
+) {
+  val cap = capDegrees(width, radius)
+  val sweep = (end - start) / 4f * progress
+  val from = degreesOf(start.toFloat())
+  val topLeft = Offset(center.x - radius, center.y - radius)
+  val box = Size(radius * 2, radius * 2)
+  if (sweep <= cap * 2) {
+    val p = pointAt(center, radius, from + sweep / 2)
+    if (outline != null) drawCircle(outline, width / 2 + 2.5f * density, p)
+    drawCircle(color, width / 2, p)
+  } else {
+    if (outline != null) {
+      drawArc(outline, from + cap, sweep - cap * 2, false, topLeft, box, style = Stroke(width + 5f * density, cap = StrokeCap.Round))
+    }
+    drawArc(color, from + cap, sweep - cap * 2, false, topLeft, box, style = Stroke(width, cap = StrokeCap.Round))
+  }
+}
+
+private fun DrawScope.drawIconAt(painter: VectorPainter, at: Offset, size: Float, tint: Color) {
+  translate(at.x - size / 2, at.y - size / 2) {
+    with(painter) { draw(Size(size, size), colorFilter = ColorFilter.tint(tint)) }
+  }
+}
+
+/** The recessed band the arcs sit on, with a light rim each side. */
+internal fun DrawScope.drawOrbitTrack(center: Offset, outer: Float, thickness: Float, glass: GlassColors) {
+  drawCircle(glass.inset, radius = outer - thickness / 2, center = center, style = Stroke(thickness))
+  drawCircle(glass.insetRim, radius = outer, center = center, style = Stroke(1f * density))
+  drawCircle(glass.insetRim, radius = outer - thickness, center = center, style = Stroke(1f * density))
+}
+
+/** A small ring for the week strip: the day's arcs only. */
+internal fun DrawScope.drawMiniOrbit(blocks: List<DayBlock>, glass: GlassColors, progress: Float) {
+  val center = Offset(size.width / 2, size.height / 2)
+  val outer = min(size.width, size.height) / 2 - 1.5f * density
+  val thickness = outer * 0.24f
+  drawOrbitTrack(center, outer, thickness, glass)
+  val mid = outer - thickness / 2
+  for (b in blocks.filterNot { it.isMarker }.sortedByDescending { it.minutes }) {
+    drawBlockArc(b.start, b.end, center, mid, thickness - 2.5f * density, pastelFor(b.session).first, progress)
+  }
+  for (b in blocks.filter { it.isMarker }) {
+    drawCircle(glass.text.copy(alpha = 0.7f), thickness * 0.28f, pointAt(center, mid, degreesOf(b.start.toFloat())))
+  }
+}
+
+/**
+ * The day as a 24-hour ring: each session an arc in its colour, 00:00 at the top. Drag an arc to
+ * move it, or either of its ends to make it longer or shorter; click one to open it, or an empty
+ * part of the ring to add a session there.
+ */
+@Composable
+fun OrbitRing(
+  blocks: List<DayBlock>,
+  view: OrbitView,
+  layers: OrbitLayers,
+  glass: GlassColors,
+  showNow: Boolean,
+  dayLabel: String,
+  modifier: Modifier = Modifier,
+  onRetime: ((DayBlock, Int, Int) -> Unit)? = null,
+  onOpen: (DayBlock) -> Unit = {},
+  onAddAt: ((Int) -> Unit)? = null
+) {
+  val split = layers == OrbitLayers.Layers
+  val canEdit = onRetime != null && view == OrbitView.Planned
+  val now by produceState(nowMinutes()) {
+    while (true) {
+      delay(20_000)
+      value = nowMinutes()
+    }
+  }
+  val grow = remember { Animatable(0f) }
+  LaunchedEffect(Unit) { grow.animateTo(1f, tween(900, easing = FastOutSlowInEasing)) }
+
+  var drag by remember { mutableStateOf<RingDrag?>(null) }
+  var hover by remember { mutableStateOf<DayBlock?>(null) }
+  val currentBlocks by rememberUpdatedState(blocks)
+  val currentRetime by rememberUpdatedState(onRetime)
+  val currentOpen by rememberUpdatedState(onOpen)
+  val currentAdd by rememberUpdatedState(onAddAt)
+
+  // Icons are drawn on the canvas, so their painters are made up front.
+  val iconSet = remember { listOf(Icons.Default.Check) + OrbitIconSet }
+  val painters: Map<ImageVector, VectorPainter> = iconSet.associateWith { rememberVectorPainter(it) }
+  val measurer = rememberTextMeasurer()
+  val tickStyle = TextStyle(fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = glass.muted)
+
+  /** The block under [pos] on the planned band, and how dragging it from there would change it. */
+  fun hitTest(pos: Offset, size: Size, density: Float): Pair<DayBlock, DragMode>? {
+    val g = RingGeometry(size, density)
+    val mid = g.plannedMid(split)
+    val width = g.plannedWidth(split, density)
+    val distance = hypot(pos.x - g.center.x, pos.y - g.center.y)
+    if (distance < mid - width / 2 - 6 * density || distance > mid + width / 2 + 8 * density) return null
+    val minute = minuteAt(pos, g.center)
+    val capMinutes = capDegrees(width, mid) * 4f
+    val pool = if (view == OrbitView.Actual) currentBlocks.filter { it.done } else currentBlocks
+    val hit = pool.filter { b ->
+      val short = (b.end - b.start) / 4f <= capDegrees(width, mid) * 2
+      val pad = if (short) capMinutes else 2f
+      listOf(minute, minute + DAY_MINUTES).any { m -> m >= b.start - pad && m <= b.end + pad }
+    }.minByOrNull { it.minutes } ?: return null
+    val m = if (minute + DAY_MINUTES <= hit.end + capMinutes) minute + DAY_MINUTES else minute
+    val edge = minOf(capMinutes + 6f, hit.minutes / 3f)
+    val mode = when {
+      hit.isMarker || (hit.end - hit.start) / 4f <= capDegrees(width, mid) * 2 -> DragMode.Move
+      m - hit.start < edge -> DragMode.ResizeStart
+      hit.end - m < edge -> DragMode.ResizeEnd
+      else -> DragMode.Move
+    }
+    return hit to mode
+  }
+
+  BoxWithConstraints(modifier.aspectRatio(1f), contentAlignment = Alignment.Center) {
+    val ringDp = min(maxWidth.value, maxHeight.value)
+    Canvas(
+      Modifier
+        .fillMaxSize()
+        .pointerHoverIcon(if (hover != null || drag != null) PointerIcon.Hand else PointerIcon.Default)
+        .pointerInput(view, split) {
+          awaitPointerEventScope {
+            while (true) {
+              val event = awaitPointerEvent()
+              val pos = event.changes.firstOrNull()?.position ?: continue
+              hover = if (event.type == PointerEventType.Exit) null
+              else hitTest(pos, Size(size.width.toFloat(), size.height.toFloat()), density)?.first
+            }
+          }
+        }
+        .pointerInput(view, split) {
+          detectTapGestures { pos ->
+            val area = Size(size.width.toFloat(), size.height.toFloat())
+            val hit = hitTest(pos, area, density)
+            if (hit != null) {
+              currentOpen(hit.first)
+            } else {
+              val g = RingGeometry(area, density)
+              val distance = hypot(pos.x - g.center.x, pos.y - g.center.y)
+              val add = currentAdd
+              if (add != null && distance in g.inner..g.outer) add(snap(minuteAt(pos, g.center).toInt(), 15) % DAY_MINUTES)
+            }
+          }
+        }
+        .pointerInput(view, split, canEdit) {
+          if (!canEdit) return@pointerInput
+          detectDragGestures(
+            onDragStart = { pos ->
+              val area = Size(size.width.toFloat(), size.height.toFloat())
+              drag = hitTest(pos, area, density)?.let { (block, mode) ->
+                RingDrag(block, mode, minuteAt(pos, RingGeometry(area, density).center), 0f)
+              }
+            },
+            onDrag = { change, _ ->
+              val d = drag ?: return@detectDragGestures
+              change.consume()
+              val area = Size(size.width.toFloat(), size.height.toFloat())
+              val minute = minuteAt(change.position, RingGeometry(area, density).center)
+              var diff = minute - d.last
+              // Crossing 00:00 at the top shouldn't jump a whole day.
+              if (diff > DAY_MINUTES / 2) diff -= DAY_MINUTES
+              if (diff < -DAY_MINUTES / 2) diff += DAY_MINUTES
+              drag = d.copy(last = minute, delta = d.delta + diff)
+            },
+            onDragEnd = {
+              drag?.let { d ->
+                val (s, e) = d.span()
+                if (s != d.block.start || e != d.block.end) currentRetime?.invoke(d.block, s, e)
+              }
+              drag = null
+            },
+            onDragCancel = { drag = null }
+          )
+        }
+    ) {
+      val g = RingGeometry(size, density)
+      val progress = grow.value
+
+      // Soft glow inside the ring and a faint halo outside it.
+      drawCircle(
+        Brush.radialGradient(
+          listOf(Color.White.copy(alpha = if (glass.dark) 0.07f else 0.55f), Color.Transparent),
+          center = g.center,
+          radius = g.inner
+        ),
+        radius = g.inner - 2 * density,
+        center = g.center
+      )
+      drawOrbitTrack(g.center, g.outer, g.thickness, glass)
+
+      // Hour ticks just inside the band, with labels at the quarters of the day.
+      for (h in 0 until 24) {
+        val deg = degreesOf(h * 60f)
+        val major = h % 3 == 0
+        if (h % 6 == 0) {
+          val label = measurer.measure("%02d:00".format(h), tickStyle)
+          val at = pointAt(g.center, g.inner - 16 * density, deg)
+          drawText(label, topLeft = Offset(at.x - label.size.width / 2f, at.y - label.size.height / 2f))
+        } else {
+          val len = if (major) 6 * density else 3 * density
+          drawLine(
+            glass.muted.copy(alpha = if (major) 0.55f else 0.3f),
+            pointAt(g.center, g.inner - 4 * density, deg),
+            pointAt(g.center, g.inner - 4 * density - len, deg),
+            strokeWidth = 1.2f * density,
+            cap = StrokeCap.Round
+          )
+        }
+      }
+
+      val pMid = g.plannedMid(split)
+      val pWidth = g.plannedWidth(split, density)
+      val iconSize = min(pWidth * 0.5f, 18 * density)
+      val dragged = drag
+      val outline = if (glass.dark) Color.White.copy(alpha = 0.55f) else Color.White.copy(alpha = 0.95f)
+
+      // Longest first, so a short session inside a long one stays visible on top; alarms over everything.
+      for (b in blocks.sortedWith(compareBy<DayBlock> { it.isMarker }.thenByDescending { it.minutes })) {
+        if (b.isMarker) {
+          val moving = dragged?.takeIf { it.block == b }
+          val at = pointAt(g.center, pMid, degreesOf((moving?.span()?.first ?: b.start).toFloat()))
+          val r = pWidth * 0.36f
+          if (moving != null || hover == b) drawCircle(outline, r + 2.5f * density, at)
+          drawCircle(glass.frost, r, at)
+          drawCircle(glass.text.copy(alpha = 0.55f), r, at, style = Stroke(1.4f * density))
+          if (progress > 0.6f) drawIconAt(painters.getValue(iconFor(b.session)), at, r * 1.15f, glass.text.copy(alpha = ((progress - 0.6f) / 0.4f).coerceIn(0f, 1f)))
+          continue
+        }
+        val (tint, ink) = pastelFor(b.session)
+        val moving = dragged?.takeIf { it.block == b }
+        val (s, e) = moving?.span() ?: (b.start to b.end)
+        val ghost = view == OrbitView.Actual && !b.done
+        val color = if (ghost) tint.copy(alpha = 0.28f) else tint
+        drawBlockArc(s, e, g.center, pMid, pWidth, color, progress, outline = if (moving != null || hover == b) outline else null)
+        if (!ghost && progress > 0.6f) {
+          val icon = if (view == OrbitView.Actual) Icons.Default.Check else iconFor(b.session)
+          val at = pointAt(g.center, pMid, degreesOf((s + e) / 2f))
+          drawIconAt(painters.getValue(icon), at, iconSize, ink.copy(alpha = ((progress - 0.6f) / 0.4f).coerceIn(0f, 1f)))
+        }
+      }
+
+      if (split) {
+        // Inner layer: what was actually done.
+        val aWidth = g.actualWidth(density)
+        for (b in blocks.filter { it.done }.sortedByDescending { it.minutes }) {
+          val (tint, ink) = pastelFor(b.session)
+          drawBlockArc(b.start, b.end, g.center, g.actualMid, aWidth, tint, progress)
+          if (aWidth > 12 * density) {
+            drawIconAt(painters.getValue(Icons.Default.Check), pointAt(g.center, g.actualMid, degreesOf((b.start + b.end) / 2f)), aWidth * 0.55f, ink)
+          }
+        }
+      }
+
+      if (showNow) {
+        val at = pointAt(g.center, pMid, degreesOf(now.toFloat()))
+        drawCircle(glass.ink.copy(alpha = 0.18f), radius = 9.5f * density, center = at)
+        drawCircle(Color.White, radius = 6.5f * density, center = at)
+        drawCircle(glass.ink, radius = 4f * density, center = at)
+      }
+    }
+
+    // The readout in the middle.
+    val big = (ringDp * 0.1f).coerceIn(18f, 46f).sp
+    val small = (ringDp * 0.038f).coerceIn(10.5f, 15f).sp
+    val dragging = drag
+    val shown = hover
+    val (headline, line1, line2) = when {
+      dragging != null -> {
+        val (s, e) = dragging.span()
+        Triple(
+          clockLabel(if (dragging.mode == DragMode.ResizeEnd) e else s),
+          if (dragging.block.isMarker) dragging.block.session.topic else "${clockLabel(s)} – ${clockLabel(e)} · ${formatDuration(e - s)}",
+          "Release to save"
+        )
+      }
+      shown != null -> Triple(
+        if (shown.isMarker) clockLabel(shown.start) else formatDuration(shown.minutes),
+        shown.session.topic.ifBlank { groupLabel(shown.session) },
+        if (shown.isMarker) "Alarm" else "${clockLabel(shown.start)} – ${clockLabel(shown.end)}" + if (shown.done) " · done" else ""
+      )
+      showNow -> Triple(
+        clockLabel(now),
+        blockAt(blocks, now)?.let { it.session.topic.ifBlank { groupLabel(it.session) } } ?: "Open time",
+        dayLabel
+      )
+      else -> Triple(formatDuration(coveredMinutes(blocks)), "planned", dayLabel)
+    }
+    Column(
+      Modifier.widthIn(max = (ringDp * 0.5f).dp),
+      horizontalAlignment = Alignment.CenterHorizontally,
+      verticalArrangement = Arrangement.Center
+    ) {
+      Text(
+        headline,
+        style = MaterialTheme.typography.displaySmall.copy(fontSize = big, lineHeight = big),
+        color = glass.text,
+        maxLines = 1
+      )
+      Text(
+        line1,
+        fontSize = small,
+        fontWeight = FontWeight.SemiBold,
+        color = glass.text,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        textAlign = TextAlign.Center
+      )
+      Text(line2, fontSize = small * 0.92f, color = glass.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+    }
+  }
+}

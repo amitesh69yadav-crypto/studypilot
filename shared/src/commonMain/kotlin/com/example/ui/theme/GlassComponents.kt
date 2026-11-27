@@ -296,6 +296,10 @@ fun TabRow(
 @Composable
 fun pageBackground(classic: Color): Color = if (LocalGlass.current != null) Color.Transparent else classic
 
+/** A dialog's background: opaque frost on the desktop, since a see-through dialog is hard to read. */
+@Composable
+fun dialogBackground(classic: Color): Color = LocalGlass.current?.frost ?: classic
+
 /** Small stat labels: as written on the phone, spaced capitals on the desktop. */
 @Composable
 fun statLabel(text: String): String = if (LocalGlass.current != null) text.uppercase() else text

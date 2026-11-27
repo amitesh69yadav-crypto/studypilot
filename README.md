@@ -115,6 +115,30 @@ screens use drop-in `Card`, `Button`, `OutlinedButton`, `FilterChip` and `TabRow
 Material components on the phone and glass on the desktop, and the sage palette the timetable and
 chat screens use is read from the theme, so those screens follow light and dark on the desktop too.
 
+### Orbit and week views
+
+On the desktop, the day is also drawn as an **orbit**: a 24-hour ring (midnight at the top) with each
+session as a pastel arc and its icon. Routines have fixed colours (meals yellow, sleep blue, exercise green,
+personal teal), subjects get their own, and alarms are frosted markers. Sleep from 23:00 to 07:00 wraps
+across the top. The middle shows the time now and what's on, or, while hovering or dragging, the session and its times.
+Drag an arc to move it, drag either end to make it longer or shorter, click it to edit it, or click an
+empty part of the ring to add a session there. **Planned / Actual** switches between the whole plan and only
+what's marked done; **Unified / Layers** puts what was done on an inner ring under the plan. A legend
+beside the ring shows how much of the day each subject or routine takes ("2h 15m · 9.4%"), and the
+expand button opens the ring large. The Today page opens with today's orbit.
+
+The Timetable page on the desktop has three views:
+- **Week**: day columns of hours with the week's sessions as blocks. Drag a block to another time
+  or day, or drag its bottom edge to change when it ends. Click an empty slot to add a session there.
+  A repeating session moves in time only, since it belongs to several days.
+- **Day**: the week as seven small orbits with the time planned each day, then the selected
+  day's orbit and agenda, where sessions can be ticked off.
+- **Planner**: the original timetable with routines, copying days and the other tools.
+
+The code is in `shared/.../ui/orbit/`: `OrbitModel.kt` holds the plain logic (which sessions fall on a
+day, snapping, dragging, lanes for overlapping blocks, legend totals), and is covered by
+`OrbitModelTest`. The phone keeps its own timetable.
+
 
 The desktop app is the full app with the same screens, using Ollama on the same PC for the tutor.
 Its data lives in `%APPDATA%\StudyPilot`.

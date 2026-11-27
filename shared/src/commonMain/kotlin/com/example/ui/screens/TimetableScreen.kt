@@ -1595,7 +1595,7 @@ fun CopyDayScheduleDialog(
         Text("Cancel", color = PaletteDarkText, fontWeight = FontWeight.Bold)
       }
     },
-    containerColor = PaletteCreamIvory,
+    containerColor = com.example.ui.theme.dialogBackground(PaletteCreamIvory),
     shape = RoundedCornerShape(16.dp)
   )
 }
@@ -1686,7 +1686,7 @@ fun ApplyFormatDialog(
         Text("Cancel", color = PaletteDarkText, fontWeight = FontWeight.Bold)
       }
     },
-    containerColor = PaletteCreamIvory,
+    containerColor = com.example.ui.theme.dialogBackground(PaletteCreamIvory),
     shape = RoundedCornerShape(16.dp)
   )
 }
@@ -1760,7 +1760,7 @@ fun SaveDayAsFormatDialog(
         Text("Cancel", color = PaletteDarkText, fontWeight = FontWeight.Bold)
       }
     },
-    containerColor = PaletteCreamIvory,
+    containerColor = com.example.ui.theme.dialogBackground(PaletteCreamIvory),
     shape = RoundedCornerShape(16.dp)
   )
 }
@@ -1985,7 +1985,7 @@ fun CreateNewFormatDialog(
         Text("Cancel", color = PaletteDarkText, fontWeight = FontWeight.Bold)
       }
     },
-    containerColor = PaletteCreamIvory,
+    containerColor = com.example.ui.theme.dialogBackground(PaletteCreamIvory),
     shape = RoundedCornerShape(16.dp)
   )
 }
@@ -2171,6 +2171,9 @@ fun SessionEditDialog(
   subjects: List<Subject>,
   todayDate: String,
   onDismiss: () -> Unit,
+  /** Start and end for a new session, e.g. from clicking an empty slot in the week grid. */
+  newStartTime: String = "10:00",
+  newEndTime: String = "",
   onConfirm: (TimetableSession) -> Unit
 ) {
   var selectedCategory by remember {
@@ -2188,8 +2191,8 @@ fun SessionEditDialog(
   }
   var topic by remember { mutableStateOf(sessionToEdit?.topic ?: "") }
   var date by remember { mutableStateOf(sessionToEdit?.date ?: todayDate) }
-  var startTime by remember { mutableStateOf(sessionToEdit?.startTime ?: "10:00") }
-  var endTime by remember { mutableStateOf(sessionToEdit?.endTime ?: "") }
+  var startTime by remember { mutableStateOf(sessionToEdit?.startTime ?: newStartTime) }
+  var endTime by remember { mutableStateOf(sessionToEdit?.endTime ?: newEndTime) }
   var location by remember { mutableStateOf(sessionToEdit?.location ?: "") }
   var notes by remember { mutableStateOf(sessionToEdit?.notes ?: "") }
   var recurringDays by remember { mutableStateOf(sessionToEdit?.recurringDays ?: "") }
@@ -2509,7 +2512,7 @@ fun SessionEditDialog(
         Text("Cancel", color = PaletteDarkText, fontWeight = FontWeight.Bold)
       }
     },
-    containerColor = PaletteCreamIvory,
+    containerColor = com.example.ui.theme.dialogBackground(PaletteCreamIvory),
     shape = RoundedCornerShape(16.dp)
   )
 }

@@ -245,7 +245,11 @@ fun StudyPilotApp(viewModel: StudyPilotViewModel) {
           Screen.Timetable -> {
             val openAddDialog = quickAddSessionTrigger
             LaunchedEffect(Unit) { quickAddSessionTrigger = false }
-            TimetableScreen(viewModel = viewModel, showAddDialogOnInit = openAddDialog)
+            if (LocalAppStyle.current == AppStyle.Glass) {
+              com.example.ui.orbit.DesktopTimetable(viewModel = viewModel, showAddDialogOnInit = openAddDialog)
+            } else {
+              TimetableScreen(viewModel = viewModel, showAddDialogOnInit = openAddDialog)
+            }
           }
           Screen.MyTopics -> {
             val openAddDialog = quickAddTopicTrigger
