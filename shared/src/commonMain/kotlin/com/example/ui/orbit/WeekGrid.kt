@@ -1,5 +1,8 @@
 package com.example.ui.orbit
 
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.hoverable
@@ -147,6 +150,8 @@ fun WeekGrid(
     }
   }
   val currentAdd by rememberUpdatedState(onAdd)
+  val currentMove by rememberUpdatedState(onMove)
+  val currentOpen by rememberUpdatedState(onOpen)
   var drag by remember { mutableStateOf<GridDrag?>(null) }
   val columns = remember(sessions, week) { week.map { columnBlocksOn(sessions, it) } }
 
@@ -221,76 +226,94 @@ fun WeekGrid(
         blocks.forEach { b ->
           key(b.session.id, b.fromYesterday, dayIndex) {
             val (lane, laneCount) = lanes[b] ?: (0 to 1)
-            // Overlapping sessions cascade: each later one is indented a little and sits on top, so
-            // every block keeps most of the column and its title stays readable.
-            val indent = cascadeIndent(colWidth, laneCount)
-            val width = colWidth - indent * lane
+            val (laneX, width) = laneLayout(colWidth, lane, laneCount)
             val visibleEnd = b.end.coerceAtMost(DAY_MINUTES)
             val height = maxOf(minute * (visibleEnd - b.start), MinBlockHeight)
-            val isDragged = drag?.block == b && drag?.day == dayIndex
+            val isDragged = drag?.block?.session?.id == b.session.id && drag?.day == dayIndex
             val canDrag = !b.fromYesterday
             val canResize = canDrag && !b.isMarker && b.end <= DAY_MINUTES
             val hover = remember { MutableInteractionSource() }
             val hovered by hover.collectIsHoveredAsState()
+            // The gesture reads these when the press starts, so a list update mid-drag can't cancel it.
+            val latestBlock by rememberUpdatedState(b)
+            val latestLane by rememberUpdatedState(lane to laneCount)
+            val edge = if (height < 40.dp) 7.dp else 11.dp
             Box(
               Modifier
                 .zIndex(lane.toFloat())
-                .offset(x = colWidth * dayIndex + indent * lane, y = minute * b.start)
+                .offset(x = colWidth * dayIndex + laneX, y = minute * b.start)
                 .size(width, height)
                 .padding(horizontal = 2.dp, vertical = 1.dp)
-                // A block resting on another casts a soft shadow, so the stacking reads at a glance.
-                .then(if (lane > 0) Modifier.shadow(4.dp, RoundedCornerShape(10.dp), clip = false) else Modifier)
+                // When three or more stack, each one resting on another casts a soft shadow.
+                .then(if (laneCount >= 3 && lane > 0) Modifier.shadow(4.dp, RoundedCornerShape(10.dp), clip = false) else Modifier)
                 .graphicsLayer { alpha = if (isDragged) 0.35f else 1f }
                 .hoverable(hover)
                 .pointerHoverIcon(PointerIcon.Hand)
-                .pointerInput(b) { detectTapGestures { onOpen(b) } }
-                .then(
-                  if (canDrag) Modifier.pointerInput(b, dayIndex) {
-                    detectDragGestures(
-                      onDragStart = { drag = GridDrag(b, dayIndex, DragMode.Move, lane = lane, lanes = laneCount) },
-                      onDrag = { change, amount ->
-                        change.consume()
-                        drag = drag?.let { it.copy(dx = it.dx + amount.x, dy = it.dy + amount.y) }
-                      },
-                      onDragEnd = {
-                        drag?.let { d ->
-                          val (day, s, e) = preview(d)
-                          if (day != d.day || s != d.block.start || e != d.block.end) onMove(d.block, week[day], s, e)
+                .pointerInput(b.session.id, b.fromYesterday, dayIndex, colPx, minutePx) {
+                  // One gesture per press. Where the press lands decides it once: the top edge moves
+                  // the start, the bottom edge the end, the body the whole block. A resize then only
+                  // follows the pointer up and down, so a hand that wobbles sideways can't turn it
+                  // into a move or cancel it. A press that doesn't travel is a click.
+                  awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val block = latestBlock
+                    val (atLane, atLanes) = latestLane
+                    val edgePx = edge.toPx()
+                    val resizable = !block.fromYesterday && !block.isMarker && block.end <= DAY_MINUTES
+                    val mode = when {
+                      resizable && down.position.y <= edgePx -> DragMode.ResizeStart
+                      resizable && down.position.y >= size.height - edgePx -> DragMode.ResizeEnd
+                      !block.fromYesterday -> DragMode.Move
+                      else -> null
+                    }
+                    var total = Offset.Zero
+                    var started = false
+                    try {
+                      while (true) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                        if (!change.pressed) {
+                          if (started) {
+                            drag?.let { d ->
+                              val (day, s, e) = preview(d)
+                              if (day != d.day || s != d.block.start || e != d.block.end) currentMove(d.block, week[day], s, e)
+                            }
+                          } else {
+                            currentOpen(block)
+                          }
+                          change.consume()
+                          break
                         }
-                        drag = null
-                      },
-                      onDragCancel = { drag = null }
-                    )
-                  } else Modifier
-                )
+                        total += change.positionChange()
+                        if (!started && mode != null) {
+                          // Resizing waits for real vertical travel; moving for travel in any direction.
+                          val travelled = if (mode == DragMode.Move) total.getDistance() else kotlin.math.abs(total.y)
+                          if (travelled > viewConfiguration.touchSlop) {
+                            started = true
+                            drag = GridDrag(block, dayIndex, mode, lane = atLane, lanes = atLanes)
+                          }
+                        }
+                        if (started) {
+                          change.consume()
+                          drag = drag?.copy(dx = if (mode == DragMode.Move) total.x else 0f, dy = total.y)
+                        }
+                      }
+                    } finally {
+                      if (started) drag = null
+                    }
+                  }
+                }
             ) {
               BlockFace(b, glass, height, b.start, b.end, colors = plan.of(b))
               if (canResize) {
-                // Both edges can be dragged: the top to change when it starts, the bottom when it ends.
+                // The edges show the resize cursor; the grips mark them. The gesture itself is above.
                 for (mode in listOf(DragMode.ResizeStart, DragMode.ResizeEnd)) {
                   Box(
                     Modifier
                       .align(if (mode == DragMode.ResizeStart) Alignment.TopCenter else Alignment.BottomCenter)
                       .fillMaxWidth()
-                      .height(if (height < 40.dp) 7.dp else 11.dp)
-                      .pointerHoverIcon(ResizeVerticalCursor)
-                      .pointerInput(b, dayIndex, mode) {
-                        detectVerticalDragGestures(
-                          onDragStart = { drag = GridDrag(b, dayIndex, mode, lane = lane, lanes = laneCount) },
-                          onVerticalDrag = { change, amount ->
-                            change.consume()
-                            drag = drag?.let { it.copy(dy = it.dy + amount) }
-                          },
-                          onDragEnd = {
-                            drag?.let { d ->
-                              val (_, s, e) = preview(d)
-                              if (s != d.block.start || e != d.block.end) onMove(d.block, week[d.day], s, e)
-                            }
-                            drag = null
-                          },
-                          onDragCancel = { drag = null }
-                        )
-                      },
+                      .height(edge)
+                      .pointerHoverIcon(ResizeVerticalCursor),
                     contentAlignment = if (mode == DragMode.ResizeStart) Alignment.TopCenter else Alignment.BottomCenter
                   ) {
                     // A small grip on the bottom edge; the top one shows while the block is hovered.
@@ -318,12 +341,12 @@ fun WeekGrid(
         val height = maxOf(minute * (visibleEnd - s), MinBlockHeight)
         // Moving takes the whole column it lands in; resizing stays in the block's own lane.
         val resizing = d.mode != DragMode.Move
-        val indent = cascadeIndent(colWidth, d.lanes)
-        val laneWidth = if (resizing) colWidth - indent * d.lane else colWidth
+        val (laneX, laneW) = laneLayout(colWidth, d.lane, d.lanes)
+        val laneWidth = if (resizing) laneW else colWidth
         Box(
           Modifier
-            .zIndex(2f)
-            .offset(x = colWidth * day + if (resizing) indent * d.lane else 0.dp, y = minute * s)
+            .zIndex(100f)
+            .offset(x = colWidth * day + if (resizing) laneX else 0.dp, y = minute * s)
             .size(laneWidth, height)
             .padding(horizontal = 3.dp, vertical = 1.dp)
             .shadow(10.dp, RoundedCornerShape(10.dp), clip = false)
@@ -393,3 +416,16 @@ private fun BlockFace(
 /** How far each overlapping block is indented from the one under it. */
 private fun cascadeIndent(colWidth: Dp, lanes: Int): Dp =
   if (lanes <= 1) 0.dp else minOf(colWidth * 0.22f, (colWidth * 0.45f) / (lanes - 1))
+
+/**
+ * Where a block sits in its day column and how wide it is. Two overlapping sessions share the column
+ * side by side, so both stay fully reachable; three or more cascade, each indented over the last.
+ */
+private fun laneLayout(colWidth: Dp, lane: Int, lanes: Int): Pair<Dp, Dp> = when {
+  lanes <= 1 -> 0.dp to colWidth
+  lanes == 2 -> (colWidth / 2) * lane to colWidth / 2
+  else -> {
+    val indent = cascadeIndent(colWidth, lanes)
+    indent * lane to colWidth - indent * lane
+  }
+}

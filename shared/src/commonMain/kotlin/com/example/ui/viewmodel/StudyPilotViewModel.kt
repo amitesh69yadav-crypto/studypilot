@@ -1,5 +1,6 @@
 package com.example.ui.viewmodel
 
+import kotlinx.coroutines.sync.withLock
 import com.example.data.ai.llm.CloudProvider
 import kotlinx.coroutines.flow.first
 import com.example.data.ai.AiTask
@@ -168,7 +169,8 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
   val hasPhoneModels: Boolean get() = repository.ai.phone != null
 
   // --- UI notifications & Theme ---
-  private val _snackbarMessage = MutableSharedFlow<String>()
+  // Buffered, so posting a message never waits for the previous one to finish showing.
+  private val _snackbarMessage = MutableSharedFlow<String>(extraBufferCapacity = 8, onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST)
   val snackbarMessage: SharedFlow<String> = _snackbarMessage.asSharedFlow()
 
   private val uiPrefs = platform.prefs("studypilot_ui_prefs")
@@ -1457,8 +1459,14 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
   }
 
   // --- Session Actions ---
+  /**
+   * Session saves run one after another, in the order they were made. Two quick edits (dragging one
+   * edge, then the other) could otherwise reach the database out of order and leave the older one.
+   */
+  private val sessionWrites = kotlinx.coroutines.sync.Mutex()
+
   fun addSession(session: TimetableSession) {
-    viewModelScope.launch {
+    viewModelScope.launch { sessionWrites.withLock {
       val sessionWithUser = if (session.userId.isBlank()) session.copy(userId = _currentUser.value.id) else session
       val insertedId = repository.addSession(sessionWithUser)
       val savedSession = if (insertedId > 0L && sessionWithUser.id == 0L) {
@@ -1475,15 +1483,15 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
         "Added ${formatTimeRange(savedSession.startTime, savedSession.endTime)}"
       }
       _snackbarMessage.emit(msg)
-    }
+    } }
   }
 
   fun updateSessionStatus(session: TimetableSession, newStatus: String) {
-    viewModelScope.launch {
+    viewModelScope.launch { sessionWrites.withLock {
       val sessionWithUser = if (session.userId.isBlank()) session.copy(userId = _currentUser.value.id) else session
       repository.updateSession(sessionWithUser.copy(status = newStatus))
       _snackbarMessage.emit("Marked ${newStatus.lowercase()}")
-    }
+    } }
   }
 
   fun deleteSession(id: Long) {
@@ -1499,7 +1507,7 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
   }
 
   fun updateSession(session: TimetableSession) {
-    viewModelScope.launch {
+    viewModelScope.launch { sessionWrites.withLock {
       val sessionWithUser = if (session.userId.isBlank()) session.copy(userId = _currentUser.value.id) else session
       repository.updateSession(sessionWithUser)
       if (sessionWithUser.isAlarmEnabled) {
@@ -1508,11 +1516,11 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
         alarms.cancel(sessionWithUser.id)
       }
       _snackbarMessage.emit("Session updated")
-    }
+    } }
   }
 
   fun toggleSessionAlarm(session: TimetableSession) {
-    viewModelScope.launch {
+    viewModelScope.launch { sessionWrites.withLock {
       val updated = session.copy(isAlarmEnabled = !session.isAlarmEnabled)
       repository.updateSession(updated)
       if (updated.isAlarmEnabled) {
@@ -1522,7 +1530,7 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
         alarms.cancel(updated.id)
         _snackbarMessage.emit("Alarm off")
       }
-    }
+    } }
   }
 
   /** Rings the alarm for [session] right now, through the same service a scheduled alarm uses. */
