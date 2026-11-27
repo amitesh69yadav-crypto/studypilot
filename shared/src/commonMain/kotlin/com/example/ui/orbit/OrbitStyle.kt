@@ -1,5 +1,6 @@
 package com.example.ui.orbit
 
+import com.example.ui.theme.pressable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -187,16 +188,16 @@ fun SegmentedPills(options: List<String>, selected: Int, glass: GlassColors, onS
       val isSelected = i == selected
       Box(
         Modifier
-          .clip(CircleShape)
-          .then(
-            if (isSelected) {
-              Modifier
-                .shadow(1.5.dp, CircleShape)
-                .background(if (glass.dark) glass.selected else Color.White)
-                .border(0.8.dp, glass.rimTop, CircleShape)
-            } else Modifier
-          )
-          .clickable { onSelect(i) }
+          .pressable({ onSelect(i) }) {
+            clip(CircleShape).then(
+              if (isSelected) {
+                Modifier
+                  .shadow(1.5.dp, CircleShape)
+                  .background(if (glass.dark) glass.selected else Color.White)
+                  .border(0.8.dp, glass.rimTop, CircleShape)
+              } else Modifier
+            )
+          }
           .padding(horizontal = 13.dp, vertical = 6.dp)
       ) {
         Text(label, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = if (isSelected) glass.text else glass.muted)

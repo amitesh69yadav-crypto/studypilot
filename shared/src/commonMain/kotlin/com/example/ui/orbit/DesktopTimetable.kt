@@ -1,5 +1,6 @@
 package com.example.ui.orbit
 
+import com.example.ui.theme.pressable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -225,8 +226,7 @@ private fun GlassPill(label: String, glass: GlassColors, onClick: () -> Unit) {
   Box(
     Modifier
       .height(40.dp)
-      .glass(CircleShape, glass)
-      .clickable(onClick = onClick)
+      .pressable(onClick) { glass(CircleShape, glass) }
       .padding(horizontal = 16.dp),
     contentAlignment = Alignment.Center
   ) {
@@ -240,9 +240,7 @@ private fun InkPill(label: String, glass: GlassColors, onClick: () -> Unit) {
   Row(
     Modifier
       .height(40.dp)
-      .clip(CircleShape)
-      .background(glass.ink)
-      .clickable(onClick = onClick)
+      .pressable(onClick) { clip(CircleShape).background(glass.ink) }
       .padding(start = 14.dp, end = 18.dp),
     verticalAlignment = Alignment.CenterVertically
   ) {

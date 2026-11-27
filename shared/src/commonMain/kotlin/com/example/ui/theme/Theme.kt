@@ -124,15 +124,16 @@ private fun glassTypography(fonts: AppFonts?): androidx.compose.material3.Typogr
   val sans = fonts?.text ?: FontFamily.Default
   val serif = fonts?.display ?: FontFamily.Serif
   fun t(size: Int, line: Int, weight: FontWeight, family: FontFamily = sans, tracking: Double = 0.0) =
-    TextStyle(fontFamily = family, fontWeight = weight, fontSize = size.sp, lineHeight = line.sp, letterSpacing = (size * tracking).sp)
+    // Tabular figures, so times and counts keep their width as the digits change.
+    TextStyle(fontFamily = family, fontWeight = weight, fontSize = size.sp, lineHeight = line.sp, letterSpacing = (size * tracking).sp, fontFeatureSettings = "tnum")
   return androidx.compose.material3.Typography(
     displayLarge = t(44, 50, FontWeight.Normal, serif, -0.01),
     displayMedium = t(38, 44, FontWeight.Normal, serif, -0.01),
     displaySmall = t(34, 40, FontWeight.Normal, serif, -0.01),
     headlineLarge = t(30, 36, FontWeight.Normal, serif, -0.01),
-    headlineMedium = t(26, 32, FontWeight.Medium, sans, -0.045),
-    headlineSmall = t(22, 28, FontWeight.Medium, sans, -0.045),
-    titleLarge = t(20, 26, FontWeight.Medium, sans, -0.045),
+    headlineMedium = t(26, 32, FontWeight.Medium, sans, -0.02),
+    headlineSmall = t(22, 28, FontWeight.Medium, sans, -0.02),
+    titleLarge = t(20, 26, FontWeight.Medium, sans, -0.02),
     titleMedium = t(16, 22, FontWeight.SemiBold, sans, -0.01),
     titleSmall = t(14, 20, FontWeight.SemiBold, sans),
     bodyLarge = t(15, 23, FontWeight.Normal, sans),

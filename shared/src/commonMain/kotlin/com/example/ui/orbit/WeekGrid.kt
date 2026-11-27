@@ -221,7 +221,10 @@ fun WeekGrid(
         blocks.forEach { b ->
           key(b.session.id, b.fromYesterday, dayIndex) {
             val (lane, laneCount) = lanes[b] ?: (0 to 1)
-            val width = colWidth / laneCount
+            // Overlapping sessions cascade: each later one is indented a little and sits on top, so
+            // every block keeps most of the column and its title stays readable.
+            val indent = cascadeIndent(colWidth, laneCount)
+            val width = colWidth - indent * lane
             val visibleEnd = b.end.coerceAtMost(DAY_MINUTES)
             val height = maxOf(minute * (visibleEnd - b.start), MinBlockHeight)
             val isDragged = drag?.block == b && drag?.day == dayIndex
@@ -231,9 +234,12 @@ fun WeekGrid(
             val hovered by hover.collectIsHoveredAsState()
             Box(
               Modifier
-                .offset(x = colWidth * dayIndex + width * lane, y = minute * b.start)
+                .zIndex(lane.toFloat())
+                .offset(x = colWidth * dayIndex + indent * lane, y = minute * b.start)
                 .size(width, height)
                 .padding(horizontal = 2.dp, vertical = 1.dp)
+                // A block resting on another casts a soft shadow, so the stacking reads at a glance.
+                .then(if (lane > 0) Modifier.shadow(4.dp, RoundedCornerShape(10.dp), clip = false) else Modifier)
                 .graphicsLayer { alpha = if (isDragged) 0.35f else 1f }
                 .hoverable(hover)
                 .pointerHoverIcon(PointerIcon.Hand)
@@ -312,11 +318,12 @@ fun WeekGrid(
         val height = maxOf(minute * (visibleEnd - s), MinBlockHeight)
         // Moving takes the whole column it lands in; resizing stays in the block's own lane.
         val resizing = d.mode != DragMode.Move
-        val laneWidth = if (resizing) colWidth / d.lanes else colWidth
+        val indent = cascadeIndent(colWidth, d.lanes)
+        val laneWidth = if (resizing) colWidth - indent * d.lane else colWidth
         Box(
           Modifier
             .zIndex(2f)
-            .offset(x = colWidth * day + if (resizing) laneWidth * d.lane else 0.dp, y = minute * s)
+            .offset(x = colWidth * day + if (resizing) indent * d.lane else 0.dp, y = minute * s)
             .size(laneWidth, height)
             .padding(horizontal = 3.dp, vertical = 1.dp)
             .shadow(10.dp, RoundedCornerShape(10.dp), clip = false)
@@ -344,8 +351,9 @@ private fun BlockFace(
   val fill = when {
     block.isMarker -> glass.selected
     block.done || highlighted -> tint
-    glass.dark -> tint.copy(alpha = 0.82f)
-    else -> tint.copy(alpha = 0.58f)
+    // Mixed onto a solid base rather than see-through, so a block resting on another hides it cleanly.
+    glass.dark -> androidx.compose.ui.graphics.lerp(glass.frost, tint, 0.82f)
+    else -> androidx.compose.ui.graphics.lerp(glass.frost, tint, 0.6f)
   }
   Box(
     Modifier
@@ -381,3 +389,7 @@ private fun BlockFace(
     }
   }
 }
+
+/** How far each overlapping block is indented from the one under it. */
+private fun cascadeIndent(colWidth: Dp, lanes: Int): Dp =
+  if (lanes <= 1) 0.dp else minOf(colWidth * 0.22f, (colWidth * 0.45f) / (lanes - 1))

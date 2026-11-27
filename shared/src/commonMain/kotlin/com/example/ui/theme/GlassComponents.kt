@@ -78,19 +78,21 @@ fun Card(
   content: @Composable ColumnScope.() -> Unit
 ) {
   val glass = LocalGlass.current
+  // One source for the click, the hover tint and the press-in, so they move together.
+  val source = interactionSource ?: androidx.compose.runtime.remember { MutableInteractionSource() }
   if (glass == null) {
     androidx.compose.material3.Card(onClick, modifier, enabled, shape, colors, elevation, border, interactionSource, content)
   } else {
     val glassShape = glassCardShape(shape)
     androidx.compose.material3.Card(
       onClick = onClick,
-      modifier = modifier.glass(glassShape, glass, glassFill(colors.containerColor, glass)),
+      modifier = modifier.pressScale(source).glass(glassShape, glass, glassFill(colors.containerColor, glass)),
       enabled = enabled,
       shape = glassShape,
       colors = CardDefaults.cardColors(containerColor = Color.Transparent, contentColor = colors.contentColor),
       elevation = CardDefaults.cardElevation(0.dp),
       border = border,
-      interactionSource = interactionSource,
+      interactionSource = source,
       content = content
     )
   }
@@ -135,19 +137,21 @@ fun Button(
   content: @Composable RowScope.() -> Unit
 ) {
   val glass = LocalGlass.current
+  // One source for the click, the hover tint and the press-in, so they move together.
+  val source = interactionSource ?: androidx.compose.runtime.remember { MutableInteractionSource() }
   if (glass == null) {
     androidx.compose.material3.Button(onClick, modifier, enabled, shape, colors, elevation, border, contentPadding, interactionSource, content)
   } else {
     androidx.compose.material3.Button(
       onClick = onClick,
-      modifier = modifier.defaultMinSize(minHeight = 40.dp),
+      modifier = modifier.pressScale(source).defaultMinSize(minHeight = 40.dp),
       enabled = enabled,
       shape = CircleShape,
       colors = colors,
       elevation = null,
       border = border,
       contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp),
-      interactionSource = interactionSource,
+      interactionSource = source,
       content = content
     )
   }
@@ -167,13 +171,15 @@ fun OutlinedButton(
   content: @Composable RowScope.() -> Unit
 ) {
   val glass = LocalGlass.current
+  // One source for the click, the hover tint and the press-in, so they move together.
+  val source = interactionSource ?: androidx.compose.runtime.remember { MutableInteractionSource() }
   if (glass == null) {
     androidx.compose.material3.OutlinedButton(onClick, modifier, enabled, shape, colors, elevation, border, contentPadding, interactionSource, content)
   } else {
     // A recessed glass pill, like the site's secondary actions.
     androidx.compose.material3.OutlinedButton(
       onClick = onClick,
-      modifier = modifier.defaultMinSize(minHeight = 40.dp),
+      modifier = modifier.pressScale(source).defaultMinSize(minHeight = 40.dp),
       enabled = enabled,
       shape = CircleShape,
       colors = ButtonDefaults.outlinedButtonColors(
@@ -184,7 +190,7 @@ fun OutlinedButton(
       elevation = null,
       border = BorderStroke(0.8.dp, glass.insetRim),
       contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp),
-      interactionSource = interactionSource,
+      interactionSource = source,
       content = content
     )
   }
@@ -206,6 +212,8 @@ fun FilterChip(
   interactionSource: MutableInteractionSource? = null
 ) {
   val glass = LocalGlass.current
+  // One source for the click, the hover tint and the press-in, so they move together.
+  val source = interactionSource ?: androidx.compose.runtime.remember { MutableInteractionSource() }
   if (glass == null) {
     androidx.compose.material3.FilterChip(selected, onClick, label, modifier, enabled, leadingIcon, trailingIcon, shape, colors, elevation, border, interactionSource)
   } else {
@@ -214,7 +222,7 @@ fun FilterChip(
       selected = selected,
       onClick = onClick,
       label = label,
-      modifier = modifier,
+      modifier = modifier.pressScale(source),
       enabled = enabled,
       leadingIcon = leadingIcon,
       trailingIcon = trailingIcon,
@@ -230,7 +238,7 @@ fun FilterChip(
       ),
       elevation = null,
       border = BorderStroke(0.8.dp, if (selected) glass.rimTop else glass.insetRim),
-      interactionSource = interactionSource
+      interactionSource = source
     )
   }
 }
@@ -347,8 +355,7 @@ fun Modifier.statTile(raised: Boolean = false, onClick: () -> Unit): Modifier {
   val shape = androidx.compose.foundation.shape.RoundedCornerShape(if (raised) 22.dp else 16.dp)
   return if (glass != null) {
     // Raised tiles stand on the page; recessed ones sit inside a card.
-    (if (raised) this.glass(shape, glass) else this.glassInset(shape, glass))
-      .clickable(onClick = onClick)
+    this.pressable(onClick) { if (raised) glass(shape, glass) else glassInset(shape, glass) }
       .padding(vertical = if (raised) 14.dp else 10.dp)
   } else {
     this.clip(androidx.compose.foundation.shape.RoundedCornerShape(10.dp)).clickable(onClick = onClick).padding(vertical = 4.dp)
@@ -397,3 +404,16 @@ fun LinearProgressIndicator(
   trackColor = trackColor,
   gapSize = 0.dp
 )
+
+/**
+ * Makes an element clickable and presses all of it in while held. [surface] is the element's own
+ * look (its background, rim, clip), applied inside the press so the whole thing moves together.
+ */
+@Composable
+fun Modifier.pressable(onClick: () -> Unit, surface: Modifier.() -> Modifier = { this }): Modifier {
+  val source = androidx.compose.runtime.remember { MutableInteractionSource() }
+  return this
+    .pressScale(source)
+    .surface()
+    .clickable(interactionSource = source, indication = androidx.compose.foundation.LocalIndication.current, onClick = onClick)
+}

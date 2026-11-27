@@ -57,7 +57,7 @@ fun WeekOrbitStrip(
   val grow = remember { Animatable(0f) }
   LaunchedEffect(week.first()) {
     grow.snapTo(0f)
-    grow.animateTo(1f, tween(800, easing = FastOutSlowInEasing))
+    grow.animateTo(1f, tween(600, easing = com.example.ui.theme.EaseOutStrong))
   }
   Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
     week.forEach { date ->

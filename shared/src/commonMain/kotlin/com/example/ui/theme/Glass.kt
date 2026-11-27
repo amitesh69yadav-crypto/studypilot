@@ -1,5 +1,7 @@
 package com.example.ui.theme
 
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.graphics.graphicsLayer
 import kotlinx.coroutines.launch
 import androidx.compose.ui.node.invalidateDraw
 import androidx.compose.foundation.Canvas
@@ -285,6 +287,14 @@ private class GlassIndicationNode(
   private var hovered = false
   private var pressed = false
   private var focused = false
+  /** The tint's strength, eased rather than switched, so hovering across a list feels smooth. */
+  private val tint = androidx.compose.animation.core.Animatable(0f)
+
+  private fun target(): Float = when {
+    pressed -> if (dark) 0.16f else 0.12f
+    hovered || focused -> if (dark) 0.10f else 0.075f
+    else -> 0f
+  }
 
   override fun onAttach() {
     coroutineScope.launch {
@@ -298,19 +308,21 @@ private class GlassIndicationNode(
           is androidx.compose.foundation.interaction.FocusInteraction.Focus -> focused = true
           is androidx.compose.foundation.interaction.FocusInteraction.Unfocus -> focused = false
         }
-        invalidateDraw()
+        val goal = target()
+        // In quickly, out a little slower; a press lands at once.
+        launch {
+          if (pressed) tint.snapTo(goal)
+          else tint.animateTo(goal, androidx.compose.animation.core.tween(if (goal > tint.value) 120 else 220, easing = EaseOutStrong)) { invalidateDraw() }
+          invalidateDraw()
+        }
       }
     }
   }
 
   override fun androidx.compose.ui.graphics.drawscope.ContentDrawScope.draw() {
     if (!behindChildren) drawContent()
-    val alpha = when {
-      pressed -> if (dark) 0.16f else 0.12f
-      hovered || focused -> if (dark) 0.10f else 0.075f
-      else -> 0f
-    }
-    if (alpha > 0f) {
+    val alpha = tint.value
+    if (alpha > 0.001f) {
       val radius = minOf(14.dp.toPx(), size.minDimension / 2)
       drawRoundRect(
         (if (dark) Color.White else Color.Black).copy(alpha = alpha),
@@ -318,5 +330,27 @@ private class GlassIndicationNode(
       )
     }
     if (behindChildren) drawContent()
+  }
+}
+
+/** Strong ease-out for things responding to the user: moves at once, settles softly. */
+val EaseOutStrong = androidx.compose.animation.core.CubicBezierEasing(0.23f, 1f, 0.32f, 1f)
+
+/**
+ * Presses an element in slightly (to 97%) while it's held, so a click feels heard. Pass the same
+ * [interactionSource] the element's clickable uses.
+ */
+@androidx.compose.runtime.Composable
+fun Modifier.pressScale(interactionSource: androidx.compose.foundation.interaction.InteractionSource): Modifier {
+  if (LocalGlass.current == null) return this
+  val pressed = interactionSource.collectIsPressedAsState()
+  val scale = androidx.compose.animation.core.animateFloatAsState(
+    targetValue = if (pressed.value) 0.97f else 1f,
+    animationSpec = androidx.compose.animation.core.tween(160, easing = EaseOutStrong),
+    label = "press"
+  )
+  return this.graphicsLayer {
+    scaleX = scale.value
+    scaleY = scale.value
   }
 }

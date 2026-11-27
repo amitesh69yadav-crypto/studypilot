@@ -1,5 +1,7 @@
 package com.example.ui
 
+import androidx.compose.ui.graphics.graphicsLayer
+import com.example.ui.theme.pressable
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.CompositionLocalProvider
@@ -100,7 +102,20 @@ fun GlassShell(
           val headerControls = remember(currentScreen) { mutableStateOf<(@Composable () -> Unit)?>(null) }
           Box(Modifier.padding(horizontal = 16.dp)) { PageHeader(viewModel, currentScreen, glass, headerControls.value) }
           Spacer(Modifier.height(18.dp))
-          Box(Modifier.weight(1f).fillMaxWidth()) {
+          // A new page settles in: a short fade and rise, so switching pages isn't a hard cut.
+          val enter = remember(currentScreen) { androidx.compose.animation.core.Animatable(0f) }
+          androidx.compose.runtime.LaunchedEffect(currentScreen) {
+            enter.animateTo(1f, androidx.compose.animation.core.tween(220, easing = com.example.ui.theme.EaseOutStrong))
+          }
+          Box(
+            Modifier
+              .weight(1f)
+              .fillMaxWidth()
+              .graphicsLayer {
+                alpha = 0.35f + 0.65f * enter.value
+                translationY = (1f - enter.value) * 8.dp.toPx()
+              }
+          ) {
             CompositionLocalProvider(LocalHeaderControls provides headerControls) { content() }
           }
         }
@@ -179,8 +194,7 @@ private fun Sidebar(viewModel: StudyPilotViewModel, current: Screen, pendingTask
     Column(
       Modifier
         .fillMaxWidth()
-        .glass(RoundedCornerShape(20.dp), glass)
-        .clickable { viewModel.navigateTo(Screen.Progress) }
+        .pressable({ viewModel.navigateTo(Screen.Progress) }) { glass(RoundedCornerShape(20.dp), glass) }
         .padding(14.dp)
     ) {
       Icon(Icons.Default.LocalFireDepartment, contentDescription = null, tint = glass.text, modifier = Modifier.size(18.dp))
@@ -207,8 +221,7 @@ private fun NavItem(entry: NavEntry, selected: Boolean, glass: GlassColors, badg
       .fillMaxWidth()
       .padding(vertical = 2.dp)
       .height(42.dp)
-      .then(if (selected) Modifier.glass(shape, glass, glass.selected) else Modifier.clip(shape))
-      .clickable(onClick = onClick)
+      .pressable(onClick) { then(if (selected) Modifier.glass(shape, glass, glass.selected) else Modifier.clip(shape)) }
       .padding(horizontal = 14.dp)
   ) {
     Icon(entry.icon, contentDescription = null, tint = glass.text, modifier = Modifier.size(18.dp))
@@ -262,8 +275,7 @@ private fun PageHeader(viewModel: StudyPilotViewModel, current: Screen, glass: G
       Box(
         Modifier
           .size(40.dp)
-          .glass(CircleShape, glass, if (current == Screen.Settings) glass.selected else glass.fill)
-          .clickable { viewModel.navigateTo(Screen.Settings) },
+          .pressable({ viewModel.navigateTo(Screen.Settings) }) { glass(CircleShape, glass, if (current == Screen.Settings) glass.selected else glass.fill) },
         contentAlignment = Alignment.Center
       ) {
         Text(user.avatarInitials, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = glass.text)
@@ -278,8 +290,7 @@ fun GlassCircleButton(icon: ImageVector, description: String, glass: GlassColors
   Box(
     Modifier
       .size(40.dp)
-      .glass(CircleShape, glass)
-      .clickable(onClick = onClick),
+      .pressable(onClick) { glass(CircleShape, glass) },
     contentAlignment = Alignment.Center
   ) {
     Icon(icon, contentDescription = description, tint = glass.text, modifier = Modifier.size(18.dp))

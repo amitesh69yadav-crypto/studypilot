@@ -219,7 +219,7 @@ fun OrbitRing(
     }
   }
   val grow = remember { Animatable(0f) }
-  LaunchedEffect(Unit) { grow.animateTo(1f, tween(900, easing = FastOutSlowInEasing)) }
+  LaunchedEffect(Unit) { grow.animateTo(1f, tween(650, easing = com.example.ui.theme.EaseOutStrong)) }
 
   var drag by remember { mutableStateOf<RingDrag?>(null) }
   var hover by remember { mutableStateOf<DayBlock?>(null) }
