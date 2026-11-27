@@ -92,6 +92,9 @@ fun ProgressScreen(
   val masteredCount = remember(topics) { topics.count { it.masteryLevel == "MASTERED" } }
   val familiarCount = remember(topics) { topics.count { it.masteryLevel == "FAMILIAR" } }
   val strugglingTopics = remember(topics) { topics.filter { it.masteryLevel == "STRUGGLING" } }
+  // A weak or untested topic opens its details, the same dialog as on the Topics page.
+  var openTopic by remember { mutableStateOf<com.example.data.model.StudyTopic?>(null) }
+  openTopic?.let { t -> TopicDetailHost(viewModel, t) { openTopic = it } }
   val untestedTopics = remember(topics) { topics.filter { it.timesTested == 0 } }
 
   val averageScore = remember(attempts) {
@@ -670,6 +673,7 @@ fun ProgressScreen(
           ) {
             strugglingTopics.forEach { topic ->
               Card(
+                onClick = { openTopic = topic },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -747,6 +751,7 @@ fun ProgressScreen(
           ) {
             untestedTopics.forEach { topic ->
               Card(
+                onClick = { openTopic = topic },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),

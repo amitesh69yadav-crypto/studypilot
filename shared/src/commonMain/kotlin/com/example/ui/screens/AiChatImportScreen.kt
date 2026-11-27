@@ -805,7 +805,7 @@ private fun ImportedChatCard(
           horizontalArrangement = Arrangement.spacedBy(12.dp),
           verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-          StatPill(icon = Icons.Default.Psychology, label = "${chat.extractedConceptsCount} concepts")
+          StatPill(icon = Icons.Default.Psychology, label = com.example.ui.components.countOf(chat.extractedConceptsCount, "concept"))
           StatPill(icon = Icons.AutoMirrored.Filled.Chat, label = "${chat.messageCount} turns")
           StatPill(icon = Icons.Default.Notes, label = "${chat.wordCount} words")
         }
@@ -1546,7 +1546,7 @@ private fun KnowledgeCoverageDashboardTab(
                     .padding(end = 8.dp)
                 )
                 Text(
-                  text = "${list.size} concepts",
+                  text = com.example.ui.components.countOf(list.size, "concept"),
                   fontSize = 12.sp,
                   color = PaletteDeepSage,
                   fontWeight = FontWeight.Bold,
@@ -2153,7 +2153,7 @@ private fun ExtractionPreviewDialog(
               color = PaletteDarkText
             )
             Text(
-              text = "${preview.concepts.size} concepts extracted from ${preview.platform}",
+              text = "${com.example.ui.components.countOf(preview.concepts.size, "concept")} extracted from ${preview.platform}",
               style = MaterialTheme.typography.bodySmall,
               color = PaletteDeepSage
             )

@@ -100,6 +100,7 @@ fun DashboardScreen(
   onQuickAddSession: () -> Unit
 ) {
   val sessions by viewModel.sessions.collectAsState()
+  var editingSession by remember { mutableStateOf<TimetableSession?>(null) }
   val topics by viewModel.topics.collectAsState()
   val tasks by viewModel.tasks.collectAsState()
   val attempts by viewModel.quizAttempts.collectAsState()
@@ -417,7 +418,7 @@ fun DashboardScreen(
           verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
           sessions.take(3).forEach { session ->
-            SessionItemRow(session = session, onToggleStatus = {
+            SessionItemRow(session = session, onOpen = { editingSession = session }, onToggleStatus = {
               val next = if (session.status == "COMPLETED") "SCHEDULED" else "COMPLETED"
               viewModel.updateSessionStatus(session, next)
             })
@@ -427,6 +428,7 @@ fun DashboardScreen(
     }
   }
   var openTopic by remember { mutableStateOf<StudyTopic?>(null) }
+  com.example.ui.orbit.SessionDialogHost(viewModel, editingSession?.let { com.example.ui.orbit.SessionDialog.Edit(it) }) { editingSession = null }
   openTopic?.let { t -> TopicDetailHost(viewModel, t) { openTopic = it } }
   val recentTopics: @Composable () -> Unit = {
     Column(
@@ -552,13 +554,14 @@ fun DashboardScreen(
 @Composable
 private fun SessionItemRow(
   session: TimetableSession,
+  onOpen: () -> Unit,
   onToggleStatus: () -> Unit
 ) {
   val isDone = session.status == "COMPLETED"
+  // The row opens the session; the circle on the right marks it done.
   Surface(
-    modifier = Modifier
-      .fillMaxWidth()
-      .clickable { onToggleStatus() },
+    onClick = onOpen,
+    modifier = Modifier.fillMaxWidth(),
     shape = RoundedCornerShape(12.dp),
     color = MaterialTheme.colorScheme.surface,
     border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
@@ -620,20 +623,28 @@ private fun SessionItemRow(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         maxLines = 1
       )
-      Spacer(modifier = Modifier.width(12.dp))
-      if (isDone) {
-        Icon(
-          imageVector = Icons.Default.CheckCircle,
-          contentDescription = "Completed",
-          tint = MaterialTheme.colorScheme.primary,
-          modifier = Modifier.size(20.dp)
-        )
-      } else {
-        Box(
-          modifier = Modifier
-            .size(20.dp)
-            .border(1.5.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
-        )
+      Spacer(modifier = Modifier.width(6.dp))
+      Box(
+        modifier = Modifier
+          .size(32.dp)
+          .clip(CircleShape)
+          .clickable(onClick = onToggleStatus),
+        contentAlignment = Alignment.Center
+      ) {
+        if (isDone) {
+          Icon(
+            imageVector = Icons.Default.CheckCircle,
+            contentDescription = "Mark not done",
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(20.dp)
+          )
+        } else {
+          Box(
+            modifier = Modifier
+              .size(20.dp)
+              .border(1.5.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
+          )
+        }
       }
     }
   }

@@ -1,5 +1,10 @@
 package com.example.ui.screens
 
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.Cancel
+import androidx.compose.material.icons.filled.ChevronRight
 import com.example.ui.theme.statTile
 import com.example.ui.theme.statLabel
 import androidx.compose.foundation.background
@@ -81,6 +86,7 @@ fun QuizScreen(
 ) {
   val topics by viewModel.topics.collectAsState()
   val quizAttempts by viewModel.quizAttempts.collectAsState()
+  var openAttempt by remember { mutableStateOf<QuizAttempt?>(null) }
   val quizConfig by viewModel.quizConfig.collectAsState()
   val isAiLoading by viewModel.isAiLoading.collectAsState()
   val subjects by viewModel.subjects.collectAsState()
@@ -431,6 +437,7 @@ fun QuizScreen(
           .padding(vertical = 4.dp)
       ) {
         SectionHeader(title = "History (${quizAttempts.size})")
+        openAttempt?.let { QuizAttemptDialog(it) { openAttempt = null } }
 
         if (quizAttempts.isEmpty()) {
           Card(
@@ -455,7 +462,7 @@ fun QuizScreen(
             verticalArrangement = Arrangement.spacedBy(8.dp)
           ) {
             quizAttempts.forEach { attempt ->
-              QuizAttemptItemRow(attempt = attempt)
+              QuizAttemptItemRow(attempt = attempt, onClick = { openAttempt = attempt })
             }
           }
         }
@@ -465,7 +472,7 @@ fun QuizScreen(
 }
 
 @Composable
-private fun QuizAttemptItemRow(attempt: QuizAttempt) {
+private fun QuizAttemptItemRow(attempt: QuizAttempt, onClick: () -> Unit) {
   val scoreColor = when {
     attempt.scorePercentage >= 80 -> EmeraldSuccess
     attempt.scorePercentage >= 60 -> CyanAccent
@@ -473,6 +480,7 @@ private fun QuizAttemptItemRow(attempt: QuizAttempt) {
   }
 
   Card(
+    onClick = onClick,
     modifier = Modifier.fillMaxWidth(),
     shape = RoundedCornerShape(16.dp),
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -505,16 +513,83 @@ private fun QuizAttemptItemRow(attempt: QuizAttempt) {
           color = MaterialTheme.colorScheme.onSurface
         )
         Text(
-          text = "${attempt.correctCount}/${attempt.totalQuestions} correct • ${attempt.dateAttempted}",
+          text = "${attempt.correctCount}/${attempt.totalQuestions} correct · ${friendlyDateTime(attempt.dateAttempted)}",
           style = MaterialTheme.typography.bodySmall,
           color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
-          text = "${attempt.topicsCoveredCount} topics" + if (attempt.topicsSkippedCount > 0) " · ${attempt.topicsSkippedCount} left for next time" else "",
+          text = com.example.ui.components.countOf(attempt.topicsCoveredCount, "topic") + if (attempt.topicsSkippedCount > 0) " · ${attempt.topicsSkippedCount} left for next time" else "",
           style = MaterialTheme.typography.labelSmall,
           color = MaterialTheme.colorScheme.primary
         )
       }
+      Icon(Icons.Default.ChevronRight, contentDescription = "Open", tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
   }
+}
+
+/** "2026-11-26 20:14" as "Nov 26, 8:14 PM", or as it is when it isn't a date and time. */
+private fun friendlyDateTime(value: String): String = runCatching {
+  val parsed = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).parse(value)!!
+  java.text.SimpleDateFormat("MMM d, h:mm a", java.util.Locale.getDefault()).format(parsed)
+}.getOrDefault(value)
+
+/** One finished quiz: how each topic went and which questions were right or wrong. */
+@Composable
+private fun QuizAttemptDialog(attempt: QuizAttempt, onDismiss: () -> Unit) {
+  data class Answer(val question: String, val topic: String, val ok: Boolean)
+  val answers = remember(attempt.detailsJson) {
+    runCatching {
+      val arr = org.json.JSONArray(attempt.detailsJson)
+      (0 until arr.length()).map { i ->
+        val o = arr.getJSONObject(i)
+        // Questions are stored as a matching key (lower case, no punctuation); show it as a sentence.
+        val key = o.optString("k").substringBefore("|").trim()
+        Answer(key.replaceFirstChar { it.uppercase() }, o.optString("t").ifBlank { "General" }, o.optBoolean("ok"))
+      }
+    }.getOrDefault(emptyList())
+  }
+  AlertDialog(
+    onDismissRequest = onDismiss,
+    containerColor = com.example.ui.theme.dialogBackground(MaterialTheme.colorScheme.surface),
+    title = {
+      Column {
+        Text(attempt.title, fontWeight = FontWeight.Bold)
+        Text(
+          "${attempt.scorePercentage}% · ${attempt.correctCount} of ${attempt.totalQuestions} right · ${friendlyDateTime(attempt.dateAttempted)}",
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+      }
+    },
+    text = {
+      if (answers.isEmpty()) {
+        Text("This quiz didn't keep a breakdown of its questions.", style = MaterialTheme.typography.bodyMedium)
+      } else {
+        Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+          answers.groupBy { it.topic }.forEach { (topic, list) ->
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+              Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(topic, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold), modifier = Modifier.weight(1f))
+                Text("${list.count { it.ok }}/${list.size}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+              }
+              list.forEach { a ->
+                Row(verticalAlignment = Alignment.Top) {
+                  Icon(
+                    if (a.ok) Icons.Default.CheckCircle else Icons.Default.Cancel,
+                    contentDescription = if (a.ok) "Right" else "Wrong",
+                    tint = if (a.ok) EmeraldSuccess else RoseError,
+                    modifier = Modifier.size(16.dp).padding(top = 2.dp)
+                  )
+                  Spacer(Modifier.width(8.dp))
+                  Text(a.question.ifBlank { "Question" }, style = MaterialTheme.typography.bodySmall, maxLines = 3)
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }
+  )
 }

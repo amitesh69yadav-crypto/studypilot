@@ -77,8 +77,10 @@ fun DesktopTimetable(viewModel: StudyPilotViewModel, showAddDialogOnInit: Boolea
   // View switch, week navigation and Add. On the desktop they sit in the page header beside the title.
   val toolbar: @Composable () -> Unit = {
     Row(verticalAlignment = Alignment.CenterVertically) {
-      SegmentedPills(TimetableMode.entries.map { it.label }, mode.ordinal, glass) { mode = TimetableMode.entries[it] }
-      Spacer(Modifier.weight(1f))
+      // The view switch sits in the middle of the free space between the title and the week controls.
+      Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+        SegmentedPills(TimetableMode.entries.map { it.label }, mode.ordinal, glass) { mode = TimetableMode.entries[it] }
+      }
       if (mode != TimetableMode.Planner) {
         val step = if (mode == TimetableMode.Week) 7 else 1
         GlassCircleButton(Icons.Default.ChevronLeft, if (step == 7) "Previous week" else "Previous day", glass) {

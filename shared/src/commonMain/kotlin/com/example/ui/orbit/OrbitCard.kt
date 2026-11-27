@@ -1,5 +1,6 @@
 package com.example.ui.orbit
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -255,7 +256,8 @@ fun OrbitLegend(
   val counted = if (view == OrbitView.Actual) blocks.filter { it.done } else blocks
   val rows = legendFor(counted)
   val covered = coveredMinutes(counted)
-  val maxRows = if (large) 10 else 6
+  var showAll by remember { mutableStateOf(false) }
+  val maxRows = if (large || showAll) Int.MAX_VALUE else 6
   Column(modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
     Row(verticalAlignment = Alignment.Bottom) {
       Text(
@@ -318,7 +320,17 @@ fun OrbitLegend(
         }
       }
       if (rows.size > maxRows) {
-        Text("+${rows.size - maxRows} more", fontSize = 12.sp, color = glass.muted, modifier = Modifier.padding(start = 2.dp))
+        // Shows the rest of the legend in place.
+        Text(
+          "Show ${rows.size - maxRows} more",
+          fontSize = 12.sp,
+          fontWeight = FontWeight.SemiBold,
+          color = glass.text,
+          modifier = Modifier
+            .clip(CircleShape)
+            .clickable { showAll = true }
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+        )
       }
     }
   }

@@ -824,3 +824,6 @@ fun TimeWheelScrollerDialog(
     shape = RoundedCornerShape(16.dp)
   )
 }
+
+/** "1 topic", "3 topics": a count with its noun in the right number. */
+fun countOf(n: Int, one: String, many: String = one + "s"): String = "$n ${if (n == 1) one else many}"
