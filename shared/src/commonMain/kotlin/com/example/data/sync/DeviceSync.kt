@@ -101,6 +101,31 @@ class SyncHost(private val engine: SyncEngine, private val prefs: KeyValueStore,
     200 to JSONObject().put("token", token).put("hostId", engine.deviceId).put("hostName", hostName)
   }
 
+  /** The last alarm stopped on any device: {key, snooze, at}. Phones check it while they ring. */
+  @Volatile private var lastAlarmStop: JSONObject? = null
+
+  /** Called when a phone says it stopped (or snoozed) an alarm, so the PC can stop the same one. */
+  @Volatile var onRemoteAlarmStop: ((key: String, snoozeMinutes: Int) -> Unit)? = null
+
+  /** The PC stopped an alarm itself; ringing phones pick this up on their next check. */
+  fun announceAlarmStop(key: String, snoozeMinutes: Int) {
+    lastAlarmStop = AlarmStop(key, snoozeMinutes, System.currentTimeMillis()).toJson()
+  }
+
+  /**
+   * POST /alarm with a bearer token. A body with "stop" reports an alarm stopped on the phone;
+   * either way the reply carries the latest stop, so a ringing phone can tell the PC stopped it.
+   */
+  fun handleAlarm(token: String?, body: JSONObject): Pair<Int, JSONObject> {
+    if (_peers.value.none { it.token == token }) return 401 to error("This phone isn't paired with the PC any more. Pair again.")
+    body.optJSONObject("stop")?.let { AlarmStop.fromJson(it) }?.let { stop ->
+      val fresh = stop.copy(at = System.currentTimeMillis())
+      lastAlarmStop = fresh.toJson()
+      runCatching { onRemoteAlarmStop?.invoke(fresh.key, fresh.snoozeMinutes) }
+    }
+    return 200 to JSONObject().put("stop", lastAlarmStop ?: JSONObject.NULL)
+  }
+
   /** POST /sync with a bearer token; see [SyncClient.syncNow] for the body. */
   suspend fun handleSync(token: String?, body: JSONObject): Pair<Int, JSONObject> {
     val peer = _peers.value.firstOrNull { it.token == token } ?: return 401 to error("This phone isn't paired with the PC any more. Pair again.")
@@ -298,6 +323,24 @@ class SyncClient(private val engine: SyncEngine, private val prefs: KeyValueStor
     }
   }
 
+  /** Tells the PC this phone stopped (snoozeMinutes 0) or snoozed an alarm. False if it couldn't. */
+  suspend fun sendAlarmStop(key: String, snoozeMinutes: Int): Boolean {
+    val address = prefs.getString("address", null) ?: return false
+    val token = prefs.getString("token", null) ?: return false
+    return runCatching { post(address, "/alarm", token, JSONObject().put("stop", AlarmStop(key, snoozeMinutes, 0L).toJson())).first == 200 }
+      .getOrDefault(false)
+  }
+
+  /** The latest alarm stop the PC knows about, or null (also when the PC can't be reached). */
+  suspend fun latestAlarmStop(): AlarmStop? {
+    val address = prefs.getString("address", null) ?: return null
+    val token = prefs.getString("token", null) ?: return null
+    return runCatching {
+      val (status, reply) = post(address, "/alarm", token, JSONObject())
+      if (status == 200) reply.optJSONObject("stop")?.let { AlarmStop.fromJson(it) } else null
+    }.getOrNull()
+  }
+
   private suspend fun post(address: String, path: String, token: String?, body: JSONObject): Pair<Int, JSONObject> =
     withContext(Dispatchers.IO) {
       val request = Request.Builder()
@@ -311,3 +354,20 @@ class SyncClient(private val engine: SyncEngine, private val prefs: KeyValueStor
       }
     }
 }
+
+/**
+ * An alarm stopped on one device. Session ids differ between phone and PC, so the alarm is named
+ * by [key] ([alarmKey]); [snoozeMinutes] is 0 for Stop; [at] is when the PC heard of it.
+ */
+data class AlarmStop(val key: String, val snoozeMinutes: Int, val at: Long) {
+  fun toJson(): JSONObject = JSONObject().put("key", key).put("snooze", snoozeMinutes).put("at", at)
+
+  companion object {
+    fun fromJson(o: JSONObject): AlarmStop? =
+      o.optString("key").takeIf { it.isNotBlank() }?.let { AlarmStop(it, o.optInt("snooze", 0).coerceIn(0, 120), o.optLong("at", 0L)) }
+  }
+}
+
+/** The same alarm on both devices: same subject, topic and start time. */
+fun alarmKey(subjectName: String, topic: String, startTime: String): String =
+  listOf(subjectName, topic, startTime).joinToString("|") { it.trim().lowercase() }

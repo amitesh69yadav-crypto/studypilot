@@ -24,6 +24,11 @@ fun startSyncServer(host: SyncHost): EmbeddedServer<*, *>? = try {
         val (status, body) = host.handlePair(call.jsonBody())
         call.respondJson(status, body)
       }
+      post("/alarm") {
+        val token = call.request.headers["Authorization"]?.removePrefix("Bearer ")?.trim()
+        val (status, body) = host.handleAlarm(token, call.jsonBody())
+        call.respondJson(status, body)
+      }
       post("/sync") {
         val token = call.request.headers["Authorization"]?.removePrefix("Bearer ")?.trim()
         val (status, body) = host.handleSync(token, call.jsonBody())

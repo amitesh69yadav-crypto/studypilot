@@ -1676,15 +1676,29 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
   }
 
   fun dismissAlarm() {
+    _ringingAlarmSession.value?.let { alarms.announceStop(it, 0) }
     alarms.stopRinging()
     _ringingAlarmSession.value = null
   }
 
   fun snoozeAlarm(session: TimetableSession, minutes: Int = 5) {
+    alarms.announceStop(session, minutes)
     alarms.stopRinging()
     _ringingAlarmSession.value = null
     alarms.snooze(session, minutes)
     snackbar("Snoozed for $minutes minutes")
+  }
+
+  /** The other device stopped or snoozed the alarm named [key]; do the same here if it's ringing. */
+  fun stopAlarmFromOtherDevice(key: String, snoozeMinutes: Int) {
+    val session = _ringingAlarmSession.value ?: return
+    if (com.example.data.sync.alarmKey(session.subjectName, session.topic, session.startTime) != key) return
+    alarms.stopRinging()
+    _ringingAlarmSession.value = null
+    if (snoozeMinutes > 0) {
+      alarms.snooze(session, snoozeMinutes)
+      snackbar("Snoozed on your other device for $snoozeMinutes minutes")
+    } else snackbar("Alarm stopped on your other device")
   }
 
   fun createDayScheduleBatch(newSessions: List<TimetableSession>) {

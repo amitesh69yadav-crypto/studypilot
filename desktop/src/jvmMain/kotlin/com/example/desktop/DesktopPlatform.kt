@@ -139,6 +139,11 @@ class DesktopAlarms(
   /** Set by the window: bring it forward and show a notification. */
   var onRing: (TimetableSession) -> Unit = {}
 
+  /** Set by the app: lets paired phones know this alarm was stopped or snoozed here. */
+  var onStopped: (TimetableSession, Int) -> Unit = { _, _ -> }
+
+  override fun announceStop(session: TimetableSession, snoozeMinutes: Int) = onStopped(session, snoozeMinutes)
+
   private val scheduled = ConcurrentHashMap<Long, Job>()
   private var tone: Job? = null
 

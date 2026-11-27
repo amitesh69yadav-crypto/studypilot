@@ -69,6 +69,8 @@ class AlarmRingingService : Service() {
   private var wakeLock: PowerManager.WakeLock? = null
   private val handler = Handler(Looper.getMainLooper())
   private val timeout = Runnable { stopRinging(applicationContext) }
+  /** Checks whether the paired PC stopped this alarm. */
+  private var relay: kotlinx.coroutines.Job? = null
 
   override fun onBind(intent: Intent?): IBinder? = null
 
@@ -92,6 +94,8 @@ class AlarmRingingService : Service() {
     AlarmSoundManager.startSoundAndVibration(applicationContext)
     handler.removeCallbacks(timeout)
     handler.postDelayed(timeout, RING_TIMEOUT_MS)
+    relay?.cancel()
+    relay = AlarmRelay.watch(applicationContext, session)
 
     AlarmEventBus.emit(
       AlarmEvent.Triggered(
@@ -109,6 +113,8 @@ class AlarmRingingService : Service() {
 
   override fun onDestroy() {
     handler.removeCallbacks(timeout)
+    relay?.cancel()
+    relay = null
     AlarmSoundManager.stopSoundAndVibration()
     releaseWakeLock()
     ringingSessionId = null

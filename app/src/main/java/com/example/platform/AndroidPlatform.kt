@@ -85,6 +85,8 @@ private class AndroidAlarms(private val context: Context) : AlarmPlatform {
   override fun snooze(session: TimetableSession, minutes: Int) = service.scheduleSnoozeAlarm(session, minutes)
   override fun startRinging(session: TimetableSession) = AlarmRingingService.startRinging(context, session)
   override fun stopRinging() = service.stopAlarmSound()
+  override fun announceStop(session: TimetableSession, snoozeMinutes: Int) =
+    com.example.data.service.AlarmRelay.send(context, session, snoozeMinutes)
   override val ringingSessionId: Long? get() = AlarmRingingService.ringingSessionId
   override fun previewSound(sound: com.example.platform.AlarmSound) =
     com.example.data.service.AlarmSoundManager.preview(context, sound)

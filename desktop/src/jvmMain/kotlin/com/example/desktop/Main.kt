@@ -44,6 +44,14 @@ fun main() {
   val server = startSyncServer(platform.syncHost)
   val viewModel = StudyPilotViewModel(platform)
   val actions = DesktopActions()
+  // Stopping an alarm on either device stops it on the other: the PC records its own stops for
+  // ringing phones to pick up, and stops here when a phone reports one.
+  platform.desktopAlarms.onStopped = { session, snooze ->
+    platform.syncHost.announceAlarmStop(com.example.data.sync.alarmKey(session.subjectName, session.topic, session.startTime), snooze)
+  }
+  platform.syncHost.onRemoteAlarmStop = { key, snooze ->
+    java.awt.EventQueue.invokeLater { viewModel.stopAlarmFromOtherDevice(key, snooze) }
+  }
 
   application {
     val windowState = rememberWindowState(size = DpSize(1240.dp, 820.dp))

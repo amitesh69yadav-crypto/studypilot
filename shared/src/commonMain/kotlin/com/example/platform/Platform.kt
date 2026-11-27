@@ -67,6 +67,8 @@ interface AlarmPlatform {
   fun stopRinging()
   /** Session whose alarm is ringing right now, or null. */
   val ringingSessionId: Long?
+  /** Tells the other device this alarm was stopped (snoozeMinutes 0) or snoozed, so it stops too. */
+  fun announceStop(session: TimetableSession, snoozeMinutes: Int) {}
   /** Plays a few seconds of [sound], for choosing one in Settings. */
   fun previewSound(sound: AlarmSound) {}
 }

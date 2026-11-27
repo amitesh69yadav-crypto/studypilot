@@ -63,12 +63,14 @@ class AlarmReceiver : BroadcastReceiver() {
 
       ACTION_DISMISS_ALARM -> {
         AlarmRingingService.stopRinging(context)
+        AlarmRelay.send(context, session, 0)
         AlarmEventBus.emit(AlarmEvent.Dismissed(session.id))
       }
 
       ACTION_SNOOZE_ALARM -> {
         AlarmRingingService.stopRinging(context)
         AlarmAndCalendarService(context).scheduleSnoozeAlarm(session, SNOOZE_MINUTES)
+        AlarmRelay.send(context, session, SNOOZE_MINUTES)
         AlarmEventBus.emit(AlarmEvent.Snoozed(session.id, SNOOZE_MINUTES))
       }
     }
