@@ -212,14 +212,17 @@ data class UserProfile(
   val lastLoginTime: Long = System.currentTimeMillis()
 )
 
-/** A note the user wrote: their own words, filed under a subject, synced between devices. */
+/**
+ * A note the user wrote, filed as subject > chapter > topic and synced between devices.
+ * [title] is the chapter, [heading] the topic within it, [body] plain text.
+ */
 @Entity(tableName = "notes")
 data class StudyNote(
   @PrimaryKey(autoGenerate = true) val id: Long = 0,
   val userId: String = "",
   val title: String,
-  /** Markdown is fine: headings, lists, bold and code are shown formatted. */
   val body: String,
+  @androidx.room.ColumnInfo(defaultValue = "") val heading: String = "",
   val subjectName: String = "General",
   val pinned: Boolean = false,
   val createdAt: Long = System.currentTimeMillis(),

@@ -90,4 +90,27 @@ class NotesTest {
     }
     file.delete()
   }
+
+  @Test
+  fun upgradeFromVersion9KeepsNotesAndAddsTopic() = runBlocking<Unit> {
+    val file = File.createTempFile("upgrade9", ".db").also { it.delete() }
+    open(file).also { db ->
+      db.studyPilotDao().insertNote(StudyNote(userId = "u", title = "Chapter 1", body = "kept"))
+      db.close()
+    }
+    BundledSQLiteDriver().open(file.absolutePath).use { c ->
+      c.execSQL("ALTER TABLE notes DROP COLUMN heading")
+      c.execSQL("PRAGMA user_version = 9")
+    }
+    val db = open(file)
+    try {
+      val note = db.studyPilotDao().getNotesForUser("u").first().single()
+      // The old single title becomes the topic; the chapter starts empty.
+      assertEquals(Triple("", "Chapter 1", "kept"), Triple(note.title, note.heading, note.body))
+      db.studyPilotDao().updateNote(note.copy(heading = "Topic A"))
+      assertEquals("Topic A", db.studyPilotDao().getNotesForUser("u").first().single().heading)
+    } finally {
+      db.close(); file.delete()
+    }
+  }
 }

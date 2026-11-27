@@ -473,12 +473,13 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
 
   /** Adds or updates a note; a blank one is not saved. */
   fun saveNote(note: com.example.data.model.StudyNote) {
-    if (note.title.isBlank() && note.body.isBlank()) return
+    if (note.title.isBlank() && note.heading.isBlank() && note.body.isBlank()) return
     viewModelScope.launch {
       repository.saveNote(
         note.copy(
           userId = note.userId.ifBlank { _currentUser.value.id },
-          title = note.title.trim().ifBlank { note.body.trim().lineSequence().first().take(60) },
+          title = note.title.trim(),
+          heading = note.heading.trim().ifBlank { note.body.trim().lineSequence().firstOrNull().orEmpty().take(60) },
           updatedAt = System.currentTimeMillis()
         )
       )

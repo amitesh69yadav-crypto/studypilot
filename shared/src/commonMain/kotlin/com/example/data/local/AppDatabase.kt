@@ -31,7 +31,7 @@ import com.example.data.model.ExtractedConcept
     ExtractedConcept::class,
     com.example.data.model.StudyNote::class
   ],
-  version = 9,
+  version = 10,
   exportSchema = false
 )
 @ConstructedBy(AppDatabaseConstructor::class)
@@ -47,13 +47,22 @@ abstract class AppDatabase : RoomDatabase() {
       .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
       // Real migrations come first, so an upgrade keeps everyone's data; the destructive fallback is
       // only for versions with no migration.
-      .addMigrations(MIGRATION_8_9)
+      .addMigrations(MIGRATION_8_9, MIGRATION_9_10)
       .fallbackToDestructiveMigration(dropAllTables = true)
       .build()
   }
 }
 
 /** Version 9 adds the user's own notes and changes nothing else. */
+/** Version 10 gives notes a topic (heading) under their chapter (title). */
+val MIGRATION_9_10 = object : androidx.room.migration.Migration(9, 10) {
+  override fun migrate(connection: androidx.sqlite.SQLiteConnection) {
+    connection.prepare("ALTER TABLE `notes` ADD COLUMN `heading` TEXT NOT NULL DEFAULT ''").use { it.step() }
+    // Notes from version 9 had one title, which named the note itself: it becomes the topic.
+    connection.prepare("UPDATE `notes` SET `heading` = `title`, `title` = ''").use { it.step() }
+  }
+}
+
 val MIGRATION_8_9 = object : androidx.room.migration.Migration(8, 9) {
   override fun migrate(connection: androidx.sqlite.SQLiteConnection) {
     connection.prepare(
