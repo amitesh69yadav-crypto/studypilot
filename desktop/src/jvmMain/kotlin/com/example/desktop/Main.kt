@@ -1,7 +1,5 @@
 package com.example.desktop
 
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.Column
 import com.example.ui.theme.BackdropPicker
 import com.example.ui.theme.LocalIsDesktop
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -61,15 +59,8 @@ fun main() {
       },
       state = windowState,
       title = "StudyPilot",
-      icon = logo,
-      // No system frame: the app's background runs to the top edge and TitleBar draws the controls.
-      undecorated = true
+      icon = logo
     ) {
-      LaunchedEffect(Unit) { window.minimumSize = java.awt.Dimension(720, 520) }
-      val closeApp = {
-        server?.stop(500, 1000)
-        exitApplication()
-      }
       LaunchedEffect(Unit) {
         platform.desktopAlarms.onRing = { session ->
           windowState.isMinimized = false
@@ -109,12 +100,8 @@ fun main() {
         StudyPilotTheme(darkTheme = dark, style = AppStyle.Glass, fonts = desktopFonts()) {
           Box(Modifier.fillMaxSize()) {
             MeshBackground(backdrop)
-            Column(Modifier.fillMaxSize()) {
-              TitleBar(windowState, onClose = closeApp)
-              Box(Modifier.weight(1f).fillMaxWidth()) { StudyPilotApp(viewModel = viewModel) }
-            }
+            StudyPilotApp(viewModel = viewModel)
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp))
-            ResizeEdges(windowState)
           }
         }
       }
