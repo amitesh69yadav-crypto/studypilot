@@ -430,7 +430,7 @@ fun GlassPhoneNavBar(items: List<Triple<Screen, String, ImageVector>>, current: 
           verticalArrangement = Arrangement.Center
         ) {
           // Icons only; the label is still read out by screen readers.
-          Icon(icon, contentDescription = label, tint = if (selected) glass.text else glass.muted, modifier = Modifier.size(24.dp))
+          Icon(icon, contentDescription = label, tint = if (selected) glass.text else glass.muted, modifier = Modifier.size(26.dp).opticalSize(icon))
         }
       }
     }
