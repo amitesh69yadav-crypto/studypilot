@@ -153,6 +153,7 @@ private fun DayAgenda(
   onOpen: (com.example.data.model.TimetableSession) -> Unit
 ) {
   val blocks = remember(sessions, date) { blocksOn(sessions, date) }
+  val plan = remember(blocks) { colorPlanFor(blocks) }
   Column(
     modifier.glass(RoundedCornerShape(26.dp), glass).padding(20.dp),
     verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -175,7 +176,7 @@ private fun DayAgenda(
           .padding(vertical = 6.dp, horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically
       ) {
-        CategoryChip(b.session, 32.dp)
+        CategoryChip(b.session, 32.dp, plan.of(b))
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
           Text(

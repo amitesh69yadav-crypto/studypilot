@@ -1,5 +1,10 @@
 package com.example.ui.orbit
 
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Path
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -96,12 +101,47 @@ private fun minuteAt(pos: Offset, center: Offset): Float {
   return (((deg + 90f) % 360f) + 360f) % 360f * 4f
 }
 
-/** Angle, in degrees, taken up by a round end of an arc [width] wide at [radius]. */
-private fun capDegrees(width: Float, radius: Float) = Math.toDegrees((width / 2f / radius).toDouble()).toFloat()
+/** Shortest an arc is drawn, in minutes, so a quick session is still something to see and grab. */
+private const val MIN_DRAWN_MINUTES = 18
 
 /**
- * Draws one block as a pastel arc with round ends; one too short for its ends is a dot. [progress]
- * grows the arcs in when the ring first appears.
+ * A ring segment with square ends and softly rounded corners, between radii [rIn] and [rOut], from
+ * [from] degrees (canvas angles) through [sweep] degrees.
+ */
+private fun sectorPath(center: Offset, rIn: Float, rOut: Float, from: Float, sweep: Float, corner: Float): Path {
+  val c = minOf(corner, (rOut - rIn) / 2f, sweep.toRadians() * rIn / 2f).coerceAtLeast(0f)
+  val dOut = Math.toDegrees((c / rOut).toDouble()).toFloat()
+  val dIn = Math.toDegrees((c / rIn).toDouble()).toFloat()
+  val to = from + sweep
+  fun rectOf(r: Float) = Rect(center.x - r, center.y - r, center.x + r, center.y + r)
+  return Path().apply {
+    val start = pointAt(center, rOut, from + dOut)
+    moveTo(start.x, start.y)
+    arcTo(rectOf(rOut), from + dOut, sweep - 2 * dOut, false)
+    pointAt(center, rOut, to).let { k -> pointAt(center, rOut - c, to).let { e -> quadraticTo(k.x, k.y, e.x, e.y) } }
+    pointAt(center, rIn + c, to).let { lineTo(it.x, it.y) }
+    pointAt(center, rIn, to).let { k -> pointAt(center, rIn, to - dIn).let { e -> quadraticTo(k.x, k.y, e.x, e.y) } }
+    arcTo(rectOf(rIn), to - dIn, -(sweep - 2 * dIn), false)
+    pointAt(center, rIn, from).let { k -> pointAt(center, rIn + c, from).let { e -> quadraticTo(k.x, k.y, e.x, e.y) } }
+    pointAt(center, rOut - c, from).let { lineTo(it.x, it.y) }
+    pointAt(center, rOut, from).let { k -> pointAt(center, rOut, from + dOut).let { e -> quadraticTo(k.x, k.y, e.x, e.y) } }
+    close()
+  }
+}
+
+private fun Float.toRadians() = Math.toRadians(this.toDouble()).toFloat()
+
+/** Start and sweep in canvas degrees for a block, widened to [MIN_DRAWN_MINUTES] around its middle. */
+private fun arcSpan(start: Int, end: Int, progress: Float): Pair<Float, Float> {
+  val minutes = maxOf(end - start, MIN_DRAWN_MINUTES).toFloat()
+  val middle = (start + end) / 2f
+  val from = if (end - start >= MIN_DRAWN_MINUTES) start.toFloat() else middle - minutes / 2
+  return degreesOf(from) to minutes / 4f * progress
+}
+
+/**
+ * Draws one block as a pastel segment. It's multiplied onto what's under it, so where two sessions
+ * overlap their colours mix rather than one hiding the other.
  */
 private fun DrawScope.drawBlockArc(
   start: Int,
@@ -110,24 +150,17 @@ private fun DrawScope.drawBlockArc(
   radius: Float,
   width: Float,
   color: Color,
-  progress: Float = 1f,
-  outline: Color? = null
+  progress: Float = 1f
 ) {
-  val cap = capDegrees(width, radius)
-  val sweep = (end - start) / 4f * progress
-  val from = degreesOf(start.toFloat())
-  val topLeft = Offset(center.x - radius, center.y - radius)
-  val box = Size(radius * 2, radius * 2)
-  if (sweep <= cap * 2) {
-    val p = pointAt(center, radius, from + sweep / 2)
-    if (outline != null) drawCircle(outline, width / 2 + 2.5f * density, p)
-    drawCircle(color, width / 2, p)
-  } else {
-    if (outline != null) {
-      drawArc(outline, from + cap, sweep - cap * 2, false, topLeft, box, style = Stroke(width + 5f * density, cap = StrokeCap.Round))
-    }
-    drawArc(color, from + cap, sweep - cap * 2, false, topLeft, box, style = Stroke(width, cap = StrokeCap.Round))
-  }
+  val (from, sweep) = arcSpan(start, end, progress)
+  if (sweep <= 0.01f) return
+  drawPath(sectorPath(center, radius - width / 2, radius + width / 2, from, sweep, 6f * density), color, blendMode = BlendMode.Multiply)
+}
+
+/** A light outline round a block, for the one being hovered or dragged. */
+private fun DrawScope.drawBlockOutline(start: Int, end: Int, center: Offset, radius: Float, width: Float, color: Color) {
+  val (from, sweep) = arcSpan(start, end, 1f)
+  drawPath(sectorPath(center, radius - width / 2, radius + width / 2, from, sweep, 6f * density), color, style = Stroke(2.2f * density))
 }
 
 private fun DrawScope.drawIconAt(painter: VectorPainter, at: Offset, size: Float, tint: Color) {
@@ -149,8 +182,9 @@ internal fun DrawScope.drawMiniOrbit(blocks: List<DayBlock>, glass: GlassColors,
   val thickness = outer * 0.24f
   drawOrbitTrack(center, outer, thickness, glass)
   val mid = outer - thickness / 2
+  val plan = colorPlanFor(blocks)
   for (b in blocks.filterNot { it.isMarker }.sortedByDescending { it.minutes }) {
-    drawBlockArc(b.start, b.end, center, mid, thickness - 2.5f * density, pastelFor(b.session).first, progress)
+    drawBlockArc(b.start, b.end, center, mid, thickness - 2.5f * density, plan.of(b).first, progress)
   }
   for (b in blocks.filter { it.isMarker }) {
     drawCircle(glass.text.copy(alpha = 0.7f), thickness * 0.28f, pointAt(center, mid, degreesOf(b.start.toFloat())))
@@ -173,7 +207,8 @@ fun OrbitRing(
   modifier: Modifier = Modifier,
   onRetime: ((DayBlock, Int, Int) -> Unit)? = null,
   onOpen: (DayBlock) -> Unit = {},
-  onAddAt: ((Int) -> Unit)? = null
+  onAddAt: ((Int) -> Unit)? = null,
+  plan: ColorPlan = remember(blocks) { colorPlanFor(blocks) }
 ) {
   val split = layers == OrbitLayers.Layers
   val canEdit = onRetime != null && view == OrbitView.Planned
@@ -196,8 +231,6 @@ fun OrbitRing(
   // Icons are drawn on the canvas, so their painters are made up front.
   val iconSet = remember { listOf(Icons.Default.Check) + OrbitIconSet }
   val painters: Map<ImageVector, VectorPainter> = iconSet.associateWith { rememberVectorPainter(it) }
-  val measurer = rememberTextMeasurer()
-  val tickStyle = TextStyle(fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = glass.muted)
 
   /** The block under [pos] on the planned band, and how dragging it from there would change it. */
   fun hitTest(pos: Offset, size: Size, density: Float): Pair<DayBlock, DragMode>? {
@@ -207,17 +240,17 @@ fun OrbitRing(
     val distance = hypot(pos.x - g.center.x, pos.y - g.center.y)
     if (distance < mid - width / 2 - 6 * density || distance > mid + width / 2 + 8 * density) return null
     val minute = minuteAt(pos, g.center)
-    val capMinutes = capDegrees(width, mid) * 4f
     val pool = if (view == OrbitView.Actual) currentBlocks.filter { it.done } else currentBlocks
-    val hit = pool.filter { b ->
-      val short = (b.end - b.start) / 4f <= capDegrees(width, mid) * 2
-      val pad = if (short) capMinutes else 2f
-      listOf(minute, minute + DAY_MINUTES).any { m -> m >= b.start - pad && m <= b.end + pad }
-    }.minByOrNull { it.minutes } ?: return null
-    val m = if (minute + DAY_MINUTES <= hit.end + capMinutes) minute + DAY_MINUTES else minute
-    val edge = minOf(capMinutes + 6f, hit.minutes / 3f)
+    fun covers(b: DayBlock, m: Float): Boolean {
+      val pad = 2f + maxOf(0, MIN_DRAWN_MINUTES - b.minutes) / 2f
+      return m >= b.start - pad && m <= b.end + pad
+    }
+    val hit = pool.filter { b -> covers(b, minute) || covers(b, minute + DAY_MINUTES) }.minByOrNull { it.minutes } ?: return null
+    val m = if (covers(hit, minute + DAY_MINUTES)) minute + DAY_MINUTES else minute
+    // The last few minutes at each end resize; the rest moves.
+    val edge = minOf(12f, hit.minutes / 4f)
     val mode = when {
-      hit.isMarker || (hit.end - hit.start) / 4f <= capDegrees(width, mid) * 2 -> DragMode.Move
+      hit.isMarker || hit.minutes < 40 -> DragMode.Move
       m - hit.start < edge -> DragMode.ResizeStart
       hit.end - m < edge -> DragMode.ResizeEnd
       else -> DragMode.Move
@@ -230,6 +263,7 @@ fun OrbitRing(
     Canvas(
       Modifier
         .fillMaxSize()
+        .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
         .pointerHoverIcon(if (hover != null || drag != null) PointerIcon.Hand else PointerIcon.Default)
         .pointerInput(view, split) {
           awaitPointerEventScope {
@@ -301,24 +335,21 @@ fun OrbitRing(
       )
       drawOrbitTrack(g.center, g.outer, g.thickness, glass)
 
-      // Hour ticks just inside the band, with labels at the quarters of the day.
+      // Hour ticks just inside the band, longer at the quarters of the day.
       for (h in 0 until 24) {
         val deg = degreesOf(h * 60f)
-        val major = h % 3 == 0
-        if (h % 6 == 0) {
-          val label = measurer.measure("%02d:00".format(h), tickStyle)
-          val at = pointAt(g.center, g.inner - 16 * density, deg)
-          drawText(label, topLeft = Offset(at.x - label.size.width / 2f, at.y - label.size.height / 2f))
-        } else {
-          val len = if (major) 6 * density else 3 * density
-          drawLine(
-            glass.muted.copy(alpha = if (major) 0.55f else 0.3f),
-            pointAt(g.center, g.inner - 4 * density, deg),
-            pointAt(g.center, g.inner - 4 * density - len, deg),
-            strokeWidth = 1.2f * density,
-            cap = StrokeCap.Round
-          )
+        val len = when {
+          h % 6 == 0 -> 8 * density
+          h % 3 == 0 -> 5 * density
+          else -> 3 * density
         }
+        drawLine(
+          glass.muted.copy(alpha = if (h % 3 == 0) 0.55f else 0.3f),
+          pointAt(g.center, g.inner - 4 * density, deg),
+          pointAt(g.center, g.inner - 4 * density - len, deg),
+          strokeWidth = (if (h % 6 == 0) 1.6f else 1.2f) * density,
+          cap = StrokeCap.Round
+        )
       }
 
       val pMid = g.plannedMid(split)
@@ -327,36 +358,41 @@ fun OrbitRing(
       val dragged = drag
       val outline = if (glass.dark) Color.White.copy(alpha = 0.55f) else Color.White.copy(alpha = 0.95f)
 
-      // Longest first, so a short session inside a long one stays visible on top; alarms over everything.
-      for (b in blocks.sortedWith(compareBy<DayBlock> { it.isMarker }.thenByDescending { it.minutes })) {
-        if (b.isMarker) {
-          val moving = dragged?.takeIf { it.block == b }
-          val at = pointAt(g.center, pMid, degreesOf((moving?.span()?.first ?: b.start).toFloat()))
-          val r = pWidth * 0.36f
-          if (moving != null || hover == b) drawCircle(outline, r + 2.5f * density, at)
-          drawCircle(glass.frost, r, at)
-          drawCircle(glass.text.copy(alpha = 0.55f), r, at, style = Stroke(1.4f * density))
-          if (progress > 0.6f) drawIconAt(painters.getValue(iconFor(b.session)), at, r * 1.15f, glass.text.copy(alpha = ((progress - 0.6f) / 0.4f).coerceIn(0f, 1f)))
-          continue
-        }
-        val (tint, ink) = pastelFor(b.session)
-        val moving = dragged?.takeIf { it.block == b }
-        val (s, e) = moving?.span() ?: (b.start to b.end)
-        val ghost = view == OrbitView.Actual && !b.done
-        val color = if (ghost) tint.copy(alpha = 0.28f) else tint
-        drawBlockArc(s, e, g.center, pMid, pWidth, color, progress, outline = if (moving != null || hover == b) outline else null)
-        if (!ghost && progress > 0.6f) {
+      val ordered = blocks.filterNot { it.isMarker }.sortedByDescending { it.minutes }
+      fun spanOf(b: DayBlock) = dragged?.takeIf { it.block == b }?.span() ?: (b.start to b.end)
+      fun ghost(b: DayBlock) = view == OrbitView.Actual && !b.done
+      // Colours first, multiplied together where sessions overlap; then outlines and icons on top.
+      for (b in ordered) {
+        val (s, e) = spanOf(b)
+        val tint = plan.of(b).first
+        drawBlockArc(s, e, g.center, pMid, pWidth, if (ghost(b)) tint.copy(alpha = 0.28f) else tint, progress)
+      }
+      for (b in ordered) {
+        val (s, e) = spanOf(b)
+        if (dragged?.block == b || hover == b) drawBlockOutline(s, e, g.center, pMid, pWidth, outline)
+        val arcLength = maxOf(e - s, MIN_DRAWN_MINUTES) / 4f * (Math.PI.toFloat() / 180f) * pMid
+        if (!ghost(b) && progress > 0.6f && arcLength >= iconSize + 6 * density) {
           val icon = if (view == OrbitView.Actual) Icons.Default.Check else iconFor(b.session)
           val at = pointAt(g.center, pMid, degreesOf((s + e) / 2f))
-          drawIconAt(painters.getValue(icon), at, iconSize, ink.copy(alpha = ((progress - 0.6f) / 0.4f).coerceIn(0f, 1f)))
+          drawIconAt(painters.getValue(icon), at, iconSize, plan.of(b).second.copy(alpha = ((progress - 0.6f) / 0.4f).coerceIn(0f, 1f)))
         }
+      }
+      // Alarms over everything.
+      for (b in blocks.filter { it.isMarker }) {
+        val moving = dragged?.takeIf { it.block == b }
+        val at = pointAt(g.center, pMid, degreesOf((moving?.span()?.first ?: b.start).toFloat()))
+        val r = pWidth * 0.36f
+        if (moving != null || hover == b) drawCircle(outline, r + 2.5f * density, at)
+        drawCircle(glass.frost, r, at)
+        drawCircle(glass.text.copy(alpha = 0.55f), r, at, style = Stroke(1.4f * density))
+        if (progress > 0.6f) drawIconAt(painters.getValue(iconFor(b.session)), at, r * 1.15f, glass.text.copy(alpha = ((progress - 0.6f) / 0.4f).coerceIn(0f, 1f)))
       }
 
       if (split) {
         // Inner layer: what was actually done.
         val aWidth = g.actualWidth(density)
         for (b in blocks.filter { it.done }.sortedByDescending { it.minutes }) {
-          val (tint, ink) = pastelFor(b.session)
+          val (tint, ink) = plan.of(b)
           drawBlockArc(b.start, b.end, g.center, g.actualMid, aWidth, tint, progress)
           if (aWidth > 12 * density) {
             drawIconAt(painters.getValue(Icons.Default.Check), pointAt(g.center, g.actualMid, degreesOf((b.start + b.end) / 2f)), aWidth * 0.55f, ink)

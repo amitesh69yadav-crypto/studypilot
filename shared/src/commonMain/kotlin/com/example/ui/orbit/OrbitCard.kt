@@ -61,6 +61,7 @@ internal fun rememberEditableSessions(viewModel: StudyPilotViewModel): Pair<List
     pending = pending.filterValues { p -> stored.none { it.id == p.id && it.startTime == p.startTime && it.endTime == p.endTime && it.date == p.date } }
   }
   val shown = if (pending.isEmpty()) stored else stored.map { pending[it.id] ?: it }
+  registerSubjects(shown)
   return shown to { updated ->
     pending = pending + (updated.id to updated)
     viewModel.updateSession(updated)
@@ -169,6 +170,7 @@ private fun OrbitPanel(
 ) {
   val today = todayDate()
   val isToday = date == today
+  val plan = remember(blocks) { colorPlanFor(blocks) }
   Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
     Row(verticalAlignment = Alignment.CenterVertically) {
       Column(Modifier.weight(1f)) {
@@ -219,7 +221,8 @@ private fun OrbitPanel(
         modifier = m,
         onRetime = onRetime,
         onOpen = onOpen,
-        onAddAt = onAddAt
+        onAddAt = onAddAt,
+        plan = plan
       )
     }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
@@ -227,12 +230,12 @@ private fun OrbitPanel(
       if (maxWidth >= 520.dp) {
         Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
           Box(Modifier.weight(1.3f), contentAlignment = Alignment.Center) { ring(Modifier.widthIn(max = maxRing).fillMaxWidth()) }
-          OrbitLegend(blocks, view, glass, Modifier.weight(1f), large)
+          OrbitLegend(blocks, view, glass, Modifier.weight(1f), large, plan)
         }
       } else {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
           ring(Modifier.widthIn(max = maxRing).fillMaxWidth())
-          OrbitLegend(blocks, view, glass, Modifier.fillMaxWidth(), large)
+          OrbitLegend(blocks, view, glass, Modifier.fillMaxWidth(), large, plan)
         }
       }
     }
@@ -241,7 +244,14 @@ private fun OrbitPanel(
 
 /** "PLANNED 7h of 24h", a bar of the day, and a line for each subject or routine. */
 @Composable
-fun OrbitLegend(blocks: List<DayBlock>, view: OrbitView, glass: GlassColors, modifier: Modifier = Modifier, large: Boolean = false) {
+fun OrbitLegend(
+  blocks: List<DayBlock>,
+  view: OrbitView,
+  glass: GlassColors,
+  modifier: Modifier = Modifier,
+  large: Boolean = false,
+  plan: ColorPlan = colorPlanFor(blocks)
+) {
   val counted = if (view == OrbitView.Actual) blocks.filter { it.done } else blocks
   val rows = legendFor(counted)
   val covered = coveredMinutes(counted)
@@ -276,7 +286,7 @@ fun OrbitLegend(blocks: List<DayBlock>, view: OrbitView, glass: GlassColors, mod
       rows.filter { it.minutes > 0 }.forEach { row ->
         val share = row.minutes.coerceAtMost((total - used).toInt()).toFloat()
         if (share > 0f) {
-          Box(Modifier.weight(share).fillMaxHeight().background(pastelFor(row.sample).first))
+          Box(Modifier.weight(share).fillMaxHeight().background(plan.ofSession(row.sample).first))
           used += share
         }
       }
@@ -294,7 +304,7 @@ fun OrbitLegend(blocks: List<DayBlock>, view: OrbitView, glass: GlassColors, mod
     Column(listModifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
       rows.take(maxRows).forEach { row ->
         Row(verticalAlignment = Alignment.CenterVertically) {
-          CategoryChip(row.sample, if (large) 34.dp else 30.dp)
+          CategoryChip(row.sample, if (large) 34.dp else 30.dp, plan.ofSession(row.sample))
           Spacer(Modifier.width(12.dp))
           Column(Modifier.weight(1f)) {
             Text(row.label, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, color = glass.text, maxLines = 1, overflow = TextOverflow.Ellipsis)

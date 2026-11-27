@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import com.example.ui.theme.statTile
 import com.example.ui.theme.statLabel
 import com.example.ui.theme.LocalAppStyle
 import com.example.ui.theme.AppStyle
@@ -321,11 +322,11 @@ fun DashboardScreen(
       Row(
         modifier = Modifier
           .fillMaxWidth()
-          .padding(vertical = 12.dp),
+          .padding(vertical = 12.dp, horizontal = if (com.example.ui.theme.LocalGlass.current != null) 12.dp else 0.dp),
         verticalAlignment = Alignment.CenterVertically
       ) {
         Column(
-          modifier = Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).clickable { onNavigate(Screen.MyTopics) }.padding(vertical = 4.dp),
+          modifier = Modifier.weight(1f).statTile { onNavigate(Screen.MyTopics) },
           horizontalAlignment = Alignment.CenterHorizontally
         ) {
           Text(
@@ -340,15 +341,10 @@ fun DashboardScreen(
           )
         }
 
-        Box(
-          modifier = Modifier
-            .width(1.dp)
-            .height(24.dp)
-            .background(MaterialTheme.colorScheme.outlineVariant)
-        )
+        com.example.ui.theme.StatDivider()
 
         Column(
-          modifier = Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).clickable { onNavigate(Screen.WeekendQuizzes) }.padding(vertical = 4.dp),
+          modifier = Modifier.weight(1f).statTile { onNavigate(Screen.WeekendQuizzes) },
           horizontalAlignment = Alignment.CenterHorizontally
         ) {
           Text(
@@ -363,15 +359,10 @@ fun DashboardScreen(
           )
         }
 
-        Box(
-          modifier = Modifier
-            .width(1.dp)
-            .height(24.dp)
-            .background(MaterialTheme.colorScheme.outlineVariant)
-        )
+        com.example.ui.theme.StatDivider()
 
         Column(
-          modifier = Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).clickable { onNavigate(Screen.Progress) }.padding(vertical = 4.dp),
+          modifier = Modifier.weight(1f).statTile { onNavigate(Screen.Progress) },
           horizontalAlignment = Alignment.CenterHorizontally
         ) {
           Text(

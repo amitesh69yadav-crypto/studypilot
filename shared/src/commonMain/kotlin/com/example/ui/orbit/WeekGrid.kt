@@ -205,6 +205,7 @@ fun WeekGrid(
 
       columns.forEachIndexed { dayIndex, blocks ->
         val lanes = remember(blocks) { lanesFor(blocks) }
+        val plan = remember(blocks) { colorPlanFor(blocks) }
         blocks.forEach { b ->
           key(b.session.id, b.fromYesterday, dayIndex) {
             val (lane, laneCount) = lanes[b] ?: (0 to 1)
@@ -242,7 +243,7 @@ fun WeekGrid(
                   } else Modifier
                 )
             ) {
-              BlockFace(b, glass, height, b.start, b.end)
+              BlockFace(b, glass, height, b.start, b.end, colors = plan.of(b))
               if (canResize) {
                 Box(
                   Modifier
@@ -273,7 +274,7 @@ fun WeekGrid(
                     Modifier
                       .size(width = 18.dp, height = 3.dp)
                       .clip(RoundedCornerShape(2.dp))
-                      .background(pastelFor(b.session).second.copy(alpha = 0.45f))
+                      .background(plan.of(b).second.copy(alpha = 0.45f))
                   )
                 }
               }
@@ -304,8 +305,16 @@ fun WeekGrid(
 
 /** A session's block: pastel, with its title and time; solid with a tick once done. */
 @Composable
-private fun BlockFace(block: DayBlock, glass: GlassColors, height: Dp, start: Int, end: Int, highlighted: Boolean = false) {
-  val (tint, ink) = pastelFor(block.session)
+private fun BlockFace(
+  block: DayBlock,
+  glass: GlassColors,
+  height: Dp,
+  start: Int,
+  end: Int,
+  highlighted: Boolean = false,
+  colors: Pair<androidx.compose.ui.graphics.Color, androidx.compose.ui.graphics.Color> = pastelFor(block.session)
+) {
+  val (tint, ink) = colors
   val shape = RoundedCornerShape(10.dp)
   val fill = when {
     block.isMarker -> glass.selected

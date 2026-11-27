@@ -1,5 +1,6 @@
 package com.example.ui.theme
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.ColumnScope
@@ -303,3 +304,30 @@ fun dialogBackground(classic: Color): Color = LocalGlass.current?.frost ?: class
 /** Small stat labels: as written on the phone, spaced capitals on the desktop. */
 @Composable
 fun statLabel(text: String): String = if (LocalGlass.current != null) text.uppercase() else text
+
+/**
+ * A clickable stat inside a row of stats. On the desktop each is its own recessed tile, so the hover
+ * tint covers exactly the tile; on the phone it stays a plain column.
+ */
+@Composable
+fun Modifier.statTile(onClick: () -> Unit): Modifier {
+  val glass = LocalGlass.current
+  val shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
+  return if (glass != null) {
+    this.glassInset(shape, glass).clickable(onClick = onClick).padding(vertical = 10.dp)
+  } else {
+    this.clip(androidx.compose.foundation.shape.RoundedCornerShape(10.dp)).clickable(onClick = onClick).padding(vertical = 4.dp)
+  }
+}
+
+/** The thin line between stats on the phone; on the desktop the tiles are just spaced apart. */
+@Composable
+fun StatDivider() {
+  if (LocalGlass.current != null) {
+    androidx.compose.foundation.layout.Spacer(Modifier.width(8.dp))
+  } else {
+    androidx.compose.foundation.layout.Box(
+      Modifier.width(1.dp).height(24.dp).background(MaterialTheme.colorScheme.outlineVariant)
+    )
+  }
+}

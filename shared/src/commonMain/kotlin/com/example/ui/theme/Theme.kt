@@ -168,7 +168,20 @@ fun StudyPilotTheme(
         shapes = GlassShapes
       ) {
         // MaterialTheme sets the ripple as the default; the glass tint replaces it inside.
-        CompositionLocalProvider(androidx.compose.foundation.LocalIndication provides GlassIndication(glass.dark), content = content)
+        CompositionLocalProvider(
+          androidx.compose.foundation.LocalIndication provides GlassIndication(glass.dark),
+          // Material's own ripples (cards, buttons, chips) get the same tint strength as the glass hover.
+          androidx.compose.material3.LocalRippleConfiguration provides androidx.compose.material3.RippleConfiguration(
+            color = if (glass.dark) Color.White else Color.Black,
+            rippleAlpha = androidx.compose.material.ripple.RippleAlpha(
+              draggedAlpha = 0.12f,
+              focusedAlpha = 0.075f,
+              hoveredAlpha = if (glass.dark) 0.10f else 0.075f,
+              pressedAlpha = if (glass.dark) 0.16f else 0.12f
+            )
+          ),
+          content = content
+        )
       }
     }
     return

@@ -5,6 +5,8 @@ import com.example.ui.orbit.DAY_MINUTES
 import com.example.ui.orbit.DayBlock
 import com.example.ui.orbit.DragMode
 import com.example.ui.orbit.blockAt
+import com.example.ui.orbit.colorPlanFor
+import com.example.ui.orbit.registerSubjects
 import com.example.ui.orbit.blocksOn
 import com.example.ui.orbit.columnBlocksOn
 import com.example.ui.orbit.coveredMinutes
@@ -165,5 +167,28 @@ class OrbitModelTest {
     assertNull(blockAt(blocks, 12 * 60))
     assertEquals("7h 30m", formatDuration(450))
     assertEquals("45m", formatDuration(45))
+  }
+
+  @Test
+  fun neighbouringSessionsNeverShareAColour() {
+    // Seven subjects for six subject colours: the first and the seventh would collide.
+    val subjects = listOf("Art", "Biology", "Chemistry", "Drama", "English", "French", "Geography")
+    val sessions = subjects.mapIndexed { i, name -> session(i + 1L, "%02d:00".format(8 + i), "%02d:00".format(9 + i), subject = name) }
+    registerSubjects(sessions)
+    val art = session(20, "10:00", "11:00", subject = "Art")
+    val geography = session(21, "10:30", "11:30", subject = "Geography")
+    val blocks = blocksOn(listOf(art, geography), "2026-11-23")
+    val plan = colorPlanFor(blocks)
+    assertTrue(plan.of(blocks[0]) != plan.of(blocks[1]))
+
+    // Two back-to-back sessions of one subject: the second is a deeper shade.
+    val first = session(30, "13:00", "14:00", subject = "Art")
+    val second = session(31, "14:00", "15:00", subject = "Art")
+    val pair = blocksOn(listOf(first, second), "2026-11-23")
+    val pairPlan = colorPlanFor(pair)
+    assertTrue(pairPlan.of(pair[0]) != pairPlan.of(pair[1]))
+    // A routine keeps its own colour whatever is next to it.
+    val lunch = blocksOn(listOf(session(40, "12:00", "13:00", category = "FOOD")), "2026-11-23")
+    assertEquals(colorPlanFor(lunch).of(lunch[0]), colorPlanFor(lunch + pair).of(lunch[0]))
   }
 }

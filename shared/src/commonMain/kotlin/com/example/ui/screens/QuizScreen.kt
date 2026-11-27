@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import com.example.ui.theme.statTile
 import com.example.ui.theme.statLabel
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -379,24 +380,24 @@ fun QuizScreen(
           Spacer(modifier = Modifier.height(16.dp))
           Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
           ) {
             Column(
-              modifier = Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).clickable { viewModel.navigateTo(com.example.ui.viewmodel.Screen.MyTopics) }.padding(vertical = 4.dp),
+              modifier = Modifier.weight(1f).statTile { viewModel.navigateTo(com.example.ui.viewmodel.Screen.MyTopics) },
               horizontalAlignment = Alignment.CenterHorizontally
             ) {
               Text(text = "${testedTopics.size}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
               Text(text = statLabel("Topics tested"), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Column(
-              modifier = Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).clickable { viewModel.navigateTo(com.example.ui.viewmodel.Screen.MyTopics) }.padding(vertical = 4.dp),
+              modifier = Modifier.weight(1f).statTile { viewModel.navigateTo(com.example.ui.viewmodel.Screen.MyTopics) },
               horizontalAlignment = Alignment.CenterHorizontally
             ) {
               Text(text = "${untestedTopics.size}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
               Text(text = statLabel("Untested"), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Column(
-              modifier = Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).clickable { viewModel.navigateTo(com.example.ui.viewmodel.Screen.MyTopics) }.padding(vertical = 4.dp),
+              modifier = Modifier.weight(1f).statTile { viewModel.navigateTo(com.example.ui.viewmodel.Screen.MyTopics) },
               horizontalAlignment = Alignment.CenterHorizontally
             ) {
               Text(text = "${strugglingTopics.size}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
