@@ -1,5 +1,6 @@
 package com.example.ui.orbit
 
+import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.horizontalScroll
 import com.example.ui.theme.pressable
@@ -202,7 +203,10 @@ fun DesktopTimetable(viewModel: StudyPilotViewModel, showAddDialogOnInit: Boolea
           }
         }
       }
-      TimetableMode.Planner -> Box(Modifier.weight(1f)) { TimetableScreen(viewModel, externalDate = selected, embedded = true) }
+      // The planner pads its own content, so it takes the full width here and lines up with the header.
+      TimetableMode.Planner -> Box(Modifier.weight(1f).requiredWidth(this@BoxWithConstraints.maxWidth)) {
+        TimetableScreen(viewModel, externalDate = selected, embedded = true)
+      }
     }
   }
   }
