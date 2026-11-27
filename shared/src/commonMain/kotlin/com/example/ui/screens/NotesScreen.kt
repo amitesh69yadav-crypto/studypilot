@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.layout.height
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -445,6 +447,8 @@ private fun ThreadCard(
   onSaveAsNote: (QaPair) -> Unit
 ) {
   val actions = LocalPlatformActions.current
+  // Answers saved from this card while it's on screen, so the button can say so.
+  var saved by remember(thread) { mutableStateOf(emptySet<Int>()) }
   Card(onClick = onToggle, modifier = Modifier.fillMaxWidth().animateContentSize()) {
     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
       Row(verticalAlignment = Alignment.CenterVertically) {
@@ -473,10 +477,23 @@ private fun ThreadCard(
             Text(pair.question, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold))
             if (pair.answer.isNotBlank()) FormattedTutorResponse(pair.answer)
             else Text("No answer saved.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            TextButton(onClick = { onSaveAsNote(pair) }, contentPadding = PaddingValues(horizontal = 8.dp)) {
-              Icon(Icons.Default.BookmarkAdd, contentDescription = null, modifier = Modifier.size(16.dp))
-              Spacer(Modifier.width(6.dp))
-              Text("Save to my notes")
+            Spacer(Modifier.height(2.dp))
+            if (i in saved) {
+              OutlinedButton(onClick = {}, enabled = false, contentPadding = PaddingValues(horizontal = 16.dp), modifier = Modifier.heightIn(min = 40.dp)) {
+                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Saved to my notes", fontWeight = FontWeight.SemiBold)
+              }
+            } else {
+              Button(
+                onClick = { onSaveAsNote(pair); saved = saved + i },
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                modifier = Modifier.heightIn(min = 40.dp)
+              ) {
+                Icon(Icons.Default.BookmarkAdd, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Save to my notes", fontWeight = FontWeight.SemiBold)
+              }
             }
           }
         }

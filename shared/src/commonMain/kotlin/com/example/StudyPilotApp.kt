@@ -1,5 +1,11 @@
 package com.example
 
+import androidx.compose.material.icons.automirrored.outlined.TrendingUp
+import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.EditNote
+import androidx.compose.material.icons.outlined.Book
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.filled.EditNote
 import com.example.ui.theme.AppStyle
 import com.example.ui.theme.LocalAppStyle
@@ -125,12 +131,13 @@ fun StudyPilotApp(viewModel: StudyPilotViewModel) {
   }
 
   val navItems = listOf(
-    Triple(Screen.Dashboard, "Dashboard", Icons.Default.Dashboard),
-    Triple(Screen.Timetable, "Timetable", Icons.Default.Schedule),
-    Triple(Screen.MyTopics, "Topics", Icons.Default.Book),
-    Triple(Screen.Notes, "Notes", Icons.Default.EditNote),
-    Triple(Screen.WeekendQuizzes, "Quizzes", Icons.Default.AutoAwesome),
-    Triple(Screen.Progress, "Progress", Icons.AutoMirrored.Filled.TrendingUp)
+    // One outlined set, so every icon has the same stroke and visual size.
+    Triple(Screen.Dashboard, "Dashboard", Icons.Outlined.Dashboard),
+    Triple(Screen.Timetable, "Timetable", Icons.Outlined.Schedule),
+    Triple(Screen.MyTopics, "Topics", Icons.Outlined.Book),
+    Triple(Screen.Notes, "Notes", Icons.Outlined.EditNote),
+    Triple(Screen.WeekendQuizzes, "Quizzes", Icons.Outlined.AutoAwesome),
+    Triple(Screen.Progress, "Progress", Icons.AutoMirrored.Outlined.TrendingUp)
   )
 
   val isSubScreen = currentScreen == Screen.AiTutor ||
