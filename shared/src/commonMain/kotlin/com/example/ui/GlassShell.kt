@@ -243,6 +243,22 @@ private fun NavItem(entry: NavEntry, selected: Boolean, glass: GlassColors, badg
 
 @Composable
 private fun PageHeader(viewModel: StudyPilotViewModel, current: Screen, glass: GlassColors, controls: (@Composable () -> Unit)?) {
+  // In a smaller window the page's controls move to their own row under the title, rather than being
+  // squeezed until their labels wrap.
+  androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+    if (controls != null && maxWidth < 1040.dp) {
+      Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        PageHeaderRow(viewModel, current, glass, null)
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { controls() }
+      }
+    } else {
+      PageHeaderRow(viewModel, current, glass, controls)
+    }
+  }
+}
+
+@Composable
+private fun PageHeaderRow(viewModel: StudyPilotViewModel, current: Screen, glass: GlassColors, controls: (@Composable () -> Unit)?) {
   val user by viewModel.currentUser.collectAsState()
   val (title, subtitle) = pageTitle(current)
   Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -393,8 +409,8 @@ fun GlassPhoneNavBar(items: List<Triple<Screen, String, ImageVector>>, current: 
     Row(
       Modifier
         .fillMaxWidth()
-        .height(64.dp)
-        .glass(RoundedCornerShape(32.dp), glass)
+        .height(58.dp)
+        .glass(RoundedCornerShape(29.dp), glass)
         .padding(6.dp),
       verticalAlignment = Alignment.CenterVertically
     ) {
@@ -405,21 +421,13 @@ fun GlassPhoneNavBar(items: List<Triple<Screen, String, ImageVector>>, current: 
             .weight(1f)
             .fillMaxHeight()
             .pressable({ onSelect(screen) }) {
-              clip(RoundedCornerShape(26.dp)).then(if (selected) Modifier.background(glass.selected) else Modifier)
+              clip(RoundedCornerShape(23.dp)).then(if (selected) Modifier.background(glass.selected) else Modifier)
             },
           horizontalAlignment = Alignment.CenterHorizontally,
           verticalArrangement = Arrangement.Center
         ) {
-          Icon(icon, contentDescription = label, tint = if (selected) glass.text else glass.muted, modifier = Modifier.size(20.dp))
-          Spacer(Modifier.height(2.dp))
-          Text(
-            label,
-            fontSize = 10.5.sp,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-            color = if (selected) glass.text else glass.muted,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-          )
+          // Icons only; the label is still read out by screen readers.
+          Icon(icon, contentDescription = label, tint = if (selected) glass.text else glass.muted, modifier = Modifier.size(24.dp))
         }
       }
     }

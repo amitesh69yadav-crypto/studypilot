@@ -759,26 +759,7 @@ fun TimetableScreen(
             if (showHeaderCards) {
               // Live "What Should I Do Now?" smart alarm card (when viewing today)
               if (isSelectedDateToday) {
-                item {
-                  WhatShouldIDoNowCard(
-                    status = scheduleStatus,
-                    onPlanScheduleClick = { showApplyFormatDialog = true },
-                    onEditSessionClick = { sessionToEdit = it },
-                    onMarkSessionDone = { session ->
-                      val next = if (session.status == "COMPLETED") "SCHEDULED" else "COMPLETED"
-                      viewModel.updateSessionStatus(session, next)
-                    },
-                    onAskAiTutor = { session ->
-                      viewModel.openTutorForSubject(session.subjectId, "Can you explain key concepts for ${session.topic}?")
-                    },
-                    onToggleAlarm = { viewModel.toggleSessionAlarm(it) },
-                    onTestAlarm = { viewModel.triggerTestAlarm(it) },
-                    onSyncGoogleCalendar = { session ->
-                      actions.addToCalendar(session)
-                    }
-                  )
-                }
-
+                // "What now" lives on Today; the planner starts with the alarm tools.
                 item {
                   MobileClockAlarmCard(
                     activeAlarmsCount = activeAlarmsCount,

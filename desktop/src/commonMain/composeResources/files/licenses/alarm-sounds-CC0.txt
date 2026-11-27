@@ -1,0 +1,10 @@
+Alarm sounds bundled with StudyPilot (desktop: files/sounds/*.wav, Android: res/raw/*.ogg)
+
+All four are from BigSoundBank (https://bigsoundbank.com) and released under CC0 1.0
+(public domain): free to use, change and share, no attribution required. They were
+resampled to 22.05 kHz mono, trimmed and normalised for use as alarms.
+
+alarm_classic_bell  "Mechanical alarm clock, short ring"  https://bigsoundbank.com/mechanical-alarm-clock-short-ring-s1373.html
+alarm_digital       "Electronic Alarm (Buzzer) #3"        https://bigsoundbank.com/electronic-alarm-buzzer-3-s0173.html
+alarm_watch_beep    "Digital watch, alarm"                https://bigsoundbank.com/digital-watch-alarm-s2256.html
+alarm_buzzer        "Buzzer #4"                           https://bigsoundbank.com/buzzer-4-s1586.html

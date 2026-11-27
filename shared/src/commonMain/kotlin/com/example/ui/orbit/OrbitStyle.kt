@@ -200,7 +200,7 @@ fun SegmentedPills(options: List<String>, selected: Int, glass: GlassColors, onS
           }
           .padding(horizontal = 13.dp, vertical = 6.dp)
       ) {
-        Text(label, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = if (isSelected) glass.text else glass.muted)
+        Text(label, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = if (isSelected) glass.text else glass.muted, maxLines = 1, softWrap = false)
       }
     }
   }

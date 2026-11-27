@@ -67,6 +67,27 @@ interface AlarmPlatform {
   fun stopRinging()
   /** Session whose alarm is ringing right now, or null. */
   val ringingSessionId: Long?
+  /** Plays a few seconds of [sound], for choosing one in Settings. */
+  fun previewSound(sound: AlarmSound) {}
+}
+
+/**
+ * What an alarm plays. [DEFAULT] is the device's own (the phone's alarm tone, beeps on the PC); the
+ * others are bundled public-domain (CC0) recordings from BigSoundBank.
+ */
+enum class AlarmSound(val label: String, val fileName: String?) {
+  DEFAULT("Device default", null),
+  CLASSIC_BELL("Classic bell", "alarm_classic_bell"),
+  DIGITAL("Digital alarm", "alarm_digital"),
+  WATCH_BEEP("Watch beeps", "alarm_watch_beep"),
+  BUZZER("Buzzer", "alarm_buzzer");
+
+  companion object {
+    /** Where the choice is kept: [STORE] prefs, [KEY]. */
+    const val STORE = "studypilot_ui_prefs"
+    const val KEY = "alarm_sound"
+    fun byName(name: String?): AlarmSound = entries.firstOrNull { it.name == name } ?: DEFAULT
+  }
 }
 
 /** Alarm events from outside the app's UI (notification buttons, a scheduled alarm firing). */

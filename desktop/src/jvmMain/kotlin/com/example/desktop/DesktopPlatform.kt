@@ -54,7 +54,9 @@ class DesktopPlatform : Platform {
   private val stores = ConcurrentHashMap<String, KeyValueStore>()
   override fun prefs(name: String): KeyValueStore = stores.getOrPut(name) { PropertiesStore(File(dataDir, "$name.properties")) }
 
-  val desktopAlarms = DesktopAlarms(scope)
+  val desktopAlarms = DesktopAlarms(scope) {
+    com.example.platform.AlarmSound.byName(prefs(com.example.platform.AlarmSound.STORE).getString(com.example.platform.AlarmSound.KEY, null))
+  }
   override val alarms: AlarmPlatform get() = desktopAlarms
 
   override val cloud: CloudStore = CloudStore.None
@@ -128,7 +130,11 @@ private class PropertiesStore(private val file: File) : KeyValueStore {
 }
 
 /** Session alarms while the desktop app is open: a repeating tone plus [onRing] (window and tray). */
-class DesktopAlarms(private val scope: CoroutineScope) : AlarmPlatform {
+class DesktopAlarms(
+  private val scope: CoroutineScope,
+  /** The sound chosen in Settings. */
+  private val chosenSound: () -> com.example.platform.AlarmSound = { com.example.platform.AlarmSound.DEFAULT }
+) : AlarmPlatform {
 
   /** Set by the window: bring it forward and show a notification. */
   var onRing: (TimetableSession) -> Unit = {}
@@ -174,12 +180,45 @@ class DesktopAlarms(private val scope: CoroutineScope) : AlarmPlatform {
     tone?.cancel()
     tone = scope.launch(Dispatchers.IO) {
       val end = System.currentTimeMillis() + 5 * 60_000L
-      while (isActive && System.currentTimeMillis() < end) {
-        playBeeps()
-        delay(1200)
+      val clip = openClip(chosenSound(), loop = true)
+      try {
+        while (isActive && System.currentTimeMillis() < end) {
+          if (clip == null) playBeeps()
+          delay(1200)
+        }
+      } finally {
+        clip?.let { runCatching { it.stop(); it.close() } }
       }
       ringingSessionId = null
     }
+  }
+
+  private var preview: kotlinx.coroutines.Job? = null
+
+  /** Plays about four seconds of [sound], for choosing it in Settings. */
+  override fun previewSound(sound: com.example.platform.AlarmSound) {
+    preview?.cancel()
+    preview = scope.launch(Dispatchers.IO) {
+      val clip = openClip(sound, loop = true)
+      try {
+        if (clip == null) repeat(3) { playBeeps(); delay(400) } else delay(4000)
+      } finally {
+        clip?.let { runCatching { it.stop(); it.close() } }
+      }
+    }
+  }
+
+  /** A playing clip of a bundled sound, or null for the default beeps or if it can't be loaded. */
+  private suspend fun openClip(sound: com.example.platform.AlarmSound, loop: Boolean): javax.sound.sampled.Clip? {
+    val name = sound.fileName ?: return null
+    return runCatching {
+      val bytes = com.example.desktop.resources.Res.readBytes("files/sounds/$name.wav")
+      val stream = AudioSystem.getAudioInputStream(java.io.ByteArrayInputStream(bytes))
+      AudioSystem.getClip().apply {
+        open(stream)
+        if (loop) loop(javax.sound.sampled.Clip.LOOP_CONTINUOUSLY) else start()
+      }
+    }.getOrNull()
   }
 
   override fun stopRinging() {

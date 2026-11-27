@@ -1,5 +1,6 @@
 package com.example.ui.orbit
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -206,7 +207,7 @@ private fun OrbitPanel(
     Text(
       if (view == OrbitView.Planned) {
         if (com.example.ui.theme.LocalIsDesktop.current) "Drag a plan to move it; drag its coloured ends to resize. Click an empty part of the ring to add one."
-        else "Press and hold a plan to move it; hold its coloured ends to resize. Tap an empty part of the ring to add one."
+        else "Hold a plan to move it, or its ends to resize."
       }
       else "Done sessions in colour; the rest of the plan is faded.",
       fontSize = 12.sp,
@@ -237,9 +238,11 @@ private fun OrbitPanel(
           OrbitLegend(blocks, view, glass, Modifier.weight(1f), large, plan)
         }
       } else {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-          ring(Modifier.widthIn(max = maxRing).fillMaxWidth())
-          OrbitLegend(blocks, view, glass, Modifier.fillMaxWidth(), large, plan)
+        // A phone: a ring sized so the whole card fits on screen, and the legend as one scrolling row.
+        val phone = !com.example.ui.theme.LocalIsDesktop.current && !large
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(if (phone) 12.dp else 16.dp)) {
+          ring(Modifier.widthIn(max = if (phone) 250.dp else maxRing).fillMaxWidth())
+          OrbitLegend(blocks, view, glass, Modifier.fillMaxWidth(), large, plan, inline = phone)
         }
       }
     }
@@ -254,7 +257,9 @@ fun OrbitLegend(
   glass: GlassColors,
   modifier: Modifier = Modifier,
   large: Boolean = false,
-  plan: ColorPlan = colorPlanFor(blocks)
+  plan: ColorPlan = colorPlanFor(blocks),
+  /** One scrolling row of chips instead of a list, to keep the card short on a phone. */
+  inline: Boolean = false
 ) {
   val counted = if (view == OrbitView.Actual) blocks.filter { it.done } else blocks
   val rows = legendFor(counted)
@@ -304,6 +309,29 @@ fun OrbitLegend(
         fontSize = 13.sp,
         color = glass.muted
       )
+    }
+    if (inline) {
+      Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        rows.forEach { row ->
+          Row(
+            Modifier.clip(CircleShape).background(glass.inset).padding(start = 4.dp, end = 12.dp, top = 4.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            CategoryChip(row.sample, 26.dp, plan.ofSession(row.sample))
+            Spacer(Modifier.width(8.dp))
+            Column {
+              Text(row.label, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = glass.text, maxLines = 1)
+              Text(
+                if (row.minutes == 0) clockLabel(minutesOf(row.sample.startTime) ?: 0) else formatDuration(row.minutes),
+                fontSize = 11.sp,
+                color = glass.muted,
+                maxLines = 1
+              )
+            }
+          }
+        }
+      }
+      return@Column
     }
     val listModifier = if (large) Modifier.verticalScroll(rememberScrollState()) else Modifier
     Column(listModifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {

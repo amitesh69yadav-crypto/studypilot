@@ -320,15 +320,15 @@ fun QuickMobileAlarmDialog(
   onDismiss: () -> Unit,
   onConfirm: (subjectName: String, topic: String, delayMinutes: Int, customTime: String?) -> Unit
 ) {
-  var subjectName by remember { mutableStateOf("Quick Study") }
-  var topic by remember { mutableStateOf("Mobile Study Session") }
+  var subjectName by remember { mutableStateOf("Study") }
+  var topic by remember { mutableStateOf("Study session") }
   var selectedPresetMinutes by remember { mutableStateOf(1) }
   var isCustomTime by remember { mutableStateOf(false) }
   var customTimeInput by remember { mutableStateOf("") }
 
   androidx.compose.material3.AlertDialog(
     onDismissRequest = onDismiss,
-    containerColor = MaterialTheme.colorScheme.surface,
+    containerColor = com.example.ui.theme.dialogBackground(MaterialTheme.colorScheme.surface),
     shape = RoundedCornerShape(20.dp),
     title = {
       Row(verticalAlignment = Alignment.CenterVertically) {
@@ -366,7 +366,7 @@ fun QuickMobileAlarmDialog(
         )
 
         Text(
-          text = "Quick pick",
+          text = "Rings in",
           style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
           color = MaterialTheme.colorScheme.onSurface
         )
@@ -376,7 +376,7 @@ fun QuickMobileAlarmDialog(
           horizontalArrangement = Arrangement.spacedBy(8.dp),
           verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-          listOf(1 to "+1 Min", 2 to "+2 Min", 5 to "+5 Min", 10 to "+10 Min", 30 to "+30 Min").forEach { (mins, label) ->
+          listOf(1 to "1 min", 2 to "2 min", 5 to "5 min", 10 to "10 min", 30 to "30 min").forEach { (mins, label) ->
             val selected = !isCustomTime && selectedPresetMinutes == mins
             Surface(
               shape = RoundedCornerShape(8.dp),
@@ -433,7 +433,7 @@ fun QuickMobileAlarmDialog(
         androidx.compose.material3.OutlinedTextField(
           value = subjectName,
           onValueChange = { subjectName = it },
-          label = { Text("Subject / Class Name") },
+          label = { Text("Subject") },
           singleLine = true,
           modifier = Modifier.fillMaxWidth()
         )
@@ -441,7 +441,7 @@ fun QuickMobileAlarmDialog(
         androidx.compose.material3.OutlinedTextField(
           value = topic,
           onValueChange = { topic = it },
-          label = { Text("Session Topic / Note") },
+          label = { Text("Note") },
           singleLine = true,
           modifier = Modifier.fillMaxWidth()
         )

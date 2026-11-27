@@ -104,6 +104,19 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
 
   private val alarms get() = platform.alarms
 
+  // --- Alarm sound ---
+  private val soundPrefs by lazy { platform.prefs(com.example.platform.AlarmSound.STORE) }
+  private val _alarmSound = MutableStateFlow(com.example.platform.AlarmSound.byName(soundPrefs.getString(com.example.platform.AlarmSound.KEY, null)))
+  /** The sound alarms play, chosen in Settings. */
+  val alarmSound: StateFlow<com.example.platform.AlarmSound> = _alarmSound.asStateFlow()
+
+  /** Saves [sound] for every alarm from now on and plays a few seconds of it. */
+  fun setAlarmSound(sound: com.example.platform.AlarmSound) {
+    _alarmSound.value = sound
+    uiPrefs.edit { putString(com.example.platform.AlarmSound.KEY, sound.name) }
+    alarms.previewSound(sound)
+  }
+
   // --- AI API Keys & Provider Settings ---
   private val aiPrefs = platform.prefs("studypilot_ai_config")
 

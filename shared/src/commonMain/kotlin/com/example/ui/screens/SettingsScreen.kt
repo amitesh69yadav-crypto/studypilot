@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.material.icons.filled.PlayArrow
 import com.example.platform.LocalDeviceSyncCard
 import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.background
@@ -458,6 +459,56 @@ fun SettingsScreen(
           }
           // The desktop adds its backdrop choices here.
           com.example.platform.LocalAppearanceExtras.current?.invoke()
+        }
+      }
+    }
+
+    // Alarm sound: what every alarm plays. Tapping one saves it and plays a few seconds.
+    item {
+      val chosen by viewModel.alarmSound.collectAsState()
+      Card(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 16.dp, vertical = 4.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+      ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+          Text("Alarm sound", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+          Text(
+            "What your session alarms play. Tap one to hear it.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+          )
+          Spacer(Modifier.height(6.dp))
+          com.example.platform.AlarmSound.entries.forEach { sound ->
+            val selected = sound == chosen
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .clickable { viewModel.setAlarmSound(sound) }
+                .padding(horizontal = 8.dp, vertical = 10.dp)
+            ) {
+              RadioButton(selected = selected, onClick = { viewModel.setAlarmSound(sound) })
+              Spacer(Modifier.width(8.dp))
+              Text(
+                sound.label,
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal),
+                modifier = Modifier.weight(1f)
+              )
+              Icon(Icons.Default.PlayArrow, contentDescription = "Play ${sound.label}", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+            }
+          }
+          Text(
+            "The bundled sounds are public domain (CC0) recordings from BigSoundBank.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp)
+          )
         }
       }
     }
