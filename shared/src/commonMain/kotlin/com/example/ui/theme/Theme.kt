@@ -157,13 +157,19 @@ fun StudyPilotTheme(
   if (style == AppStyle.Glass) {
     val glass = if (darkTheme) DarkGlass else LightGlass
     val study = if (darkTheme) DarkGlassStudyColors else LightGlassStudyColors
-    CompositionLocalProvider(LocalAppStyle provides style, LocalGlass provides glass, LocalStudyColors provides study) {
+    CompositionLocalProvider(
+      LocalAppStyle provides style,
+      LocalGlass provides glass,
+      LocalStudyColors provides study
+    ) {
       MaterialTheme(
         colorScheme = glassScheme(glass, study.deepSage),
         typography = glassTypography(fonts),
-        shapes = GlassShapes,
-        content = content
-      )
+        shapes = GlassShapes
+      ) {
+        // MaterialTheme sets the ripple as the default; the glass tint replaces it inside.
+        CompositionLocalProvider(androidx.compose.foundation.LocalIndication provides GlassIndication(glass.dark), content = content)
+      }
     }
     return
   }

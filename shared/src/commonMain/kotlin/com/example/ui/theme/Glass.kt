@@ -1,5 +1,7 @@
 package com.example.ui.theme
 
+import kotlinx.coroutines.launch
+import androidx.compose.ui.node.invalidateDraw
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -262,5 +264,56 @@ private fun DrawScope.drawBloom(b: Bloom) {
       radius = rx,
       center = center
     )
+  }
+}
+
+/**
+ * The desktop's hover and press feedback: a soft rounded tint over the element instead of the grey
+ * Material ripple, darker on light glass and lighter on dark glass.
+ */
+data class GlassIndication(val dark: Boolean) : androidx.compose.foundation.IndicationNodeFactory {
+  override fun create(interactionSource: androidx.compose.foundation.interaction.InteractionSource): androidx.compose.ui.node.DelegatableNode =
+    GlassIndicationNode(interactionSource, dark)
+}
+
+private class GlassIndicationNode(
+  private val source: androidx.compose.foundation.interaction.InteractionSource,
+  private val dark: Boolean
+) : Modifier.Node(), androidx.compose.ui.node.DrawModifierNode {
+  private var hovered = false
+  private var pressed = false
+  private var focused = false
+
+  override fun onAttach() {
+    coroutineScope.launch {
+      source.interactions.collect { i ->
+        when (i) {
+          is androidx.compose.foundation.interaction.HoverInteraction.Enter -> hovered = true
+          is androidx.compose.foundation.interaction.HoverInteraction.Exit -> hovered = false
+          is androidx.compose.foundation.interaction.PressInteraction.Press -> pressed = true
+          is androidx.compose.foundation.interaction.PressInteraction.Release,
+          is androidx.compose.foundation.interaction.PressInteraction.Cancel -> pressed = false
+          is androidx.compose.foundation.interaction.FocusInteraction.Focus -> focused = true
+          is androidx.compose.foundation.interaction.FocusInteraction.Unfocus -> focused = false
+        }
+        invalidateDraw()
+      }
+    }
+  }
+
+  override fun androidx.compose.ui.graphics.drawscope.ContentDrawScope.draw() {
+    drawContent()
+    val alpha = when {
+      pressed -> if (dark) 0.16f else 0.12f
+      hovered || focused -> if (dark) 0.10f else 0.075f
+      else -> 0f
+    }
+    if (alpha > 0f) {
+      val radius = minOf(14.dp.toPx(), size.minDimension / 2)
+      drawRoundRect(
+        (if (dark) Color.White else Color.Black).copy(alpha = alpha),
+        cornerRadius = androidx.compose.ui.geometry.CornerRadius(radius)
+      )
+    }
   }
 }

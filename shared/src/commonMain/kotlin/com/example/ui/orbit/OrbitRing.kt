@@ -73,7 +73,7 @@ private data class RingDrag(val block: DayBlock, val mode: DragMode, val last: F
 private class RingGeometry(size: Size, density: Float) {
   val center = Offset(size.width / 2f, size.height / 2f)
   val outer = min(size.width, size.height) / 2f - 6f * density
-  val thickness = outer * 0.26f
+  val thickness = outer * 0.21f
   val inner = outer - thickness
 
   /** Planned arcs: the whole band, or its outer part when the layers are split. */
@@ -140,7 +140,6 @@ private fun DrawScope.drawIconAt(painter: VectorPainter, at: Offset, size: Float
 internal fun DrawScope.drawOrbitTrack(center: Offset, outer: Float, thickness: Float, glass: GlassColors) {
   drawCircle(glass.inset, radius = outer - thickness / 2, center = center, style = Stroke(thickness))
   drawCircle(glass.insetRim, radius = outer, center = center, style = Stroke(1f * density))
-  drawCircle(glass.insetRim, radius = outer - thickness, center = center, style = Stroke(1f * density))
 }
 
 /** A small ring for the week strip: the day's arcs only. */

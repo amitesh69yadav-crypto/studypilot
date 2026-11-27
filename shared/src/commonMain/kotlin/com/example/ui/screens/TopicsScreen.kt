@@ -306,31 +306,8 @@ fun TopicsScreen(
   }
 
   // Topic Details & Spaced Repetition Dialog
-  detailTopic?.let { topic ->
-    TopicDetailDialog(
-      topic = topic,
-      subjects = subjects,
-      onMoveToSubject = { subject ->
-        viewModel.moveTopicToSubject(topic, subject)
-        detailTopic = topic.copy(subjectId = subject?.id ?: SubjectGroup.GENERAL_ID, subjectName = subject?.name ?: "General")
-      },
-      isAiLoading = isAiLoading,
-      onDismiss = { detailTopic = null },
-      onSummarizeAi = {
-        viewModel.summarizeTopicWithAi(topic.title, topic.descriptionNotes) { summary ->
-          detailTopic = topic.copy(aiSummary = summary)
-        }
-      },
-      onUpdateMastery = { newMastery ->
-        viewModel.updateTopicMastery(topic, newMastery)
-        detailTopic = topic.copy(masteryLevel = newMastery)
-      },
-      onAskTutor = {
-        detailTopic = null
-        viewModel.openTutorForSubject(topic.subjectId, "Can you explain '${topic.title}' from ${topic.subjectName} in detail?")
-      }
-    )
-  }
+  detailTopic?.let { topic -> TopicDetailHost(viewModel, topic) { detailTopic = it } }
+
 }
 
 @Composable
@@ -798,4 +775,35 @@ fun TopicDetailDialog(
       }
     }
   )
+}
+
+/** The topic details dialog, shared by the Topics page and the Today page's Recent list. */
+@Composable
+fun TopicDetailHost(viewModel: StudyPilotViewModel, topic: StudyTopic, onTopic: (StudyTopic?) -> Unit) {
+  val subjects by viewModel.subjects.collectAsState()
+  val isAiLoading by viewModel.isAiLoading.collectAsState()
+
+    TopicDetailDialog(
+      topic = topic,
+      subjects = subjects,
+      onMoveToSubject = { subject ->
+        viewModel.moveTopicToSubject(topic, subject)
+        onTopic(topic.copy(subjectId = subject?.id ?: SubjectGroup.GENERAL_ID, subjectName = subject?.name ?: "General"))
+      },
+      isAiLoading = isAiLoading,
+      onDismiss = { onTopic(null) },
+      onSummarizeAi = {
+        viewModel.summarizeTopicWithAi(topic.title, topic.descriptionNotes) { summary ->
+          onTopic(topic.copy(aiSummary = summary))
+        }
+      },
+      onUpdateMastery = { newMastery ->
+        viewModel.updateTopicMastery(topic, newMastery)
+        onTopic(topic.copy(masteryLevel = newMastery))
+      },
+      onAskTutor = {
+        onTopic(null)
+        viewModel.openTutorForSubject(topic.subjectId, "Can you explain '${topic.title}' from ${topic.subjectName} in detail?")
+      }
+    )
 }

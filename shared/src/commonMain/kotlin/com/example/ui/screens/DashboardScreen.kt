@@ -433,6 +433,8 @@ fun DashboardScreen(
       }
     }
   }
+  var openTopic by remember { mutableStateOf<StudyTopic?>(null) }
+  openTopic?.let { t -> TopicDetailHost(viewModel, t) { openTopic = it } }
   val recentTopics: @Composable () -> Unit = {
     Column(
       modifier = Modifier
@@ -469,7 +471,7 @@ fun DashboardScreen(
           verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
           topics.take(3).forEach { topic ->
-            RecentTopicRow(topic = topic)
+            RecentTopicRow(topic = topic, onClick = { openTopic = topic })
           }
         }
       }
@@ -645,8 +647,9 @@ private fun SessionItemRow(
 }
 
 @Composable
-private fun RecentTopicRow(topic: StudyTopic) {
+private fun RecentTopicRow(topic: StudyTopic, onClick: () -> Unit) {
   Surface(
+    onClick = onClick,
     modifier = Modifier.fillMaxWidth(),
     shape = RoundedCornerShape(12.dp),
     color = MaterialTheme.colorScheme.surface,
