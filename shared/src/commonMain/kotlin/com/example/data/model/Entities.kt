@@ -211,3 +211,17 @@ data class UserProfile(
   val rememberMe: Boolean = false,
   val lastLoginTime: Long = System.currentTimeMillis()
 )
+
+/** A note the user wrote: their own words, filed under a subject, synced between devices. */
+@Entity(tableName = "notes")
+data class StudyNote(
+  @PrimaryKey(autoGenerate = true) val id: Long = 0,
+  val userId: String = "",
+  val title: String,
+  /** Markdown is fine: headings, lists, bold and code are shown formatted. */
+  val body: String,
+  val subjectName: String = "General",
+  val pinned: Boolean = false,
+  val createdAt: Long = System.currentTimeMillis(),
+  val updatedAt: Long = System.currentTimeMillis()
+)

@@ -28,9 +28,10 @@ import com.example.data.model.ExtractedConcept
     TutorMessageEntity::class,
     com.example.data.model.ScheduleFormat::class,
     ImportedChat::class,
-    ExtractedConcept::class
+    ExtractedConcept::class,
+    com.example.data.model.StudyNote::class
   ],
-  version = 8,
+  version = 9,
   exportSchema = false
 )
 @ConstructedBy(AppDatabaseConstructor::class)
@@ -44,8 +45,22 @@ abstract class AppDatabase : RoomDatabase() {
     /** Shared settings for a builder from either platform. */
     fun configure(builder: Builder<AppDatabase>): AppDatabase = builder
       .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
+      // Real migrations come first, so an upgrade keeps everyone's data; the destructive fallback is
+      // only for versions with no migration.
+      .addMigrations(MIGRATION_8_9)
       .fallbackToDestructiveMigration(dropAllTables = true)
       .build()
+  }
+}
+
+/** Version 9 adds the user's own notes and changes nothing else. */
+val MIGRATION_8_9 = object : androidx.room.migration.Migration(8, 9) {
+  override fun migrate(connection: androidx.sqlite.SQLiteConnection) {
+    connection.prepare(
+      "CREATE TABLE IF NOT EXISTS `notes` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `userId` TEXT NOT NULL, " +
+        "`title` TEXT NOT NULL, `body` TEXT NOT NULL, `subjectName` TEXT NOT NULL, `pinned` INTEGER NOT NULL, " +
+        "`createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL)"
+    ).use { it.step() }
   }
 }
 

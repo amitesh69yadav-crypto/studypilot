@@ -49,7 +49,8 @@ class SyncEngine(private val db: AppDatabase, private val authPrefs: KeyValueSto
     Table("extracted_concepts", mapOf("sourceChatId" to "imported_chats", "subjectId" to "subjects")),
     Table("tutor_sessions", mapOf("subjectId" to "subjects")),
     Table("tutor_messages", mapOf("sessionId" to "tutor_sessions")),
-    Table("schedule_formats")
+    Table("schedule_formats"),
+    Table("notes")
   )
   private val tableByName = tables.associateBy { it.name }
   val tableNames: Array<String> get() = tables.map { it.name }.toTypedArray()

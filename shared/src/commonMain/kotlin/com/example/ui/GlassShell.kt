@@ -1,5 +1,6 @@
 package com.example.ui
 
+import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -134,6 +135,7 @@ private val mainPages = listOf(
   NavEntry(Screen.Dashboard, "Dashboard", Icons.Default.WbSunny),
   NavEntry(Screen.Timetable, "Timetable", Icons.Default.Schedule),
   NavEntry(Screen.MyTopics, "Topics", Icons.Default.Book),
+  NavEntry(Screen.Notes, "Notes", Icons.Default.EditNote),
   NavEntry(Screen.WeekendQuizzes, "Quizzes", Icons.Default.AutoAwesome),
   NavEntry(Screen.Progress, "Progress", Icons.AutoMirrored.Filled.TrendingUp)
 )
@@ -324,6 +326,7 @@ private fun pageTitle(screen: Screen): Pair<String, String> = when (screen) {
   Screen.Progress -> "Progress" to "What you've covered, how it's going, and what needs review."
   Screen.AiTutor -> "Tutor" to "Ask anything; answers draw on your own notes and chats."
   Screen.AiChatImport -> "Chats" to "AI conversations you've imported, and what they taught you."
+  Screen.Notes -> "Notes" to "Your own notes, your tutor's answers, and what your imported chats covered."
   Screen.Tasks -> "Tasks" to "Assignments, exams and to-dos."
   Screen.Settings -> "Settings" to "Profile, appearance, AI, and your phone."
   Screen.ActiveQuiz -> "Quiz" to ""

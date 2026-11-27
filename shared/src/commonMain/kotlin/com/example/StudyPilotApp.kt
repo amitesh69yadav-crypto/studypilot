@@ -1,5 +1,6 @@
 package com.example
 
+import androidx.compose.material.icons.filled.EditNote
 import com.example.ui.theme.AppStyle
 import com.example.ui.theme.LocalAppStyle
 import com.example.ui.GlassShell
@@ -127,6 +128,7 @@ fun StudyPilotApp(viewModel: StudyPilotViewModel) {
     Triple(Screen.Dashboard, "Dashboard", Icons.Default.Dashboard),
     Triple(Screen.Timetable, "Timetable", Icons.Default.Schedule),
     Triple(Screen.MyTopics, "Topics", Icons.Default.Book),
+    Triple(Screen.Notes, "Notes", Icons.Default.EditNote),
     Triple(Screen.WeekendQuizzes, "Quizzes", Icons.Default.AutoAwesome),
     Triple(Screen.Progress, "Progress", Icons.AutoMirrored.Filled.TrendingUp)
   )
@@ -148,6 +150,7 @@ fun StudyPilotApp(viewModel: StudyPilotViewModel) {
     Screen.Settings -> "Settings"
     Screen.ActiveQuiz -> "Quiz"
     Screen.AiChatImport -> "Chats"
+    Screen.Notes -> "Notes"
   }
 
   // The alarm banner and the current screen; the same in every layout.
@@ -273,6 +276,9 @@ fun StudyPilotApp(viewModel: StudyPilotViewModel) {
           }
           Screen.Settings -> {
             SettingsScreen(viewModel = viewModel)
+          }
+          Screen.Notes -> {
+            com.example.ui.screens.NotesScreen(viewModel = viewModel)
           }
           Screen.AiChatImport -> {
             AiChatImportScreen(viewModel = viewModel)

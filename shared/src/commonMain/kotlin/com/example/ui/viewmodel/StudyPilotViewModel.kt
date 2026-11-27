@@ -74,6 +74,7 @@ sealed class Screen(val title: String) {
   object Tasks : Screen("Tasks & Exams")
   object Settings : Screen("Settings")
   object AiChatImport : Screen("AI Chat Import & Memory")
+  object Notes : Screen("Notes")
 }
 
 data class ActiveQuizState(
@@ -463,6 +464,42 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
   val importedChats: StateFlow<List<ImportedChat>> = _currentUser
     .flatMapLatest { user -> repository.getImportedChatsForUser(user.id) }
     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+  /** The user's own notes, pinned first, then most recently edited. */
+  @OptIn(ExperimentalCoroutinesApi::class)
+  val notes: StateFlow<List<com.example.data.model.StudyNote>> = _currentUser
+    .flatMapLatest { repository.notesFor(it.id) }
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+  /** Adds or updates a note; a blank one is not saved. */
+  fun saveNote(note: com.example.data.model.StudyNote) {
+    if (note.title.isBlank() && note.body.isBlank()) return
+    viewModelScope.launch {
+      repository.saveNote(
+        note.copy(
+          userId = note.userId.ifBlank { _currentUser.value.id },
+          title = note.title.trim().ifBlank { note.body.trim().lineSequence().first().take(60) },
+          updatedAt = System.currentTimeMillis()
+        )
+      )
+      _snackbarMessage.emit(if (note.id == 0L) "Note saved" else "Note updated")
+    }
+  }
+
+  fun deleteNote(id: Long) {
+    viewModelScope.launch {
+      repository.deleteNote(id)
+      _snackbarMessage.emit("Note deleted")
+    }
+  }
+
+  /** Saved tutor chats as question-and-answer threads, newest first. */
+  suspend fun tutorQaThreads(): List<com.example.data.notes.QaThread> =
+    repository.tutorChatsWithMessages(_currentUser.value.id).mapNotNull { (session, messages) ->
+      val pairs = com.example.data.notes.QaPairs.fromTurns(messages.filterNot { it.isError }.map { (it.role == "user") to it.text })
+      if (pairs.isEmpty()) null
+      else com.example.data.notes.QaThread(session.title, session.subjectName, "Tutor", session.lastUpdatedAt, pairs)
+    }
 
   @OptIn(ExperimentalCoroutinesApi::class)
   val extractedConcepts: StateFlow<List<ExtractedConcept>> = _currentUser

@@ -314,16 +314,17 @@ fun OrbitLegend(
       Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         rows.forEach { row ->
           Row(
-            Modifier.clip(CircleShape).background(glass.inset).padding(start = 4.dp, end = 12.dp, top = 4.dp, bottom = 4.dp),
+            Modifier.clip(CircleShape).background(glass.inset).height(36.dp).padding(start = 5.dp, end = 14.dp),
             verticalAlignment = Alignment.CenterVertically
           ) {
             CategoryChip(row.sample, 26.dp, plan.ofSession(row.sample))
             Spacer(Modifier.width(8.dp))
-            Column {
-              Text(row.label, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = glass.text, maxLines = 1)
+            Column(verticalArrangement = Arrangement.Center) {
+              Text(row.label, fontSize = 12.5.sp, lineHeight = 14.sp, fontWeight = FontWeight.SemiBold, color = glass.text, maxLines = 1)
               Text(
                 if (row.minutes == 0) clockLabel(minutesOf(row.sample.startTime) ?: 0) else formatDuration(row.minutes),
                 fontSize = 11.sp,
+                lineHeight = 12.sp,
                 color = glass.muted,
                 maxLines = 1
               )

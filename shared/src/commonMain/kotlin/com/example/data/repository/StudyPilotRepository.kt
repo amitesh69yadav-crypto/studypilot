@@ -391,6 +391,19 @@ class StudyPilotRepository(
     return ai.summarizeMaterial(title, rawContent)
   }
 
+  // --- Notes ---
+  fun notesFor(userId: String): Flow<List<com.example.data.model.StudyNote>> = dao.getNotesForUser(userId)
+
+  /** Adds [note], or updates it when it already has an id. Returns its id. */
+  suspend fun saveNote(note: com.example.data.model.StudyNote): Long =
+    if (note.id == 0L) dao.insertNote(note) else { dao.updateNote(note); note.id }
+
+  suspend fun deleteNote(id: Long) = dao.deleteNote(id)
+
+  /** Every saved tutor chat with its messages, newest first. */
+  suspend fun tutorChatsWithMessages(userId: String): List<Pair<TutorSession, List<TutorMessageEntity>>> =
+    dao.getTutorSessionsForUser(userId).first().sortedByDescending { it.lastUpdatedAt }.map { it to dao.getMessagesForSessionSync(it.id) }
+
   suspend fun chatWithTutor(
     history: List<com.example.data.model.ChatMessage>,
     systemInstruction: String,
@@ -1830,4 +1843,5 @@ fun newChatMaterial(old: String, new: String): String {
   fun norm(t: String) = t.lowercase().replace(Regex("""\s+"""), " ").trim()
   val known = o.split(Regex("""\n\s*\n""")).map(::norm).toHashSet()
   return n.split(Regex("""\n\s*\n""")).filter { it.isNotBlank() && norm(it) !in known }.joinToString("\n\n")
+
 }

@@ -354,5 +354,17 @@ interface StudyPilotDao {
 
   @Query("DELETE FROM extracted_concepts WHERE userId = :userId")
   suspend fun deleteExtractedConceptsForUser(userId: String)
-}
 
+  // --- Notes ---
+  @Query("SELECT * FROM notes WHERE userId = :userId ORDER BY pinned DESC, updatedAt DESC")
+  fun getNotesForUser(userId: String): Flow<List<com.example.data.model.StudyNote>>
+
+  @Insert(onConflict = OnConflictStrategy.REPLACE)
+  suspend fun insertNote(note: com.example.data.model.StudyNote): Long
+
+  @Update
+  suspend fun updateNote(note: com.example.data.model.StudyNote)
+
+  @Query("DELETE FROM notes WHERE id = :id")
+  suspend fun deleteNote(id: Long)
+}
