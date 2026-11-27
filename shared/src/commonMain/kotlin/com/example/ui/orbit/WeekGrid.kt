@@ -1,5 +1,8 @@
 package com.example.ui.orbit
 
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -67,7 +70,16 @@ private val HourHeight = 52.dp
 private val GutterWidth = 58.dp
 private val MinBlockHeight = 22.dp
 
-private data class GridDrag(val block: DayBlock, val day: Int, val mode: DragMode, val dx: Float = 0f, val dy: Float = 0f)
+private data class GridDrag(
+  val block: DayBlock,
+  val day: Int,
+  val mode: DragMode,
+  val dx: Float = 0f,
+  val dy: Float = 0f,
+  /** The block's lane in its column, so a resize stays in place rather than spreading across the day. */
+  val lane: Int = 0,
+  val lanes: Int = 1
+)
 
 private fun hourLabel(h: Int): String = when {
   h == 0 -> "12 AM"
@@ -215,18 +227,21 @@ fun WeekGrid(
             val isDragged = drag?.block == b && drag?.day == dayIndex
             val canDrag = !b.fromYesterday
             val canResize = canDrag && !b.isMarker && b.end <= DAY_MINUTES
+            val hover = remember { MutableInteractionSource() }
+            val hovered by hover.collectIsHoveredAsState()
             Box(
               Modifier
                 .offset(x = colWidth * dayIndex + width * lane, y = minute * b.start)
                 .size(width, height)
                 .padding(horizontal = 2.dp, vertical = 1.dp)
                 .graphicsLayer { alpha = if (isDragged) 0.35f else 1f }
+                .hoverable(hover)
                 .pointerHoverIcon(PointerIcon.Hand)
                 .pointerInput(b) { detectTapGestures { onOpen(b) } }
                 .then(
                   if (canDrag) Modifier.pointerInput(b, dayIndex) {
                     detectDragGestures(
-                      onDragStart = { drag = GridDrag(b, dayIndex, DragMode.Move) },
+                      onDragStart = { drag = GridDrag(b, dayIndex, DragMode.Move, lane = lane, lanes = laneCount) },
                       onDrag = { change, amount ->
                         change.consume()
                         drag = drag?.let { it.copy(dx = it.dx + amount.x, dy = it.dy + amount.y) }
@@ -245,37 +260,44 @@ fun WeekGrid(
             ) {
               BlockFace(b, glass, height, b.start, b.end, colors = plan.of(b))
               if (canResize) {
-                Box(
-                  Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .height(9.dp)
-                    .pointerHoverIcon(PointerIcon.Crosshair)
-                    .pointerInput(b, dayIndex) {
-                      detectVerticalDragGestures(
-                        onDragStart = { drag = GridDrag(b, dayIndex, DragMode.ResizeEnd) },
-                        onVerticalDrag = { change, amount ->
-                          change.consume()
-                          drag = drag?.let { it.copy(dy = it.dy + amount) }
-                        },
-                        onDragEnd = {
-                          drag?.let { d ->
-                            val (_, s, e) = preview(d)
-                            if (e != d.block.end) onMove(d.block, week[d.day], s, e)
-                          }
-                          drag = null
-                        },
-                        onDragCancel = { drag = null }
-                      )
-                    },
-                  contentAlignment = Alignment.Center
-                ) {
+                // Both edges can be dragged: the top to change when it starts, the bottom when it ends.
+                for (mode in listOf(DragMode.ResizeStart, DragMode.ResizeEnd)) {
                   Box(
                     Modifier
-                      .size(width = 18.dp, height = 3.dp)
-                      .clip(RoundedCornerShape(2.dp))
-                      .background(plan.of(b).second.copy(alpha = 0.45f))
-                  )
+                      .align(if (mode == DragMode.ResizeStart) Alignment.TopCenter else Alignment.BottomCenter)
+                      .fillMaxWidth()
+                      .height(if (height < 40.dp) 7.dp else 11.dp)
+                      .pointerHoverIcon(ResizeVerticalCursor)
+                      .pointerInput(b, dayIndex, mode) {
+                        detectVerticalDragGestures(
+                          onDragStart = { drag = GridDrag(b, dayIndex, mode, lane = lane, lanes = laneCount) },
+                          onVerticalDrag = { change, amount ->
+                            change.consume()
+                            drag = drag?.let { it.copy(dy = it.dy + amount) }
+                          },
+                          onDragEnd = {
+                            drag?.let { d ->
+                              val (_, s, e) = preview(d)
+                              if (s != d.block.start || e != d.block.end) onMove(d.block, week[d.day], s, e)
+                            }
+                            drag = null
+                          },
+                          onDragCancel = { drag = null }
+                        )
+                      },
+                    contentAlignment = if (mode == DragMode.ResizeStart) Alignment.TopCenter else Alignment.BottomCenter
+                  ) {
+                    // A small grip on the bottom edge; the top one shows while the block is hovered.
+                    if (mode == DragMode.ResizeEnd || hovered) {
+                      Box(
+                        Modifier
+                          .padding(vertical = 3.dp)
+                          .size(width = 18.dp, height = 3.dp)
+                          .clip(RoundedCornerShape(2.dp))
+                          .background(plan.of(b).second.copy(alpha = 0.45f))
+                      )
+                    }
+                  }
                 }
               }
             }
@@ -288,11 +310,14 @@ fun WeekGrid(
         val (day, s, e) = preview(d)
         val visibleEnd = e.coerceAtMost(DAY_MINUTES)
         val height = maxOf(minute * (visibleEnd - s), MinBlockHeight)
+        // Moving takes the whole column it lands in; resizing stays in the block's own lane.
+        val resizing = d.mode != DragMode.Move
+        val laneWidth = if (resizing) colWidth / d.lanes else colWidth
         Box(
           Modifier
             .zIndex(2f)
-            .offset(x = colWidth * day, y = minute * s)
-            .size(colWidth, height)
+            .offset(x = colWidth * day + if (resizing) laneWidth * d.lane else 0.dp, y = minute * s)
+            .size(laneWidth, height)
             .padding(horizontal = 3.dp, vertical = 1.dp)
             .shadow(10.dp, RoundedCornerShape(10.dp), clip = false)
         ) {

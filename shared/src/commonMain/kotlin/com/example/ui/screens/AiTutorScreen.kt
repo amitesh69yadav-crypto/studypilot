@@ -290,7 +290,7 @@ fun AiTutorScreen(
             modifier = Modifier
               .fillMaxWidth()
               .padding(horizontal = 16.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically
           ) {
           item {
@@ -656,7 +656,7 @@ private fun ChatTabContent(
         // Where answers come from (also in Settings > AI)
         LazyRow(
           modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.spacedBy(8.dp),
+          horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
           verticalAlignment = Alignment.CenterVertically
         ) {
           items(AiSource.entries) { option ->
@@ -687,7 +687,8 @@ private fun ChatTabContent(
           color = MaterialTheme.colorScheme.onSurfaceVariant,
           maxLines = 2,
           overflow = TextOverflow.Ellipsis,
-          modifier = Modifier.padding(vertical = 2.dp)
+          textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+          modifier = Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 4.dp)
         )
       }
     }
@@ -708,8 +709,8 @@ private fun ChatTabContent(
       LazyRow(
         modifier = Modifier
           .fillMaxWidth()
-          .padding(horizontal = 16.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+          .padding(horizontal = 16.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
       ) {
         if (linkPromptChips.isNotEmpty()) {
           items(linkPromptChips, key = { "${it.label}|${it.sourceUrl}|${it.prompt}" }) { linkChip ->
