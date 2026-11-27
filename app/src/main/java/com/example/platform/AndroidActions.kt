@@ -45,6 +45,28 @@ class AndroidActions(private val context: Context) : PlatformActions {
     }
   }
 
+  /** Saves into Downloads (via MediaStore on Android 10 and later), then says where. */
+  override fun saveFile(fileName: String, mimeType: String, bytes: ByteArray) {
+    try {
+      if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+        val values = android.content.ContentValues().apply {
+          put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+          put(android.provider.MediaStore.MediaColumns.MIME_TYPE, mimeType)
+          put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS)
+        }
+        val uri = context.contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+          ?: throw IllegalStateException("No Downloads folder")
+        context.contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
+      } else {
+        val dir = context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir
+        java.io.File(dir, fileName).writeBytes(bytes)
+      }
+      showMessage("Saved $fileName to Downloads")
+    } catch (e: Exception) {
+      showMessage("Couldn't save the file: ${e.message ?: "unknown error"}")
+    }
+  }
+
   override val googleSignIn: (suspend () -> PlatformActions.GoogleAccount?) = suspend {
     // default_web_client_id is generated from google-services.json, which isn't checked in,
     // so look it up by name and fall back to the OAuth client from firebase-applet-config.json.

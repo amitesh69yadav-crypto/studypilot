@@ -322,9 +322,9 @@ fun TopicCard(
   onDelete: () -> Unit
 ) {
   Card(
+    onClick = onClick,
     modifier = Modifier
-      .fillMaxWidth()
-      .clickable { onClick() },
+      .fillMaxWidth(),
     shape = RoundedCornerShape(16.dp),
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)

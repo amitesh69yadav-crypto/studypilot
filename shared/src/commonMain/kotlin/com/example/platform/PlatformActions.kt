@@ -12,6 +12,10 @@ interface PlatformActions {
   fun showMessage(message: String)
   /** Opens the calendar app's (or web calendar's) "new event" screen for this session. */
   fun addToCalendar(session: TimetableSession)
+  /** Saves a file the user names and places (a Save dialog on the PC, Downloads on the phone). */
+  fun saveFile(fileName: String, mimeType: String, bytes: ByteArray) {
+    showMessage("Saving files isn't available here.")
+  }
   /** Google sign-in returning an ID token for Firebase, or null where unsupported. */
   val googleSignIn: (suspend () -> GoogleAccount?)?
 

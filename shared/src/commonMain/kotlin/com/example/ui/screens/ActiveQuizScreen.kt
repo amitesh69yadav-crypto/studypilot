@@ -293,9 +293,10 @@ fun ActiveQuizScreen(
                 options.forEach { opt ->
                   val isSelected = userAnswer.equals(opt, ignoreCase = true)
                   Card(
+                    onClick = { viewModel.answerCurrentQuestion(opt) },
                     modifier = Modifier
                       .fillMaxWidth()
-                      .clickable { viewModel.answerCurrentQuestion(opt) },
+                      ,
                     shape = RoundedCornerShape(12.dp),
                     colors = CardDefaults.cardColors(
                       containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface

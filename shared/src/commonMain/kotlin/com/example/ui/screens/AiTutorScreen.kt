@@ -176,7 +176,7 @@ fun AiTutorScreen(
                 shape = RoundedCornerShape(20.dp),
                 color = if (selectedTab == TutorTab.CHAT) MaterialTheme.colorScheme.primary else Color.Transparent,
                 modifier = Modifier
-                  .clickable { selectedTab = TutorTab.CHAT }
+                  .clip(RoundedCornerShape(20.dp)).clickable { selectedTab = TutorTab.CHAT }
                   .clip(RoundedCornerShape(20.dp))
               ) {
                 Row(
@@ -203,7 +203,7 @@ fun AiTutorScreen(
                 shape = RoundedCornerShape(20.dp),
                 color = if (selectedTab == TutorTab.HISTORY) MaterialTheme.colorScheme.primary else Color.Transparent,
                 modifier = Modifier
-                  .clickable { selectedTab = TutorTab.HISTORY }
+                  .clip(RoundedCornerShape(20.dp)).clickable { selectedTab = TutorTab.HISTORY }
                   .clip(RoundedCornerShape(20.dp))
               ) {
                 Row(
@@ -1029,9 +1029,9 @@ private fun TutorSessionHistoryCard(
   }
 
   Card(
+    onClick = onClick,
     modifier = Modifier
-      .fillMaxWidth()
-      .clickable { onClick() },
+      .fillMaxWidth(),
     shape = RoundedCornerShape(14.dp),
     colors = CardDefaults.cardColors(
       containerColor = if (isActive) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f) else MaterialTheme.colorScheme.surface
@@ -1520,7 +1520,7 @@ private fun ChatMessageBubble(
                 Surface(
                   shape = RoundedCornerShape(16.dp),
                   color = MaterialTheme.colorScheme.primaryContainer,
-                  modifier = Modifier.clickable { onTopicClick(topic) }
+                  modifier = Modifier.clip(RoundedCornerShape(16.dp)).clickable { onTopicClick(topic) }
                 ) {
                   Row(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -1581,7 +1581,7 @@ private fun PromptChip(
     shape = RoundedCornerShape(16.dp),
     color = MaterialTheme.colorScheme.surface,
     shadowElevation = 0.dp,
-    modifier = Modifier.clickable { onClick() }
+    modifier = Modifier.clip(RoundedCornerShape(16.dp)).clickable { onClick() }
   ) {
     Text(
       text = text,

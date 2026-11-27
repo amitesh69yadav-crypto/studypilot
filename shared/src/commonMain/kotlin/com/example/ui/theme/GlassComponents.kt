@@ -84,15 +84,22 @@ fun Card(
     androidx.compose.material3.Card(onClick, modifier, enabled, shape, colors, elevation, border, interactionSource, content)
   } else {
     val glassShape = glassCardShape(shape)
+    // The glass card handles the click itself: one soft tint over the whole card and a press-in,
+    // rather than Material's own state layer stacked on top of it.
     androidx.compose.material3.Card(
-      onClick = onClick,
-      modifier = modifier.pressScale(source).glass(glassShape, glass, glassFill(colors.containerColor, glass)),
-      enabled = enabled,
+      modifier = modifier
+        .pressScale(source)
+        .glass(glassShape, glass, glassFill(colors.containerColor, glass))
+        .clickable(
+          interactionSource = source,
+          indication = androidx.compose.foundation.LocalIndication.current,
+          enabled = enabled,
+          onClick = onClick
+        ),
       shape = glassShape,
       colors = CardDefaults.cardColors(containerColor = Color.Transparent, contentColor = colors.contentColor),
       elevation = CardDefaults.cardElevation(0.dp),
       border = border,
-      interactionSource = source,
       content = content
     )
   }
@@ -416,4 +423,31 @@ fun Modifier.pressable(onClick: () -> Unit, surface: Modifier.() -> Modifier = {
     .pressScale(source)
     .surface()
     .clickable(interactionSource = source, indication = androidx.compose.foundation.LocalIndication.current, onClick = onClick)
+}
+
+/**
+ * A clickable surface: Material's on the phone; on the desktop a glass panel with the same soft hover
+ * tint and press-in as every other control, clipped to its shape.
+ */
+@Composable
+fun ClickableSurface(
+  onClick: () -> Unit,
+  modifier: Modifier = Modifier,
+  shape: Shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+  color: Color = MaterialTheme.colorScheme.surface,
+  border: BorderStroke? = null,
+  content: @Composable () -> Unit
+) {
+  val glass = LocalGlass.current
+  if (glass == null) {
+    androidx.compose.material3.Surface(onClick = onClick, modifier = modifier, shape = shape, color = color, border = border, content = content)
+    return
+  }
+  val glassShape = glassCardShape(shape)
+  val fill = glassFill(color, glass)
+  androidx.compose.foundation.layout.Box(
+    modifier.pressable(onClick) { glass(glassShape, glass, fill) }
+  ) {
+    androidx.compose.runtime.CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides glass.text) { content() }
+  }
 }

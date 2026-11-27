@@ -325,7 +325,7 @@ fun TimetableScreen(
               modifier = Modifier
                 .weight(1f)
                 .heightIn(min = 38.dp)
-                .clickable { showHeaderCards = !showHeaderCards }
+                .clip(RoundedCornerShape(8.dp)).clickable { showHeaderCards = !showHeaderCards }
             ) {
               Row(
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
@@ -390,7 +390,7 @@ fun TimetableScreen(
                     border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage),
                     modifier = Modifier
                       .height(28.dp)
-                      .clickable { shiftSelectedYear(-1) }
+                      .clip(RoundedCornerShape(6.dp)).clickable { shiftSelectedYear(-1) }
                   ) {
                     Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 8.dp)) {
                       Text(
@@ -431,7 +431,7 @@ fun TimetableScreen(
                       color = PaletteDeepSage,
                       modifier = Modifier
                         .height(22.dp)
-                        .clickable { selectedDate = realToday }
+                        .clip(RoundedCornerShape(6.dp)).clickable { selectedDate = realToday }
                     ) {
                       Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 8.dp)) {
                         Text(
@@ -464,7 +464,7 @@ fun TimetableScreen(
                     border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage),
                     modifier = Modifier
                       .height(28.dp)
-                      .clickable { shiftSelectedYear(1) }
+                      .clip(RoundedCornerShape(6.dp)).clickable { shiftSelectedYear(1) }
                   ) {
                     Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 8.dp)) {
                       Text(
@@ -626,7 +626,7 @@ fun TimetableScreen(
                       ),
                       modifier = Modifier
                         .weight(1f)
-                        .clickable { selectedDate = dStr }
+                        .clip(RoundedCornerShape(8.dp)).clickable { selectedDate = dStr }
                     ) {
                       Column(
                         modifier = Modifier.padding(vertical = 4.dp),
@@ -1644,7 +1644,7 @@ fun ApplyFormatDialog(
               ),
               modifier = Modifier
                 .fillMaxWidth()
-                .clickable { selectedFormat = format }
+                .clip(RoundedCornerShape(10.dp)).clickable { selectedFormat = format }
             ) {
               Column(modifier = Modifier.padding(12.dp)) {
                 Text(format.name, fontWeight = FontWeight.Bold, color = PaletteDarkText)
@@ -2418,7 +2418,7 @@ fun SessionEditDialog(
           border = androidx.compose.foundation.BorderStroke(1.dp, PaletteMediumSage),
           modifier = Modifier
             .fillMaxWidth()
-            .clickable { isAlarmEnabled = !isAlarmEnabled }
+            .clip(RoundedCornerShape(10.dp)).clickable { isAlarmEnabled = !isAlarmEnabled }
         ) {
           Row(
             modifier = Modifier.padding(12.dp),

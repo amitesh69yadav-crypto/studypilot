@@ -432,7 +432,7 @@ fun SettingsScreen(
                 modifier = Modifier
                   .weight(1f)
                   .heightIn(min = 44.dp)
-                  .clickable { viewModel.setThemeMode(mode) }
+                  .clip(RoundedCornerShape(12.dp)).clickable { viewModel.setThemeMode(mode) }
               ) {
                 Row(
                   modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp),

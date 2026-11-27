@@ -528,7 +528,7 @@ fun TimeScrollPickerField(
     shape = RoundedCornerShape(10.dp),
     color = MaterialTheme.colorScheme.surfaceVariant,
     border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-    modifier = modifier.clickable { showPicker = true }
+    modifier = modifier.clip(RoundedCornerShape(10.dp)).clickable { showPicker = true }
   ) {
     Column(
       modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
@@ -709,7 +709,7 @@ fun TimeWheelScrollerDialog(
                   modifier = Modifier
                     .fillMaxWidth(0.85f)
                     .padding(vertical = 2.dp)
-                    .clickable { selectedHour = h }
+                    .clip(RoundedCornerShape(8.dp)).clickable { selectedHour = h }
                 ) {
                   Text(
                     text = String.format("%02d", h),
@@ -745,7 +745,7 @@ fun TimeWheelScrollerDialog(
                   modifier = Modifier
                     .fillMaxWidth(0.85f)
                     .padding(vertical = 2.dp)
-                    .clickable { selectedMinute = m }
+                    .clip(RoundedCornerShape(8.dp)).clickable { selectedMinute = m }
                 ) {
                   Text(
                     text = String.format("%02d", m),
@@ -775,7 +775,7 @@ fun TimeWheelScrollerDialog(
                 modifier = Modifier
                   .fillMaxWidth(0.85f)
                   .padding(vertical = 4.dp)
-                  .clickable { selectedPeriod = p }
+                  .clip(RoundedCornerShape(8.dp)).clickable { selectedPeriod = p }
               ) {
                 Text(
                   text = p,

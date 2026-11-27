@@ -423,7 +423,7 @@ fun ProgressScreen(
                 color = MaterialTheme.colorScheme.onSurface
               )
               Text(
-                text = if (attempts.isEmpty()) "Target 85%" else "Average of ${attempts.size} quizzes · target 85%",
+                text = if (attempts.isEmpty()) "Target 85%" else "Average of ${com.example.ui.components.countOf(attempts.size, "quiz", "quizzes")} · target 85%",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
               )
@@ -785,56 +785,75 @@ fun ProgressScreen(
     }
   }
 
-  // Export Progress Report Dialog
+  // Export: the full report as an Excel workbook or a Word document, or a short summary as text.
   if (showExportDialog) {
-    val reportText = remember(topics.size, masteredCount, strugglingTopics.size, untestedTopics.size, attempts.size, averageScore, studyStreak, totalWeeklyHours) {
+    val user by viewModel.currentUser.collectAsState()
+    val report = remember(topics, attempts, sessions, studyStreak, weeklyDayHours, user) {
+      com.example.data.export.ProgressReport(
+        studentName = user.name.ifBlank { "Student" },
+        generatedAt = java.util.Date(),
+        topics = topics,
+        attempts = attempts,
+        sessions = sessions,
+        studyStreak = studyStreak,
+        weekHours = weeklyDayHours.map { it.first to it.second.toFloat() }
+      )
+    }
+    val summary = remember(report) {
       buildString {
-        append("=== StudyPilot AI - Academic Progress Report ===\n")
-        append("Total Topics Recorded: ${topics.size}\n")
-        append("Mastered Topics: $masteredCount\n")
-        append("Needs Review: ${strugglingTopics.size}\n")
-        append("Untested Topics: ${untestedTopics.size}\n")
-        append("Quizzes Completed: ${attempts.size}\n")
-        append("Average Quiz Score: $averageScore%\n")
-        append("Current Study Streak: $studyStreak Days\n")
-        append("Weekly Hours Logged: ${String.format(Locale.getDefault(), "%.1f", totalWeeklyHours)} Hours\n")
-        append("===============================================")
+        appendLine("StudyPilot progress report")
+        appendLine("Topics: ${report.topics.size} (${report.mastered} mastered, ${report.struggling} need review, ${report.untested} untested)")
+        appendLine("Quizzes: ${report.attempts.size}" + (report.averageScore?.let { ", average $it%" } ?: ""))
+        appendLine("Study streak: ${report.studyStreak} days")
+        append("This week: ${String.format(Locale.getDefault(), "%.1f", report.weekTotal)} hours")
       }
     }
 
     AlertDialog(
       onDismissRequest = { showExportDialog = false },
+      containerColor = com.example.ui.theme.dialogBackground(MaterialTheme.colorScheme.surface),
       title = { Text("Export report", fontWeight = FontWeight.Bold) },
       text = {
-        Column {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
           Text(
-            "Copy your progress report, or share it with a tutor:",
+            "Save everything about your progress: a summary, every subject and topic with its mastery and accuracy, " +
+              "each quiz and every question you answered, this week's study hours and your timetable.",
             style = MaterialTheme.typography.bodyMedium
           )
-          Spacer(modifier = Modifier.height(12.dp))
-          Surface(
-            shape = RoundedCornerShape(8.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant
-          ) {
-            Text(reportText, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(12.dp))
+          Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+            Text(summary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(12.dp).fillMaxWidth())
+          }
+          Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+              onClick = {
+                actions.saveFile(
+                  "${report.fileStem}.xlsx",
+                  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                  com.example.data.export.progressXlsx(report)
+                )
+                showExportDialog = false
+              },
+              modifier = Modifier.weight(1f)
+            ) { Text("Excel (.xlsx)", maxLines = 1) }
+            Button(
+              onClick = {
+                actions.saveFile(
+                  "${report.fileStem}.docx",
+                  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                  com.example.data.export.progressDocx(report)
+                )
+                showExportDialog = false
+              },
+              modifier = Modifier.weight(1f)
+            ) { Text("Word (.docx)", maxLines = 1) }
           }
         }
       },
       confirmButton = {
-        Button(
-          onClick = {
-            actions.copyText(reportText, "Report copied to clipboard!")
-            showExportDialog = false
-          },
-          shape = RoundedCornerShape(10.dp)
-        ) {
-          Text("Copy to clipboard")
-        }
+        TextButton(onClick = { actions.copyText(summary, "Summary copied") }) { Text("Copy summary") }
       },
       dismissButton = {
-        TextButton(onClick = { showExportDialog = false }) {
-          Text("Close")
-        }
+        TextButton(onClick = { showExportDialog = false }) { Text("Close") }
       }
     )
   }

@@ -656,7 +656,7 @@ private fun ImportedChatCard(
               Surface(
                 color = PalettePaleCeladon,
                 shape = RoundedCornerShape(6.dp),
-                modifier = Modifier.clickable { onMoveSubject() }
+                modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { onMoveSubject() }
               ) {
                 Text(
                   text = chat.subjectName,
@@ -1808,10 +1808,10 @@ private fun ImportChatTab(
     // Subject Grouping Selector (Auto + Existing + Manual New)
     var subjectDropdownExpanded by remember { mutableStateOf(false) }
     Box(modifier = Modifier.fillMaxWidth()) {
-      OutlinedCard(
+      Card(
+        onClick = { subjectDropdownExpanded = true },
         modifier = Modifier
           .fillMaxWidth()
-          .clickable { subjectDropdownExpanded = true }
           .testTag("import_subject_dropdown_trigger"),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.outlinedCardColors(containerColor = PaletteMintFoam),
@@ -2211,10 +2211,10 @@ private fun ExtractionPreviewDialog(
 
           // Subject Grouping Card (Auto or Manual Selection/Creation)
           Box(modifier = Modifier.fillMaxWidth()) {
-            OutlinedCard(
+            Card(
+              onClick = { subjectDropdownExpanded = true },
               modifier = Modifier
                 .fillMaxWidth()
-                .clickable { subjectDropdownExpanded = true }
                 .testTag("preview_subject_selector"),
               shape = RoundedCornerShape(12.dp),
               colors = CardDefaults.outlinedCardColors(containerColor = PaletteMintFoam),
@@ -2554,7 +2554,7 @@ private fun MoveChatToSubjectDialog(
             border = BorderStroke(1.dp, PaletteMediumSage),
             modifier = Modifier
               .fillMaxWidth()
-              .clickable { createNew = true }
+              .clip(RoundedCornerShape(10.dp)).clickable { createNew = true }
           ) {
             Row(
               modifier = Modifier

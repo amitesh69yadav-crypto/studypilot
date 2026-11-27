@@ -252,7 +252,7 @@ fun DashboardScreen(
         modifier = Modifier
           .weight(1f)
           .height(60.dp)
-          .clickable { onNavigate(Screen.WeekendQuizzes) },
+          .clip(RoundedCornerShape(12.dp)).clickable { onNavigate(Screen.WeekendQuizzes) },
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surface,
         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
@@ -283,7 +283,7 @@ fun DashboardScreen(
         modifier = Modifier
           .weight(1f)
           .height(60.dp)
-          .clickable { onNavigate(Screen.AiChatImport) },
+          .clip(RoundedCornerShape(12.dp)).clickable { onNavigate(Screen.AiChatImport) },
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surface,
         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
@@ -559,7 +559,7 @@ private fun SessionItemRow(
 ) {
   val isDone = session.status == "COMPLETED"
   // The row opens the session; the circle on the right marks it done.
-  Surface(
+  com.example.ui.theme.ClickableSurface(
     onClick = onOpen,
     modifier = Modifier.fillMaxWidth(),
     shape = RoundedCornerShape(12.dp),
@@ -652,7 +652,7 @@ private fun SessionItemRow(
 
 @Composable
 private fun RecentTopicRow(topic: StudyTopic, onClick: () -> Unit) {
-  Surface(
+  com.example.ui.theme.ClickableSurface(
     onClick = onClick,
     modifier = Modifier.fillMaxWidth(),
     shape = RoundedCornerShape(12.dp),
@@ -739,8 +739,9 @@ private fun QuickActionButton(
   modifier: Modifier = Modifier,
   onClick: () -> Unit
 ) {
-  Surface(
-    modifier = modifier.height(60.dp).clickable { onClick() },
+  com.example.ui.theme.ClickableSurface(
+    onClick = { onClick() },
+    modifier = modifier.height(60.dp),
     shape = RoundedCornerShape(12.dp),
     color = MaterialTheme.colorScheme.surface,
     border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
