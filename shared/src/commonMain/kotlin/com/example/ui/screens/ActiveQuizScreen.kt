@@ -228,7 +228,7 @@ fun ActiveQuizScreen(
                     color = MaterialTheme.colorScheme.primaryContainer
                   ) {
                     Text(
-                      text = "${currentQuestion.subjectName} • ${currentQuestion.topicTitle}",
+                      text = currentQuestion.subjectName.trim().ifBlank { "General" },
                       style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                       color = MaterialTheme.colorScheme.onPrimaryContainer,
                       modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
