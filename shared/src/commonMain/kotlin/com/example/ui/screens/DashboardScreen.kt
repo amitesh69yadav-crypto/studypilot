@@ -1,5 +1,11 @@
 package com.example.ui.screens
 
+import com.example.ui.theme.statLabel
+import com.example.ui.theme.LocalAppStyle
+import com.example.ui.theme.AppStyle
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.fillMaxHeight
 import com.example.platform.LocalPlatformActions
 import com.example.platform.PlatformBackHandler
 import com.example.ui.components.formatTimeRange
@@ -40,14 +46,14 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material3.Button
+import com.example.ui.theme.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
+import com.example.ui.theme.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ElevatedCard
+import com.example.ui.theme.ElevatedCard
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import com.example.ui.theme.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -116,277 +122,185 @@ fun DashboardScreen(
   val strugglingCount = remember(topics) { topics.count { it.masteryLevel == "STRUGGLING" } }
   val pendingTasks = remember(tasks) { tasks.filter { !it.isCompleted } }
 
-  LazyColumn(
-    modifier = Modifier.fillMaxSize(),
-    contentPadding = PaddingValues(bottom = 24.dp)
-  ) {
-    // 1. Clean Subtle Header
-    item {
-      Row(
-        modifier = Modifier
-          .fillMaxWidth()
-          .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 12.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-      ) {
-        val isGuestMode = !currentUser.isLoggedIn || currentUser.id == com.example.ui.viewmodel.StudyPilotViewModel.GUEST_USER_ID
-        val firstName = currentUser.name.trim().split(" ").firstOrNull().orEmpty().ifBlank { "Guest" }
-        Column {
-          Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = if (isGuestMode) Modifier.clickable { onNavigate(Screen.Login) } else Modifier
-          ) {
-            Text(
-              text = if (isGuestMode) "Welcome" else "Hello, $firstName",
-              style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-              color = MaterialTheme.colorScheme.onBackground
-            )
-            if (isGuestMode) {
-              Spacer(modifier = Modifier.width(8.dp))
-              Text(
-                text = "· Sign in",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary
-              )
-            }
-          }
-          Spacer(modifier = Modifier.height(2.dp))
-          Text(
-            text = java.text.SimpleDateFormat("EEEE, MMM d", java.util.Locale.getDefault()).format(java.util.Date()),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-          )
-        }
-
-        Surface(
-          shape = RoundedCornerShape(20.dp),
-          color = MaterialTheme.colorScheme.surface,
-          border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+  // Each part of the dashboard, so the phone can stack them and the desktop can lay them out in columns.
+  val greeting: @Composable () -> Unit = {
+    Row(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 12.dp),
+      horizontalArrangement = Arrangement.SpaceBetween,
+      verticalAlignment = Alignment.CenterVertically
+    ) {
+      val isGuestMode = !currentUser.isLoggedIn || currentUser.id == com.example.ui.viewmodel.StudyPilotViewModel.GUEST_USER_ID
+      val firstName = currentUser.name.trim().split(" ").firstOrNull().orEmpty().ifBlank { "Guest" }
+      Column {
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          modifier = if (isGuestMode) Modifier.clickable { onNavigate(Screen.Login) } else Modifier
         ) {
-          Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-          ) {
-            Icon(
-              imageVector = Icons.Default.LocalFireDepartment,
-              contentDescription = "Streak",
-              tint = MaterialTheme.colorScheme.primary,
-              modifier = Modifier.size(14.dp)
-            )
-            Spacer(modifier = Modifier.width(4.dp))
+          Text(
+            text = if (isGuestMode) "Welcome" else "Hello, $firstName",
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.onBackground
+          )
+          if (isGuestMode) {
+            Spacer(modifier = Modifier.width(8.dp))
             Text(
-              text = "$studyStreak d",
-              style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+              text = "· Sign in",
+              style = MaterialTheme.typography.bodySmall,
               color = MaterialTheme.colorScheme.primary
             )
           }
         }
-      }
-    }
-
-    // 2. Real-Time "What Should I Do Now?" Live Card
-    item {
-      Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-        WhatShouldIDoNowCard(
-          status = scheduleStatus,
-          onPlanScheduleClick = { onNavigate(Screen.Timetable) },
-          onEditSessionClick = { onNavigate(Screen.Timetable) },
-          onMarkSessionDone = { session ->
-            val next = if (session.status == "COMPLETED") "SCHEDULED" else "COMPLETED"
-            viewModel.updateSessionStatus(session, next)
-          },
-          onAskAiTutor = { session ->
-            viewModel.openTutorForSubject(session.subjectId, "Help me prepare notes and key concepts for ${session.topic}")
-          },
-          onToggleAlarm = { viewModel.toggleSessionAlarm(it) },
-          onTestAlarm = { viewModel.triggerTestAlarm(it) },
-          onSyncGoogleCalendar = { session ->
-            actions.addToCalendar(session)
-          }
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+          text = java.text.SimpleDateFormat("EEEE, MMM d", java.util.Locale.getDefault()).format(java.util.Date()),
+          style = MaterialTheme.typography.labelSmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant
         )
       }
-    }
 
-    // 3. Subtle 4-Item Quick Action Row
-    item {
-      Row(
-        modifier = Modifier
-          .fillMaxWidth()
-          .padding(horizontal = 16.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+      Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
       ) {
-        QuickActionButton(
-          icon = Icons.Default.Schedule,
-          label = "Schedule",
-          modifier = Modifier.weight(1f),
-          onClick = onQuickAddSession
-        )
-        QuickActionButton(
-          icon = Icons.Default.Book,
-          label = "Topic",
-          modifier = Modifier.weight(1f),
-          onClick = onQuickAddTopic
-        )
-        QuickActionButton(
-          icon = Icons.Default.Alarm,
-          label = "Alarm",
-          modifier = Modifier.weight(1f),
-          onClick = { showQuickAlarmDialog = true }
-        )
-        QuickActionButton(
-          icon = Icons.Default.Psychology,
-          label = "Tutor",
-          modifier = Modifier.weight(1f),
-          onClick = { onNavigate(Screen.AiTutor) }
-        )
-      }
-    }
-
-    // 4. Subtle 2-Tile Hub: Quiz & Memory
-    item {
-      Row(
-        modifier = Modifier
-          .fillMaxWidth()
-          .padding(horizontal = 16.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-      ) {
-        Surface(
-          modifier = Modifier
-            .weight(1f)
-            .height(60.dp)
-            .clickable { onNavigate(Screen.WeekendQuizzes) },
-          shape = RoundedCornerShape(12.dp),
-          color = MaterialTheme.colorScheme.surface,
-          border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        Row(
+          modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+          verticalAlignment = Alignment.CenterVertically
         ) {
-          Row(
-            modifier = Modifier
-              .fillMaxSize()
-              .padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-          ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-              Text(
-                text = "Quiz",
-                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onSurface
-              )
-              Text(
-                text = "${topics.size} topics",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-              )
-            }
-          }
-        }
-
-        Surface(
-          modifier = Modifier
-            .weight(1f)
-            .height(60.dp)
-            .clickable { onNavigate(Screen.AiChatImport) },
-          shape = RoundedCornerShape(12.dp),
-          color = MaterialTheme.colorScheme.surface,
-          border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-        ) {
-          Row(
-            modifier = Modifier
-              .fillMaxSize()
-              .padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-          ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-              Text(
-                text = "Memory",
-                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onSurface
-              )
-              Text(
-                text = "${extractedConcepts.size} facts",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-              )
-            }
-          }
+          Icon(
+            imageVector = Icons.Default.LocalFireDepartment,
+            contentDescription = "Streak",
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(14.dp)
+          )
+          Spacer(modifier = Modifier.width(4.dp))
+          Text(
+            text = "$studyStreak d",
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.primary
+          )
         }
       }
     }
-
-    // 5. Even 3-Column Stats Capsule
-    item {
+  }
+  val whatNow: @Composable () -> Unit = {
+    Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+      WhatShouldIDoNowCard(
+        status = scheduleStatus,
+        onPlanScheduleClick = { onNavigate(Screen.Timetable) },
+        onEditSessionClick = { onNavigate(Screen.Timetable) },
+        onMarkSessionDone = { session ->
+          val next = if (session.status == "COMPLETED") "SCHEDULED" else "COMPLETED"
+          viewModel.updateSessionStatus(session, next)
+        },
+        onAskAiTutor = { session ->
+          viewModel.openTutorForSubject(session.subjectId, "Help me prepare notes and key concepts for ${session.topic}")
+        },
+        onToggleAlarm = { viewModel.toggleSessionAlarm(it) },
+        onTestAlarm = { viewModel.triggerTestAlarm(it) },
+        onSyncGoogleCalendar = { session ->
+          actions.addToCalendar(session)
+        }
+      )
+    }
+  }
+  val quickActions: @Composable () -> Unit = {
+    Row(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 16.dp, vertical = 4.dp),
+      horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+      QuickActionButton(
+        icon = Icons.Default.Schedule,
+        label = "Schedule",
+        modifier = Modifier.weight(1f),
+        onClick = onQuickAddSession
+      )
+      QuickActionButton(
+        icon = Icons.Default.Book,
+        label = "Topic",
+        modifier = Modifier.weight(1f),
+        onClick = onQuickAddTopic
+      )
+      QuickActionButton(
+        icon = Icons.Default.Alarm,
+        label = "Alarm",
+        modifier = Modifier.weight(1f),
+        onClick = { showQuickAlarmDialog = true }
+      )
+      QuickActionButton(
+        icon = Icons.Default.Psychology,
+        label = "Tutor",
+        modifier = Modifier.weight(1f),
+        onClick = { onNavigate(Screen.AiTutor) }
+      )
+    }
+  }
+  val hub: @Composable () -> Unit = {
+    Row(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 16.dp, vertical = 4.dp),
+      horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
       Surface(
         modifier = Modifier
-          .fillMaxWidth()
-          .padding(horizontal = 16.dp, vertical = 4.dp),
+          .weight(1f)
+          .height(60.dp)
+          .clickable { onNavigate(Screen.WeekendQuizzes) },
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surface,
         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
       ) {
         Row(
           modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 12.dp),
-          verticalAlignment = Alignment.CenterVertically
+            .fillMaxSize()
+            .padding(horizontal = 16.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.Center
         ) {
-          Column(
-            modifier = Modifier.weight(1f),
-            horizontalAlignment = Alignment.CenterHorizontally
-          ) {
+          Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-              text = "${topics.size}",
-              style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+              text = "Quiz",
+              style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
               color = MaterialTheme.colorScheme.onSurface
             )
             Text(
-              text = "Studied",
+              text = "${topics.size} topics",
               style = MaterialTheme.typography.labelSmall,
               color = MaterialTheme.colorScheme.onSurfaceVariant
             )
           }
+        }
+      }
 
-          Box(
-            modifier = Modifier
-              .width(1.dp)
-              .height(24.dp)
-              .background(MaterialTheme.colorScheme.outlineVariant)
-          )
-
-          Column(
-            modifier = Modifier.weight(1f),
-            horizontalAlignment = Alignment.CenterHorizontally
-          ) {
+      Surface(
+        modifier = Modifier
+          .weight(1f)
+          .height(60.dp)
+          .clickable { onNavigate(Screen.AiChatImport) },
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+      ) {
+        Row(
+          modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.Center
+        ) {
+          Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-              text = if (attempts.isNotEmpty()) "$averageScore%" else "—",
-              style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+              text = "Memory",
+              style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
               color = MaterialTheme.colorScheme.onSurface
             )
             Text(
-              text = "Avg Score",
-              style = MaterialTheme.typography.labelSmall,
-              color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-          }
-
-          Box(
-            modifier = Modifier
-              .width(1.dp)
-              .height(24.dp)
-              .background(MaterialTheme.colorScheme.outlineVariant)
-          )
-
-          Column(
-            modifier = Modifier.weight(1f),
-            horizontalAlignment = Alignment.CenterHorizontally
-          ) {
-            Text(
-              text = "$masteredCount",
-              style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-              color = MaterialTheme.colorScheme.primary
-            )
-            Text(
-              text = "Mastered",
+              text = "${extractedConcepts.size} facts",
               style = MaterialTheme.typography.labelSmall,
               color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -394,121 +308,233 @@ fun DashboardScreen(
         }
       }
     }
-    // 5. Today's Lectures & Study Sessions
-    item {
-      Column(
+  }
+  val stats: @Composable () -> Unit = {
+    Surface(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 16.dp, vertical = 4.dp),
+      shape = RoundedCornerShape(12.dp),
+      color = MaterialTheme.colorScheme.surface,
+      border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+      Row(
         modifier = Modifier
           .fillMaxWidth()
-          .padding(vertical = 4.dp)
+          .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
       ) {
-        SectionHeader(
-          title = "Today",
-          actionText = "All",
-          onActionClick = { onNavigate(Screen.Timetable) }
-        )
-
-        if (sessions.isEmpty()) {
-          Card(
-            modifier = Modifier
-              .fillMaxWidth()
-              .padding(horizontal = 16.dp),
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-          ) {
-            Text(
-              text = "No classes scheduled today.",
-              style = MaterialTheme.typography.bodySmall,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
-              textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-              modifier = Modifier.fillMaxWidth().padding(16.dp)
-            )
-          }
-        } else {
-          Column(
-            modifier = Modifier.padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-          ) {
-            sessions.take(3).forEach { session ->
-              SessionItemRow(session = session, onToggleStatus = {
-                val next = if (session.status == "COMPLETED") "SCHEDULED" else "COMPLETED"
-                viewModel.updateSessionStatus(session, next)
-              })
-            }
-          }
-        }
-      }
-    }
-
-    // 6. Topics Studied Recently
-    item {
-      Column(
-        modifier = Modifier
-          .fillMaxWidth()
-          .padding(vertical = 4.dp)
-      ) {
-        SectionHeader(
-          title = "Recent",
-          actionText = "Library",
-          onActionClick = { onNavigate(Screen.MyTopics) }
-        )
-
-        if (topics.isEmpty()) {
-          Card(
-            modifier = Modifier
-              .fillMaxWidth()
-              .padding(horizontal = 16.dp),
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-          ) {
-            Text(
-              text = "No topics recorded yet.",
-              style = MaterialTheme.typography.bodySmall,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
-              textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-              modifier = Modifier.fillMaxWidth().padding(16.dp)
-            )
-          }
-        } else {
-          Column(
-            modifier = Modifier.padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-          ) {
-            topics.take(3).forEach { topic ->
-              RecentTopicRow(topic = topic)
-            }
-          }
-        }
-      }
-    }
-
-    // 7. Pending Tasks & Upcoming Exams
-    if (pendingTasks.isNotEmpty()) {
-      item {
         Column(
+          modifier = Modifier.weight(1f),
+          horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+          Text(
+            text = "${topics.size}",
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.onSurface
+          )
+          Text(
+            text = statLabel("Studied"),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+          )
+        }
+
+        Box(
+          modifier = Modifier
+            .width(1.dp)
+            .height(24.dp)
+            .background(MaterialTheme.colorScheme.outlineVariant)
+        )
+
+        Column(
+          modifier = Modifier.weight(1f),
+          horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+          Text(
+            text = if (attempts.isNotEmpty()) "$averageScore%" else "—",
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.onSurface
+          )
+          Text(
+            text = statLabel("Avg Score"),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+          )
+        }
+
+        Box(
+          modifier = Modifier
+            .width(1.dp)
+            .height(24.dp)
+            .background(MaterialTheme.colorScheme.outlineVariant)
+        )
+
+        Column(
+          modifier = Modifier.weight(1f),
+          horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+          Text(
+            text = "$masteredCount",
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.primary
+          )
+          Text(
+            text = statLabel("Mastered"),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+          )
+        }
+      }
+    }
+  }
+  val todaySessions: @Composable () -> Unit = {
+    Column(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(vertical = 4.dp)
+    ) {
+      SectionHeader(
+        title = "Today",
+        actionText = "All",
+        onActionClick = { onNavigate(Screen.Timetable) }
+      )
+
+      if (sessions.isEmpty()) {
+        Card(
           modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp)
+            .padding(horizontal = 16.dp),
+          shape = RoundedCornerShape(12.dp),
+          colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+          border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+          elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
-          SectionHeader(
-            title = "Deadlines",
-            actionText = "Tasks",
-            onActionClick = { onNavigate(Screen.Tasks) }
+          Text(
+            text = "No classes scheduled today.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().padding(16.dp)
           )
-
-          Column(
-            modifier = Modifier.padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-          ) {
-            pendingTasks.take(2).forEach { task ->
-              DashboardTaskRow(task = task)
-            }
+        }
+      } else {
+        Column(
+          modifier = Modifier.padding(horizontal = 16.dp),
+          verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+          sessions.take(3).forEach { session ->
+            SessionItemRow(session = session, onToggleStatus = {
+              val next = if (session.status == "COMPLETED") "SCHEDULED" else "COMPLETED"
+              viewModel.updateSessionStatus(session, next)
+            })
           }
         }
       }
+    }
+  }
+  val recentTopics: @Composable () -> Unit = {
+    Column(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(vertical = 4.dp)
+    ) {
+      SectionHeader(
+        title = "Recent",
+        actionText = "Library",
+        onActionClick = { onNavigate(Screen.MyTopics) }
+      )
+
+      if (topics.isEmpty()) {
+        Card(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+          shape = RoundedCornerShape(12.dp),
+          colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+          border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+          elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        ) {
+          Text(
+            text = "No topics recorded yet.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().padding(16.dp)
+          )
+        }
+      } else {
+        Column(
+          modifier = Modifier.padding(horizontal = 16.dp),
+          verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+          topics.take(3).forEach { topic ->
+            RecentTopicRow(topic = topic)
+          }
+        }
+      }
+    }
+  }
+  val deadlines: @Composable () -> Unit = {
+    Column(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(vertical = 4.dp)
+    ) {
+      SectionHeader(
+        title = "Deadlines",
+        actionText = "Tasks",
+        onActionClick = { onNavigate(Screen.Tasks) }
+      )
+
+      Column(
+        modifier = Modifier.padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+      ) {
+        pendingTasks.take(2).forEach { task ->
+          DashboardTaskRow(task = task)
+        }
+      }
+    }
+  }
+
+  if (LocalAppStyle.current == AppStyle.Glass) {
+    // Desktop: the page header already shows the date and the streak, so the greeting is left out.
+    Row(
+      modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
+      horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+      Column(
+        modifier = Modifier.weight(1.35f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+      ) {
+        whatNow()
+        todaySessions()
+        recentTopics()
+      }
+      Column(
+        modifier = Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+      ) {
+        quickActions()
+        hub()
+        stats()
+        if (pendingTasks.isNotEmpty()) deadlines()
+      }
+    }
+  } else {
+    LazyColumn(
+      modifier = Modifier.fillMaxSize(),
+      contentPadding = PaddingValues(bottom = 24.dp)
+    ) {
+      item { greeting() }
+      item { whatNow() }
+      item { quickActions() }
+      item { hub() }
+      item { stats() }
+      item { todaySessions() }
+      item { recentTopics() }
+      if (pendingTasks.isNotEmpty()) item { deadlines() }
     }
   }
 

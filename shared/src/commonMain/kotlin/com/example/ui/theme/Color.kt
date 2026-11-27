@@ -1,5 +1,7 @@
 package com.example.ui.theme
 
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.graphics.Color
 
 /**
@@ -11,16 +13,16 @@ import androidx.compose.ui.graphics.Color
  * Band 5 (Warm Cream Ivory): #FDF8EB
  * Text & High-Contrast: Deep Forest Olive (#212C1E)
  */
-val PaletteDeepSage = Color(0xFF8C9F85)     // Band 1
-val PaletteMediumSage = Color(0xFFB3C2AC)   // Band 2
-val PalettePaleCeladon = Color(0xFFD3DDCF)  // Band 3
-val PaletteMintFoam = Color(0xFFDFEAE0)     // Band 4
-val PaletteCreamIvory = Color(0xFFFDF8EB)   // Band 5
-val PaletteDarkText = Color(0xFF212C1E)     // Deep Forest Olive
+val PaletteDeepSage: Color @Composable @ReadOnlyComposable get() = LocalStudyColors.current.deepSage     // Band 1
+val PaletteMediumSage: Color @Composable @ReadOnlyComposable get() = LocalStudyColors.current.mediumSage   // Band 2
+val PalettePaleCeladon: Color @Composable @ReadOnlyComposable get() = LocalStudyColors.current.paleCeladon  // Band 3
+val PaletteMintFoam: Color @Composable @ReadOnlyComposable get() = LocalStudyColors.current.mintFoam     // Band 4
+val PaletteCreamIvory: Color @Composable @ReadOnlyComposable get() = LocalStudyColors.current.creamIvory   // Band 5
+val PaletteDarkText: Color @Composable @ReadOnlyComposable get() = LocalStudyColors.current.darkText     // Deep Forest Olive
 
-val PaletteMutedText = Color(0xFF5E6858)
-val PalettePaper = Color(0xFFFFFDF7)
-val PaletteError = Color(0xFFB3261E)
+val PaletteMutedText: Color @Composable @ReadOnlyComposable get() = LocalStudyColors.current.mutedText
+val PalettePaper: Color @Composable @ReadOnlyComposable get() = LocalStudyColors.current.paper
+val PaletteError: Color @Composable @ReadOnlyComposable get() = LocalStudyColors.current.error
 
 // Modern Minimal Light Tokens
 val MinimalLightBackground = Color(0xFFF8F9FA)
@@ -58,28 +60,25 @@ val RoseError = Color(0xFFEF4444)
 val PurpleAccent = Color(0xFF8B5CF6)
 
 // Semantic UI aliases
-val PaletteMint = PaletteMintFoam
-val PaletteParchment = PalettePaleCeladon
-val PalettePeachTan = PaletteMediumSage
-val PaletteCoral = PaletteDeepSage
-val PaletteWarmTerracotta = PaletteDeepSage
-val PaletteCreamOffWhite = PaletteCreamIvory
-val PaletteWarmDark = PaletteDarkText
-val PaletteDeepNavy = PaletteDarkText
-
-val PrimarySage = PaletteDeepSage
-val SecondarySage = PaletteMediumSage
-val TertiaryCeladon = PalettePaleCeladon
-val SurfaceMint = PaletteMintFoam
-val BackgroundIvory = PaletteCreamIvory
-
-val BluePrimaryLight = PaletteDeepSage
-val BluePrimaryDark = PaletteDeepSage
-val BlueContainerLight = PaletteMintFoam
-val BlueContainerDark = PalettePaleCeladon
-
-val Navy900 = PaletteDarkText
-val Navy800 = PaletteDarkText
-val Navy700 = PaletteDarkText
-val Navy50 = PaletteCreamIvory
-val Navy100 = PaletteMintFoam
+val PaletteMint: Color @Composable @ReadOnlyComposable get() = PaletteMintFoam
+val PaletteParchment: Color @Composable @ReadOnlyComposable get() = PalettePaleCeladon
+val PalettePeachTan: Color @Composable @ReadOnlyComposable get() = PaletteMediumSage
+val PaletteCoral: Color @Composable @ReadOnlyComposable get() = PaletteDeepSage
+val PaletteWarmTerracotta: Color @Composable @ReadOnlyComposable get() = PaletteDeepSage
+val PaletteCreamOffWhite: Color @Composable @ReadOnlyComposable get() = PaletteCreamIvory
+val PaletteWarmDark: Color @Composable @ReadOnlyComposable get() = PaletteDarkText
+val PaletteDeepNavy: Color @Composable @ReadOnlyComposable get() = PaletteDarkText
+val PrimarySage: Color @Composable @ReadOnlyComposable get() = PaletteDeepSage
+val SecondarySage: Color @Composable @ReadOnlyComposable get() = PaletteMediumSage
+val TertiaryCeladon: Color @Composable @ReadOnlyComposable get() = PalettePaleCeladon
+val SurfaceMint: Color @Composable @ReadOnlyComposable get() = PaletteMintFoam
+val BackgroundIvory: Color @Composable @ReadOnlyComposable get() = PaletteCreamIvory
+val BluePrimaryLight: Color @Composable @ReadOnlyComposable get() = PaletteDeepSage
+val BluePrimaryDark: Color @Composable @ReadOnlyComposable get() = PaletteDeepSage
+val BlueContainerLight: Color @Composable @ReadOnlyComposable get() = PaletteMintFoam
+val BlueContainerDark: Color @Composable @ReadOnlyComposable get() = PalettePaleCeladon
+val Navy900: Color @Composable @ReadOnlyComposable get() = PaletteDarkText
+val Navy800: Color @Composable @ReadOnlyComposable get() = PaletteDarkText
+val Navy700: Color @Composable @ReadOnlyComposable get() = PaletteDarkText
+val Navy50: Color @Composable @ReadOnlyComposable get() = PaletteCreamIvory
+val Navy100: Color @Composable @ReadOnlyComposable get() = PaletteMintFoam

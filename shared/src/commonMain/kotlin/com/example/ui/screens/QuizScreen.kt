@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import com.example.ui.theme.statLabel
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -32,18 +33,18 @@ import androidx.compose.material.icons.filled.Quiz
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.Button
+import com.example.ui.theme.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
+import com.example.ui.theme.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.FilterChip
+import com.example.ui.theme.ElevatedCard
+import com.example.ui.theme.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import com.example.ui.theme.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -385,21 +386,21 @@ fun QuizScreen(
               horizontalAlignment = Alignment.CenterHorizontally
             ) {
               Text(text = "${testedTopics.size}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-              Text(text = "Topics tested", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+              Text(text = statLabel("Topics tested"), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Column(
               modifier = Modifier.weight(1f),
               horizontalAlignment = Alignment.CenterHorizontally
             ) {
               Text(text = "${untestedTopics.size}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-              Text(text = "Untested", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+              Text(text = statLabel("Untested"), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Column(
               modifier = Modifier.weight(1f),
               horizontalAlignment = Alignment.CenterHorizontally
             ) {
               Text(text = "${strugglingTopics.size}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-              Text(text = "Needs review", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+              Text(text = statLabel("Needs review"), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
           }
 

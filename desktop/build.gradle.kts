@@ -26,7 +26,7 @@ compose.desktop {
     nativeDistributions {
       targetFormats(TargetFormat.Msi, TargetFormat.Exe)
       packageName = "StudyPilot"
-      packageVersion = "1.1.0"
+      packageVersion = "1.2.0"
       description = "StudyPilot for desktop"
       modules("java.sql", "java.naming", "jdk.unsupported", "java.net.http")
       windows {

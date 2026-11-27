@@ -19,6 +19,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import com.example.ui.theme.pageBackground
+import com.example.ui.theme.FilterChip
+import com.example.ui.theme.OutlinedButton
+import com.example.ui.theme.Button
+import com.example.ui.theme.OutlinedCard
+import com.example.ui.theme.Card
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -101,16 +107,16 @@ fun AiChatImportScreen(
     // The app's main Scaffold already applies system bar insets.
 
     contentWindowInsets = WindowInsets(0, 0, 0, 0),
-    containerColor = PaletteCreamIvory,
+    containerColor = pageBackground(PaletteCreamIvory),
     topBar = {
       Column(
         modifier = Modifier
           .fillMaxWidth()
-          .background(PaletteCreamIvory)
+          .background(pageBackground(PaletteCreamIvory))
       ) {
         ScrollableTabRow(
           selectedTabIndex = selectedTab,
-          containerColor = PaletteCreamIvory,
+          containerColor = pageBackground(PaletteCreamIvory),
           contentColor = PaletteDarkText,
           edgePadding = 16.dp,
           indicator = { tabPositions ->

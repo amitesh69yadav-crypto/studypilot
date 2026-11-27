@@ -184,14 +184,16 @@ class StudyPilotUnitTest {
 
   @Test
   fun testPhotoColorPaletteValues() {
-    assertEquals(androidx.compose.ui.graphics.Color(0xFF8C9F85), com.example.ui.theme.PaletteDeepSage)
-    assertEquals(androidx.compose.ui.graphics.Color(0xFFB3C2AC), com.example.ui.theme.PaletteMediumSage)
-    assertEquals(androidx.compose.ui.graphics.Color(0xFFD3DDCF), com.example.ui.theme.PalettePaleCeladon)
-    assertEquals(androidx.compose.ui.graphics.Color(0xFFDFEAE0), com.example.ui.theme.PaletteMintFoam)
-    assertEquals(androidx.compose.ui.graphics.Color(0xFFFDF8EB), com.example.ui.theme.PaletteCreamIvory)
-    assertEquals(androidx.compose.ui.graphics.Color(0xFF212C1E), com.example.ui.theme.PaletteDarkText)
+    // The phone keeps the original sage palette; the desktop's glass palette is separate.
+    val phone = com.example.ui.theme.ClassicStudyColors
+    assertEquals(androidx.compose.ui.graphics.Color(0xFF8C9F85), phone.deepSage)
+    assertEquals(androidx.compose.ui.graphics.Color(0xFFB3C2AC), phone.mediumSage)
+    assertEquals(androidx.compose.ui.graphics.Color(0xFFD3DDCF), phone.paleCeladon)
+    assertEquals(androidx.compose.ui.graphics.Color(0xFFDFEAE0), phone.mintFoam)
+    assertEquals(androidx.compose.ui.graphics.Color(0xFFFDF8EB), phone.creamIvory)
+    assertEquals(androidx.compose.ui.graphics.Color(0xFF212C1E), phone.darkText)
     // Dark blue 0xFF223E5B must NOT be used
-    org.junit.Assert.assertNotEquals(androidx.compose.ui.graphics.Color(0xFF223E5B), com.example.ui.theme.PaletteDarkText)
+    org.junit.Assert.assertNotEquals(androidx.compose.ui.graphics.Color(0xFF223E5B), phone.darkText)
   }
 
   @Test

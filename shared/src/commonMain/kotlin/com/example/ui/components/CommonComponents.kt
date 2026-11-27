@@ -21,7 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
+import com.example.ui.theme.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -116,7 +116,9 @@ fun SectionHeader(
   ) {
     Text(
       text = title,
-      style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+      // Desktop: the larger, tightly tracked card-title style.
+      style = if (com.example.ui.theme.LocalGlass.current != null) MaterialTheme.typography.titleLarge
+              else MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
       color = MaterialTheme.colorScheme.onSurface,
       maxLines = 1,
       overflow = TextOverflow.Ellipsis,
@@ -284,7 +286,7 @@ fun MobileClockAlarmCard(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
       ) {
-        androidx.compose.material3.Button(
+        com.example.ui.theme.Button(
           onClick = onQuickAlarmClick,
           colors = androidx.compose.material3.ButtonDefaults.buttonColors(
             containerColor = MaterialTheme.colorScheme.primary,
@@ -295,7 +297,7 @@ fun MobileClockAlarmCard(
         ) {
           Text("Quick alarm", maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
         }
-        androidx.compose.material3.OutlinedButton(
+        com.example.ui.theme.OutlinedButton(
           onClick = onTestAlarmSoundClick,
           colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
           border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
@@ -443,7 +445,7 @@ fun QuickMobileAlarmDialog(
       }
     },
     confirmButton = {
-      androidx.compose.material3.Button(
+      com.example.ui.theme.Button(
         onClick = {
           onConfirm(
             subjectName,
@@ -787,7 +789,7 @@ fun TimeWheelScrollerDialog(
       }
     },
     confirmButton = {
-      androidx.compose.material3.Button(
+      com.example.ui.theme.Button(
         onClick = {
           var h24 = selectedHour % 12
           if (selectedPeriod == "PM") h24 += 12

@@ -97,6 +97,22 @@ questions to the tutor, and the key points of its answers.
 
 ## Desktop app and phone sync
 
+### Desktop look
+
+The desktop uses its own "glass" style (`AppStyle.Glass`; the phone keeps `Classic`): frosted, see-through
+panels with a light rim over a painted backdrop, a serif for page titles, small spaced capitals for
+labels, pill-shaped buttons, chips and tab tracks, and a near-black pill for the main action. The
+window has a sidebar (pages, tools and a streak card) and a page header with the title, a one-line
+purpose, the date and round glass buttons; the Today page is laid out in two columns. Backdrops are
+picked in **Settings > Appearance**: Olive Mist, Soft Neutral, Minimal Solid (light) and Dark Forest,
+Midnight (dark).
+
+How it's built (`shared/.../ui/theme/Glass.kt`, `GlassComponents.kt`, `ui/GlassShell.kt`): the
+screens use drop-in `Card`, `Button`, `OutlinedButton`, `FilterChip` and `TabRow` that are the
+Material components on the phone and glass on the desktop, and the sage palette the timetable and
+chat screens use is read from the theme, so those screens follow light and dark on the desktop too.
+
+
 The desktop app is the full app with the same screens, using Ollama on the same PC for the tutor.
 Its data lives in `%APPDATA%\StudyPilot`.
 

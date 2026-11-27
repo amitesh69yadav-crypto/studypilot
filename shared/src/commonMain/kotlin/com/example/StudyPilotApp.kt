@@ -1,5 +1,8 @@
 package com.example
 
+import com.example.ui.theme.AppStyle
+import com.example.ui.theme.LocalAppStyle
+import com.example.ui.GlassShell
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -34,7 +37,7 @@ import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
-import androidx.compose.material3.Button
+import com.example.ui.theme.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -147,8 +150,148 @@ fun StudyPilotApp(viewModel: StudyPilotViewModel) {
     Screen.AiChatImport -> "Chats"
   }
 
+  // The alarm banner and the current screen; the same in every layout.
+  val screenBody: @Composable () -> Unit = {
+    Column(modifier = Modifier.fillMaxSize()) {
+      // Banner shown on every screen while an alarm rings.
+      ringingAlarmSession?.let { ringingSession ->
+        Surface(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+          shape = RoundedCornerShape(14.dp),
+          color = MaterialTheme.colorScheme.errorContainer,
+          shadowElevation = 0.dp,
+          border = androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.error)
+        ) {
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Icon(
+              imageVector = Icons.Default.NotificationsActive,
+              contentDescription = "Alarm Ringing",
+              tint = MaterialTheme.colorScheme.error,
+              modifier = Modifier.size(22.dp)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+              Text(
+                text = "Alarm: ${ringingSession.subjectName}",
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.error,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+              )
+              Text(
+                text = "${ringingSession.topic} (${ringingSession.startTime})",
+                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onErrorContainer,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+              )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Button(
+              onClick = { viewModel.dismissAlarm() },
+              colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.error,
+                contentColor = MaterialTheme.colorScheme.onError
+              ),
+              shape = RoundedCornerShape(8.dp),
+              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+              modifier = Modifier.heightIn(min = 40.dp)
+            ) {
+              Icon(
+                imageVector = Icons.Default.AlarmOff,
+                contentDescription = "Stop alarm",
+                modifier = Modifier.size(16.dp)
+              )
+              Spacer(modifier = Modifier.width(4.dp))
+              Text("Stop", fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1, softWrap = false)
+            }
+          }
+        }
+      }
+
+      Box(
+        modifier = Modifier
+          .weight(1f)
+          .fillMaxWidth()
+      ) {
+        when (currentScreen) {
+          Screen.Login -> {
+            LoginScreen(
+              viewModel = viewModel,
+              onLoginSuccess = { viewModel.navigateTo(Screen.Dashboard) }
+            )
+          }
+          Screen.Dashboard -> {
+            DashboardScreen(
+              viewModel = viewModel,
+              onNavigate = { screen -> viewModel.navigateTo(screen) },
+              onQuickAddTopic = {
+                quickAddTopicTrigger = true
+                viewModel.navigateTo(Screen.MyTopics)
+              },
+              onQuickAddSession = {
+                quickAddSessionTrigger = true
+                viewModel.navigateTo(Screen.Timetable)
+              }
+            )
+          }
+          Screen.Timetable -> {
+            val openAddDialog = quickAddSessionTrigger
+            LaunchedEffect(Unit) { quickAddSessionTrigger = false }
+            TimetableScreen(viewModel = viewModel, showAddDialogOnInit = openAddDialog)
+          }
+          Screen.MyTopics -> {
+            val openAddDialog = quickAddTopicTrigger
+            LaunchedEffect(Unit) { quickAddTopicTrigger = false }
+            TopicsScreen(viewModel = viewModel, showAddDialogOnInit = openAddDialog)
+          }
+          Screen.WeekendQuizzes -> {
+            QuizScreen(viewModel = viewModel)
+          }
+          Screen.ActiveQuiz -> {
+            ActiveQuizScreen(viewModel = viewModel)
+          }
+          Screen.AiTutor -> {
+            AiTutorScreen(viewModel = viewModel)
+          }
+          Screen.Progress -> {
+            ProgressScreen(viewModel = viewModel)
+          }
+          Screen.Tasks -> {
+            TasksScreen(viewModel = viewModel)
+          }
+          Screen.Settings -> {
+            SettingsScreen(viewModel = viewModel)
+          }
+          Screen.AiChatImport -> {
+            AiChatImportScreen(viewModel = viewModel)
+          }
+        }
+      }
+    }
+  }
+
   BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
     val isWideScreen = maxWidth >= 600.dp
+
+    // Desktop: the glass layout with a sidebar and a page header.
+    if (LocalAppStyle.current == AppStyle.Glass && isWideScreen && currentScreen != Screen.Login && currentScreen != Screen.ActiveQuiz) {
+      GlassShell(
+        viewModel = viewModel,
+        currentScreen = currentScreen,
+        pendingTaskCount = pendingTaskCount,
+        snackbarHostState = snackbarHostState,
+        content = screenBody
+      )
+      return@BoxWithConstraints
+    }
 
     Row(modifier = Modifier.fillMaxSize()) {
       // Navigation rail on tablets and foldables, bottom bar on phones.
@@ -359,130 +502,7 @@ fun StudyPilotApp(viewModel: StudyPilotViewModel) {
           .widthIn(max = 860.dp),
         contentAlignment = Alignment.TopCenter
       ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-          // Banner shown on every screen while an alarm rings.
-          ringingAlarmSession?.let { ringingSession ->
-            Surface(
-              modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 4.dp),
-              shape = RoundedCornerShape(14.dp),
-              color = MaterialTheme.colorScheme.errorContainer,
-              shadowElevation = 0.dp,
-              border = androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.error)
-            ) {
-              Row(
-                modifier = Modifier
-                  .fillMaxWidth()
-                  .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-              ) {
-                Icon(
-                  imageVector = Icons.Default.NotificationsActive,
-                  contentDescription = "Alarm Ringing",
-                  tint = MaterialTheme.colorScheme.error,
-                  modifier = Modifier.size(22.dp)
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                  Text(
-                    text = "Alarm: ${ringingSession.subjectName}",
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.error,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                  )
-                  Text(
-                    text = "${ringingSession.topic} (${ringingSession.startTime})",
-                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onErrorContainer,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                  )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                Button(
-                  onClick = { viewModel.dismissAlarm() },
-                  colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.error,
-                    contentColor = MaterialTheme.colorScheme.onError
-                  ),
-                  shape = RoundedCornerShape(8.dp),
-                  contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                  modifier = Modifier.heightIn(min = 40.dp)
-                ) {
-                  Icon(
-                    imageVector = Icons.Default.AlarmOff,
-                    contentDescription = "Stop alarm",
-                    modifier = Modifier.size(16.dp)
-                  )
-                  Spacer(modifier = Modifier.width(4.dp))
-                  Text("Stop", fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1, softWrap = false)
-                }
-              }
-            }
-          }
-
-          Box(
-            modifier = Modifier
-              .weight(1f)
-              .fillMaxWidth()
-          ) {
-            when (currentScreen) {
-              Screen.Login -> {
-                LoginScreen(
-                  viewModel = viewModel,
-                  onLoginSuccess = { viewModel.navigateTo(Screen.Dashboard) }
-                )
-              }
-              Screen.Dashboard -> {
-                DashboardScreen(
-                  viewModel = viewModel,
-                  onNavigate = { screen -> viewModel.navigateTo(screen) },
-                  onQuickAddTopic = {
-                    quickAddTopicTrigger = true
-                    viewModel.navigateTo(Screen.MyTopics)
-                  },
-                  onQuickAddSession = {
-                    quickAddSessionTrigger = true
-                    viewModel.navigateTo(Screen.Timetable)
-                  }
-                )
-              }
-              Screen.Timetable -> {
-                val openAddDialog = quickAddSessionTrigger
-                LaunchedEffect(Unit) { quickAddSessionTrigger = false }
-                TimetableScreen(viewModel = viewModel, showAddDialogOnInit = openAddDialog)
-              }
-              Screen.MyTopics -> {
-                val openAddDialog = quickAddTopicTrigger
-                LaunchedEffect(Unit) { quickAddTopicTrigger = false }
-                TopicsScreen(viewModel = viewModel, showAddDialogOnInit = openAddDialog)
-              }
-              Screen.WeekendQuizzes -> {
-                QuizScreen(viewModel = viewModel)
-              }
-              Screen.ActiveQuiz -> {
-                ActiveQuizScreen(viewModel = viewModel)
-              }
-              Screen.AiTutor -> {
-                AiTutorScreen(viewModel = viewModel)
-              }
-              Screen.Progress -> {
-                ProgressScreen(viewModel = viewModel)
-              }
-              Screen.Tasks -> {
-                TasksScreen(viewModel = viewModel)
-              }
-              Screen.Settings -> {
-                SettingsScreen(viewModel = viewModel)
-              }
-              Screen.AiChatImport -> {
-                AiChatImportScreen(viewModel = viewModel)
-              }
-            }
-          }
-        }
+        screenBody()
       }
     }
   }

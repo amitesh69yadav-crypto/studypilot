@@ -50,3 +50,6 @@ fun isValidEmail(text: String): Boolean = EMAIL.matches(text.trim())
 
 /** The "Phone" (on the PC) or "PC" (on the phone) card shown at the top of Settings. */
 val LocalDeviceSyncCard = staticCompositionLocalOf<(@Composable () -> Unit)?> { null }
+
+/** Extra appearance settings shown under the theme choice (the desktop's backdrops). */
+val LocalAppearanceExtras = staticCompositionLocalOf<(@Composable () -> Unit)?> { null }

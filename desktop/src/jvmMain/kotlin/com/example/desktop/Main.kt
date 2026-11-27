@@ -10,7 +10,13 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import com.example.platform.LocalAppearanceExtras
+import com.example.ui.theme.AppStyle
+import com.example.ui.theme.Backdrop
+import com.example.ui.theme.MeshBackground
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.DpSize
@@ -72,12 +78,25 @@ fun main() {
       val snackbar = remember { SnackbarHostState() }
       LaunchedEffect(Unit) { actions.messages.collect { snackbar.showSnackbar(it) } }
 
+      // The painted backdrop: one for light mode, one for dark, both remembered.
+      val uiPrefs = remember { platform.prefs("studypilot_ui_prefs") }
+      var lightBackdrop by remember { mutableStateOf(Backdrop.byName(uiPrefs.getString("backdrop_light", null), Backdrop.OliveMist)) }
+      var darkBackdrop by remember { mutableStateOf(Backdrop.byName(uiPrefs.getString("backdrop_dark", null), Backdrop.DarkForest)) }
+      val backdrop = if (dark) darkBackdrop else lightBackdrop
+      val pickBackdrop: (Backdrop) -> Unit = { picked ->
+        if (picked.dark) darkBackdrop = picked else lightBackdrop = picked
+        uiPrefs.edit { putString(if (picked.dark) "backdrop_dark" else "backdrop_light", picked.name) }
+        viewModel.setThemeMode(if (picked.dark) "dark" else "light")
+      }
+
       CompositionLocalProvider(
         LocalPlatformActions provides actions,
-        LocalDeviceSyncCard provides { PhonePairingCard(platform.syncHost, serverRunning = server != null) }
+        LocalDeviceSyncCard provides { PhonePairingCard(platform.syncHost, serverRunning = server != null) },
+        LocalAppearanceExtras provides { BackdropPicker(current = backdrop, onPick = pickBackdrop) }
       ) {
-        StudyPilotTheme(darkTheme = dark) {
+        StudyPilotTheme(darkTheme = dark, style = AppStyle.Glass, fonts = DesktopFonts) {
           Box(Modifier.fillMaxSize()) {
+            MeshBackground(backdrop)
             StudyPilotApp(viewModel = viewModel)
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp))
           }
