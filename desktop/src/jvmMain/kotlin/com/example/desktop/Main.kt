@@ -94,7 +94,7 @@ fun main() {
         LocalDeviceSyncCard provides { PhonePairingCard(platform.syncHost, serverRunning = server != null) },
         LocalAppearanceExtras provides { BackdropPicker(current = backdrop, onPick = pickBackdrop) }
       ) {
-        StudyPilotTheme(darkTheme = dark, style = AppStyle.Glass, fonts = DesktopFonts) {
+        StudyPilotTheme(darkTheme = dark, style = AppStyle.Glass, fonts = desktopFonts()) {
           Box(Modifier.fillMaxSize()) {
             MeshBackground(backdrop)
             StudyPilotApp(viewModel = viewModel)

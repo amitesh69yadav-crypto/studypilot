@@ -26,7 +26,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.platform.SystemFont
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontVariation
+import com.example.desktop.resources.Res
+import com.example.desktop.resources.fraunces
+import com.example.desktop.resources.manrope
+import org.jetbrains.compose.resources.Font
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.AppFonts
@@ -35,18 +40,20 @@ import com.example.ui.theme.LocalGlass
 import com.example.ui.theme.MeshBackground
 import com.example.ui.theme.glass
 
-/** Windows fonts in the spirit of the design: Georgia for page titles, Segoe UI for everything else. */
+/**
+ * The design's own fonts, bundled: Manrope for text and Fraunces for page titles (both variable
+ * fonts, so one file each covers every weight).
+ */
 @OptIn(ExperimentalTextApi::class)
-val DesktopFonts = AppFonts(
-  display = FontFamily(SystemFont("Georgia", FontWeight.Normal), SystemFont("Georgia", FontWeight.Bold)),
-  text = FontFamily(
-    SystemFont("Segoe UI", FontWeight.Light),
-    SystemFont("Segoe UI", FontWeight.Normal),
-    SystemFont("Segoe UI", FontWeight.Medium),
-    SystemFont("Segoe UI", FontWeight.SemiBold),
-    SystemFont("Segoe UI", FontWeight.Bold)
-  )
-)
+@Composable
+fun desktopFonts(): AppFonts {
+  val text = listOf(FontWeight.Light, FontWeight.Normal, FontWeight.Medium, FontWeight.SemiBold, FontWeight.Bold, FontWeight.ExtraBold)
+    .map { w -> Font(Res.font.manrope, w, FontStyle.Normal, FontVariation.Settings(FontVariation.weight(w.weight))) }
+  // Fraunces at a display optical size: the sharper, higher-contrast cut meant for large titles.
+  val display = listOf(FontWeight.Normal, FontWeight.Medium, FontWeight.SemiBold)
+    .map { w -> Font(Res.font.fraunces, w, FontStyle.Normal, FontVariation.Settings(FontVariation.weight(w.weight), FontVariation.Setting("opsz", 36f))) }
+  return AppFonts(display = FontFamily(display), text = FontFamily(text))
+}
 
 /** Settings > Appearance on the PC: the painted backdrops, each light or dark. */
 @Composable

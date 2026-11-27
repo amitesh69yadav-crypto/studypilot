@@ -9,6 +9,9 @@ plugins {
 kotlin {
   jvm()
   sourceSets {
+    commonMain.dependencies {
+      implementation(libs.cmp.resources)
+    }
     jvmMain.dependencies {
       implementation(project(":shared"))
       implementation(compose.desktop.currentOs)
@@ -20,13 +23,18 @@ kotlin {
   }
 }
 
+// Manrope and Fraunces (SIL Open Font License; texts in composeResources/files/licenses).
+compose.resources {
+  packageOfResClass = "com.example.desktop.resources"
+}
+
 compose.desktop {
   application {
     mainClass = "com.example.desktop.MainKt"
     nativeDistributions {
       targetFormats(TargetFormat.Msi, TargetFormat.Exe)
       packageName = "StudyPilot"
-      packageVersion = "1.2.0"
+      packageVersion = "1.3.0"
       description = "StudyPilot for desktop"
       modules("java.sql", "java.naming", "jdk.unsupported", "java.net.http")
       windows {

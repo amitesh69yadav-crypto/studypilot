@@ -103,7 +103,10 @@ The desktop uses its own "glass" style (`AppStyle.Glass`; the phone keeps `Class
 panels with a light rim over a painted backdrop, a serif for page titles, small spaced capitals for
 labels, pill-shaped buttons, chips and tab tracks, and a near-black pill for the main action. The
 window has a sidebar (pages, tools and a streak card) and a page header with the title, a one-line
-purpose, the date and round glass buttons; the Today page is laid out in two columns. Backdrops are
+purpose, the date and round glass buttons; the Today page is laid out in two columns. Text is set in Manrope
+and page titles in Fraunces, both bundled with the desktop app as variable fonts
+(`desktop/src/commonMain/composeResources/font`, SIL Open Font License, texts alongside in
+`files/licenses`). Backdrops are
 picked in **Settings > Appearance**: Olive Mist, Soft Neutral, Minimal Solid (light) and Dark Forest,
 Midnight (dark).
 
