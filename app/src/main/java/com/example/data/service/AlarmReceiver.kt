@@ -96,6 +96,8 @@ class AlarmReceiver : BroadcastReceiver() {
 /** Alarms are cleared on reboot and can drift on clock changes; restore them for the active account. */
 class AlarmRescheduleReceiver : BroadcastReceiver() {
   override fun onReceive(context: Context, intent: Intent) {
+    // The receiver is exported for system broadcasts, so ignore anything else another app sends.
+    if (intent.action !in RESCHEDULE_ACTIONS) return
     val pending = goAsync()
     CoroutineScope(Dispatchers.IO).launch {
       try {
@@ -114,3 +116,11 @@ class AlarmRescheduleReceiver : BroadcastReceiver() {
     }
   }
 }
+
+private val RESCHEDULE_ACTIONS = setOf(
+  Intent.ACTION_BOOT_COMPLETED,
+  Intent.ACTION_MY_PACKAGE_REPLACED,
+  Intent.ACTION_TIME_CHANGED,
+  Intent.ACTION_TIMEZONE_CHANGED,
+  "android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED"
+)

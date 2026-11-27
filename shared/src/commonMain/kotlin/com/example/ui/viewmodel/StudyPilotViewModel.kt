@@ -499,7 +499,10 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
     repository.tutorChatsWithMessages(_currentUser.value.id).mapNotNull { (session, messages) ->
       val pairs = com.example.data.notes.QaPairs.fromTurns(messages.filterNot { it.isError }.map { (it.role == "user") to it.text })
       if (pairs.isEmpty()) null
-      else com.example.data.notes.QaThread(session.title, session.subjectName, "Tutor", session.lastUpdatedAt, pairs)
+      else com.example.data.notes.QaThread(
+        session.title.trim().ifBlank { pairs.first().question.lineSequence().first().take(80) },
+        session.subjectName, "Tutor", session.lastUpdatedAt, pairs
+      )
     }
 
   @OptIn(ExperimentalCoroutinesApi::class)

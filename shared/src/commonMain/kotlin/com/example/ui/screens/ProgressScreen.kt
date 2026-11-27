@@ -796,7 +796,7 @@ fun ProgressScreen(
         attempts = attempts,
         sessions = sessions,
         studyStreak = studyStreak,
-        weekHours = weeklyDayHours.map { it.first to it.second.toFloat() }
+        weekHours = weeklyDayHours.map { it.first to it.second }
       )
     }
     val summary = remember(report) {

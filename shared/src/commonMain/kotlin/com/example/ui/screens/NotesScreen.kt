@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.lazy.itemsIndexed
+import com.example.platform.PlatformBackHandler
 import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.animation.animateContentSize
@@ -144,6 +146,9 @@ fun NotesScreen(viewModel: StudyPilotViewModel) {
       )
     }
   }
+
+  // On the phone, Back inside a subject returns to the subject list instead of leaving Notes.
+  PlatformBackHandler(enabled = openSubject != null) { openSubject = null }
 
   val current = openSubject
   if (current == null) {
@@ -425,8 +430,9 @@ private fun ThreadList(
     verticalArrangement = Arrangement.spacedBy(12.dp),
     modifier = Modifier.fillMaxSize()
   ) {
-    items(threads, key = { "${it.source}|${it.title}|${it.at}" }) { thread ->
-      val id = "${thread.source}|${thread.title}|${thread.at}"
+    // The index keeps keys unique even for two chats with the same title and time.
+    itemsIndexed(threads, key = { i, t -> "$i|${t.source}|${t.title}|${t.at}" }) { i, thread ->
+      val id = "$i|${thread.source}|${thread.title}|${thread.at}"
       ThreadCard(
         thread = thread,
         expanded = open == id,

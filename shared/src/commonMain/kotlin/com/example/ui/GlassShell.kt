@@ -134,8 +134,8 @@ private class NavEntry(val screen: Screen, val label: String, val icon: ImageVec
 private val mainPages = listOf(
   NavEntry(Screen.Dashboard, "Dashboard", Icons.Default.WbSunny),
   NavEntry(Screen.Timetable, "Timetable", Icons.Default.Schedule),
-  NavEntry(Screen.MyTopics, "Topics", Icons.Default.Book),
   NavEntry(Screen.Notes, "Notes", Icons.Default.EditNote),
+  NavEntry(Screen.MyTopics, "Topics", Icons.Default.Book),
   NavEntry(Screen.WeekendQuizzes, "Quizzes", Icons.Default.AutoAwesome),
   NavEntry(Screen.Progress, "Progress", Icons.AutoMirrored.Filled.TrendingUp)
 )

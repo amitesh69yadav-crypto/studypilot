@@ -134,8 +134,8 @@ fun StudyPilotApp(viewModel: StudyPilotViewModel) {
     // One outlined set, so every icon has the same stroke and visual size.
     Triple(Screen.Dashboard, "Dashboard", Icons.Outlined.Dashboard),
     Triple(Screen.Timetable, "Timetable", Icons.Outlined.Schedule),
-    Triple(Screen.MyTopics, "Topics", Icons.Outlined.Book),
     Triple(Screen.Notes, "Notes", Icons.Outlined.EditNote),
+    Triple(Screen.MyTopics, "Topics", Icons.Outlined.Book),
     Triple(Screen.WeekendQuizzes, "Quizzes", Icons.Outlined.AutoAwesome),
     Triple(Screen.Progress, "Progress", Icons.AutoMirrored.Outlined.TrendingUp)
   )
