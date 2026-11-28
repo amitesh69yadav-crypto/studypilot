@@ -1758,7 +1758,7 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
 
   private fun loadConnections() = Connections(
     calendarFeeds = connectPrefs.getString("calendar_feeds", "").orEmpty().lines().filter { it.isNotBlank() },
-    canvasUrl = connectPrefs.getString("canvas_url", "").orEmpty(),
+    canvasUrl = connectPrefs.getString("canvas_url", "").orEmpty().let { if (it.isBlank()) it else com.example.data.connect.LmsHttp.siteRoot(it) },
     canvasConnected = !connectPrefs.getString("canvas_token", null).isNullOrBlank(),
     moodleUrl = connectPrefs.getString("moodle_url", "").orEmpty(),
     moodleConnected = !connectPrefs.getString("moodle_token", null).isNullOrBlank(),
@@ -1784,7 +1784,8 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
   /** Saves a Canvas or Moodle address and token ("canvas" / "moodle") and imports; a blank token disconnects. */
   fun setLms(kind: String, url: String, token: String) {
     connectPrefs.edit {
-      putString("${kind}_url", url.trim())
+      val root = if (kind == "canvas") com.example.data.connect.LmsHttp.siteRoot(url) else com.example.data.connect.LmsHttp.moodleRoot(url)
+      putString("${kind}_url", if (url.isBlank()) "" else root)
       putString("${kind}_token", token.trim())
     }
     _connections.value = loadConnections().copy(results = _connections.value.results - kind.replaceFirstChar { it.uppercase() })

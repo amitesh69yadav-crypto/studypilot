@@ -105,7 +105,7 @@ class ConnectionsTest {
     val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
     fun route(path: String, body: () -> String) = server.createContext(path) { ex ->
       val bytes = body().toByteArray()
-      ex.sendResponseHeaders(if (ex.requestURI.toString().contains("bad")) 401 else 200, bytes.size.toLong())
+      ex.sendResponseHeaders(if (ex.requestHeaders.getFirst("Authorization") == "Bearer revoked") 401 else 200, bytes.size.toLong())
       ex.responseBody.use { it.write(bytes) }
     }
     route("/api/v1/courses") {
@@ -119,7 +119,6 @@ class ConnectionsTest {
     route("/webservice/rest/server.php") {
       """{"userid":5}"""
     }
-    route("/bad") { "[]" } // answers 401, like a revoked token
     server.start()
     try {
       val base = "http://127.0.0.1:${server.address.port}"
@@ -136,7 +135,7 @@ class ConnectionsTest {
         assertEquals("Already up to date", repo.importCourses("u", courses, "2026-11-28").toString())
       }
       // A refused token says so instead of failing silently.
-      val refused = runCatching { CanvasSource("$base/bad", "x").courses() }.exceptionOrNull()
+      val refused = runCatching { CanvasSource("$base/profile/settings", "revoked").courses() }.exceptionOrNull()
       assertTrue(refused?.message?.contains("refused") == true)
       // Moodle reports its own errors as JSON with "exception".
       server.removeContext("/webservice/rest/server.php")
@@ -146,6 +145,15 @@ class ConnectionsTest {
     } finally {
       server.stop(0)
     }
+  }
+
+  @Test
+  fun copiedPageAddressesAreTrimmedToTheSite() {
+    assertEquals("https://canvas.vub.be", com.example.data.connect.LmsHttp.siteRoot("https://canvas.vub.be/profile/settings"))
+    assertEquals("https://canvas.uni.edu", com.example.data.connect.LmsHttp.siteRoot("canvas.uni.edu/"))
+    assertEquals("http://127.0.0.1:8080", com.example.data.connect.LmsHttp.siteRoot("http://127.0.0.1:8080/courses/7"))
+    assertEquals("https://uni.edu/moodle", com.example.data.connect.LmsHttp.moodleRoot("https://uni.edu/moodle/login/index.php"))
+    assertEquals("https://moodle.uni.edu", com.example.data.connect.LmsHttp.moodleRoot("moodle.uni.edu/my/"))
   }
 
   @Test

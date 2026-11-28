@@ -58,6 +58,27 @@ object LmsHttp {
     val t = url.trim().trimEnd('/')
     return if (t.startsWith("http://") || t.startsWith("https://")) t else "https://$t"
   }
+
+  /**
+   * Canvas always lives at the root of its site, so any page path copied from the browser
+   * ("https://canvas.uni.edu/profile/settings") is dropped.
+   */
+  fun siteRoot(url: String): String {
+    val full = base(url)
+    val parsed = full.toHttpUrlOrNull() ?: return full
+    val port = if (parsed.port == okhttp3.HttpUrl.defaultPort(parsed.scheme)) "" else ":${parsed.port}"
+    return "${parsed.scheme}://${parsed.host}$port"
+  }
+
+  /**
+   * Moodle can live in a folder ("uni.edu/moodle"), so only the page part of a copied address is
+   * dropped: everything from "/login", "/my", "/course", "/user", "/admin", "/mod" or a ".php" page on.
+   */
+  fun moodleRoot(url: String): String {
+    val full = base(url)
+    val cut = Regex("/(login|my|course|user|admin|mod|grade|calendar|message)(/|$)|/[^/]+\\.php").find(full.substringAfter("://"))
+    return if (cut == null) full else full.substringBefore("://") + "://" + full.substringAfter("://").substring(0, cut.range.first)
+  }
 }
 
 /** Plain text from the HTML learning systems store pages and syllabi in. */
@@ -98,7 +119,7 @@ internal fun isoToLocalDay(iso: String?): String {
  */
 class CanvasSource(baseUrl: String, private val token: String) : LmsSource {
   override val label = "Canvas"
-  private val base = LmsHttp.base(baseUrl)
+  private val base = LmsHttp.siteRoot(baseUrl)
 
   private suspend fun list(path: String): JSONArray = JSONArray(LmsHttp.get("$base/api/v1/$path", token))
 
@@ -137,7 +158,7 @@ class CanvasSource(baseUrl: String, private val token: String) : LmsSource {
  */
 class MoodleSource(baseUrl: String, private val token: String) : LmsSource {
   override val label = "Moodle"
-  private val base = LmsHttp.base(baseUrl)
+  private val base = LmsHttp.moodleRoot(baseUrl)
 
   private suspend fun call(function: String, vararg args: Pair<String, String>): Any {
     val url = "$base/webservice/rest/server.php".toHttpUrlOrNull()?.newBuilder()
