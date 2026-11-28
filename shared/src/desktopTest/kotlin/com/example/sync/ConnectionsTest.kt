@@ -133,6 +133,13 @@ class ConnectionsTest {
         val tasks = db.studyPilotDao().getTasksForUser("u").first()
         assertEquals("EXAM", tasks.first { it.title == "Midterm exam" }.type)
         assertEquals("Already up to date", repo.importCourses("u", courses, "2026-11-28").toString())
+        // Removing the course takes its imported topics with it, and a skipped course isn't re-added.
+        val subject = db.studyPilotDao().getSubjectsForUser("u").first().single()
+        repo.deleteSubject(subject)
+        assertTrue(db.studyPilotDao().getTopicsForUser("u").first().none { it.sourceType == "IMPORTED_LMS" })
+        val again = repo.importCourses("u", courses, "2026-11-28", skip = setOf("data structures"))
+        assertEquals(0, again.subjects)
+        assertTrue(db.studyPilotDao().getSubjectsForUser("u").first().isEmpty())
       }
       // A refused token says so instead of failing silently.
       val refused = runCatching { CanvasSource("$base/profile/settings", "revoked").courses() }.exceptionOrNull()

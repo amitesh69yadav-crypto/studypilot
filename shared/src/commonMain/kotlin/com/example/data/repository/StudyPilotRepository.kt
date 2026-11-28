@@ -230,9 +230,11 @@ class StudyPilotRepository(
   }
 
   suspend fun deleteSubject(subject: Subject) {
-    // Its topics stay, under General.
+    // Topics the student made stay, under General; ones imported from a course site go with it.
     val owned = if (subject.userId.isNotBlank()) dao.getTopicsForUser(subject.userId).first() else dao.getAllTopics().first()
-    val moved = owned.filter { it.subjectId == subject.id }.map { it.copy(subjectId = 0L, subjectName = "General") }
+    val (imported, own) = owned.filter { it.subjectId == subject.id }.partition { it.sourceType == "IMPORTED_LMS" }
+    imported.forEach { deleteTopic(it.id, subject.userId) }
+    val moved = own.map { it.copy(subjectId = 0L, subjectName = "General") }
     if (moved.isNotEmpty()) dao.updateTopics(moved)
     dao.deleteSubject(subject)
     if (subject.userId.isNotBlank()) {
@@ -475,7 +477,13 @@ class StudyPilotRepository(
    * exists), its syllabus and pages become topics, and assignments with a due date become tasks.
    * Running it again only adds what's new and refreshes changed notes and due dates.
    */
-  suspend fun importCourses(userId: String, courses: List<com.example.data.connect.LmsCourse>, today: String): ImportSummary {
+  suspend fun importCourses(
+    userId: String,
+    courses: List<com.example.data.connect.LmsCourse>,
+    today: String,
+    /** Lower-case names of courses the student removed; they aren't added back. */
+    skip: Set<String> = emptySet()
+  ): ImportSummary {
     var subjects = dao.getSubjectsForUser(userId).first()
     val topics = dao.getTopicsForUser(userId).first()
     val tasks = dao.getTasksForUser(userId).first()
@@ -484,7 +492,7 @@ class StudyPilotRepository(
     var newTopics = 0
     var newTasks = 0
     var updated = 0
-    for (course in courses.filter { it.name.isNotBlank() }) {
+    for (course in courses.filter { it.name.isNotBlank() && it.name.take(60).lowercase() !in skip }) {
       val name = course.name.take(60)
       var subject = subjects.firstOrNull { it.name.equals(name, true) || (course.code.isNotBlank() && it.code.equals(course.code, true)) }
       if (subject == null) {

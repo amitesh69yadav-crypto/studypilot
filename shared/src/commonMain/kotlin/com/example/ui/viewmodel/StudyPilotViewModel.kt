@@ -1567,6 +1567,9 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
 
   fun deleteSubject(subject: Subject) {
     viewModelScope.launch {
+      // Connected course sites won't add it back on their next import.
+      val skipped = skippedCourses() + subject.name.lowercase()
+      connectPrefs.edit { putString("skipped_courses", skipped.joinToString("\n")) }
       repository.deleteSubject(subject)
       _snackbarMessage.emit("Subject removed")
     }
@@ -1756,6 +1759,9 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
   private val _connections = MutableStateFlow(loadConnections())
   val connections: StateFlow<Connections> = _connections.asStateFlow()
 
+  private fun skippedCourses(): Set<String> =
+    connectPrefs.getString("skipped_courses", "").orEmpty().lines().filter { it.isNotBlank() }.toSet()
+
   private fun loadConnections() = Connections(
     calendarFeeds = connectPrefs.getString("calendar_feeds", "").orEmpty().lines().filter { it.isNotBlank() },
     canvasUrl = connectPrefs.getString("canvas_url", "").orEmpty().let { if (it.isBlank()) it else com.example.data.connect.LmsHttp.siteRoot(it) },
@@ -1816,7 +1822,7 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
         connectPrefs.getString("moodle_token", null)?.takeIf { it.isNotBlank() }?.let { com.example.data.connect.MoodleSource(connectPrefs.getString("moodle_url", "").orEmpty(), it) }
       )
       for (source in lms) {
-        results[source.label] = runCatching { repository.importCourses(uid, source.courses(), today).toString() }
+        results[source.label] = runCatching { repository.importCourses(uid, source.courses(), today, skippedCourses()).toString() }
           .getOrElse { "Couldn't import: ${it.message}" }
       }
       connectPrefs.edit { putLong("last_import_at", now) }
@@ -1830,7 +1836,7 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
     viewModelScope.launch {
       _connections.value = _connections.value.copy(busy = true)
       val result = runCatching {
-        repository.importCourses(_currentUser.value.id, com.example.data.connect.ClassroomSource(accessToken).courses(), com.example.ui.orbit.todayDate()).toString()
+        repository.importCourses(_currentUser.value.id, com.example.data.connect.ClassroomSource(accessToken).courses(), com.example.ui.orbit.todayDate(), skippedCourses()).toString()
       }.getOrElse { "Couldn't import: ${it.message}" }
       _connections.value = _connections.value.copy(busy = false, results = _connections.value.results + ("Google Classroom" to result))
       _snackbarMessage.emit("Google Classroom: $result")
