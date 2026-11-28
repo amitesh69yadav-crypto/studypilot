@@ -27,7 +27,7 @@ object DocumentText {
     when (type) {
       "pdf" -> pdfPages(bytes)
       "pptx" -> slides(bytes)
-      "docx" -> listOf(docx(bytes))
+      "docx" -> docxSections(bytes)
       else -> emptyList()
     }
   }.getOrDefault(emptyList()).map { tidy(it) }
@@ -74,5 +74,29 @@ object DocumentText {
     }
   }
 
-  private fun docx(bytes: ByteArray): String = zipEntries(bytes) { it == "word/document.xml" }["word/document.xml"]?.let(::xmlText).orEmpty()
+  private val PARAGRAPH = Regex("<w:p[ >].*?</w:p>|<w:p/>", RegexOption.DOT_MATCHES_ALL)
+  private val HEADING_STYLE = Regex("""<w:pStyle w:val="(Heading[123]|Title|Kop[123]|Titel)"""", RegexOption.IGNORE_CASE)
+
+  /**
+   * A Word document as sections: a new one at each heading (Heading 1-3 or Title), or, when it has no
+   * headings, every ~2,500 characters at a paragraph break. Each section is read like a slide.
+   */
+  private fun docxSections(bytes: ByteArray): List<String> {
+    val xml = zipEntries(bytes) { it == "word/document.xml" }["word/document.xml"] ?: return emptyList()
+    val paragraphs = PARAGRAPH.findAll(xml).map { it.value }.toList()
+    val headed = paragraphs.any { HEADING_STYLE.containsMatchIn(it) }
+    val sections = mutableListOf<StringBuilder>()
+    var current = StringBuilder()
+    for (p in paragraphs) {
+      val text = xmlText(p).trim()
+      val startsNew = if (headed) HEADING_STYLE.containsMatchIn(p) else current.length > 2500
+      if (startsNew && current.isNotBlank()) {
+        sections += current
+        current = StringBuilder()
+      }
+      if (text.isNotEmpty()) current.append(text).append('\n')
+    }
+    if (current.isNotBlank()) sections += current
+    return sections.map { it.toString() }
+  }
 }

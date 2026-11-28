@@ -170,9 +170,9 @@ fun NotesScreen(viewModel: StudyPilotViewModel) {
       onOpenNote = { editing = it },
       onNewNote = { chapter -> editing = StudyNote(title = chapter, body = "", subjectName = current) },
       onSaveAsNote = { thread, pair -> viewModel.saveNote(noteFrom(thread, pair)) },
-      courseFiles = courseDocs.filter { sameSubject(it.subjectName, current) },
-      onUseFiles = { docs, use -> viewModel.setUseForStudy(docs, use) },
-      filesOnThisDevice = viewModel.connectsHere
+      // Documents the student uploaded (older Canvas downloads aren't listed).
+      courseFiles = courseDocs.filter { it.source == "upload" && sameSubject(it.subjectName, current) },
+      viewModel = viewModel
     )
   }
 
@@ -264,8 +264,7 @@ private fun SubjectNotes(
   onOpenNote: (StudyNote) -> Unit,
   onNewNote: (chapter: String) -> Unit,
   onSaveAsNote: (QaThread, QaPair) -> Unit,
-  onUseFiles: (List<com.example.data.model.CourseDocument>, Boolean) -> Unit = { _, _ -> },
-  filesOnThisDevice: Boolean = false
+  viewModel: StudyPilotViewModel? = null
 ) {
   var tab by rememberSaveable(subject) { mutableIntStateOf(0) }
   var query by rememberSaveable(subject) { mutableStateOf("") }
@@ -330,7 +329,7 @@ private fun SubjectNotes(
         onSaveAsNote = onSaveAsNote,
         conceptsFor = { thread -> linkThreads.firstOrNull { it.second == thread }?.first?.let { conceptsByChat[it] }.orEmpty() }
       )
-      3 -> CourseFileList(courseFiles.filter { matches(it.title) || matches(it.text) }, subject, onUseFiles, filesOnThisDevice)
+      3 -> viewModel?.let { DocumentList(courseFiles.filter { matches(it.title) || matches(it.text) }, subject, it) }
     }
   }
 }
@@ -613,84 +612,82 @@ private fun NoteEditor(
 }
 
 /**
- * The course's files (PDFs, slides, documents) as fetched from Canvas or Moodle. They open as the
- * originals on the PC; switching one on makes it material for quizzes and the tutor's College notes.
+ * Documents uploaded to this subject: open the original (on the device that keeps it), make a quiz
+ * from one, read it again, or remove it. The subject's own quiz uses all of them.
  */
 @Composable
-private fun CourseFileList(
-  files: List<com.example.data.model.CourseDocument>,
-  subject: String,
-  onUse: (List<com.example.data.model.CourseDocument>, Boolean) -> Unit,
-  onThisDevice: Boolean
-) {
-  if (files.isEmpty()) {
-    EmptyState(
-      icon = Icons.Default.EditNote,
-      title = "No course files for $subject",
-      description = if (onThisDevice) "Connect Canvas or Moodle in Settings > Connections. Each course's PDFs and slides are kept here, under their subject."
-      else "Course files are fetched on your PC (Settings > Connections there) and listed here after the next sync.",
-      modifier = Modifier.fillMaxSize()
-    )
-    return
-  }
+private fun DocumentList(files: List<com.example.data.model.CourseDocument>, subject: String, viewModel: StudyPilotViewModel) {
   val actions = LocalPlatformActions.current
-  val chosen = files.count { it.useForStudy }
-  LazyColumn(
-    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 32.dp),
-    verticalArrangement = Arrangement.spacedBy(10.dp),
-    modifier = Modifier.fillMaxSize()
-  ) {
-    item(key = "header") {
-      Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(
-          "${countOf(files.size, "file")} · $chosen used for quizzes and the tutor",
-          style = MaterialTheme.typography.labelMedium,
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
-          modifier = Modifier.weight(1f)
-        )
-        if (chosen < files.size) TextButton(onClick = { onUse(files.filter { !it.useForStudy }, true) }) { Text("Use all") }
-        else TextButton(onClick = { onUse(files, false) }) { Text("Stop using all") }
-      }
+  Column(Modifier.fillMaxSize()) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+      Text(
+        if (files.isEmpty()) "No documents yet" else "${countOf(files.size, "document")} · the subject quiz uses all of them",
+        style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f)
+      )
+      UploadDocumentButton(viewModel, presetSubject = subject, outlined = true)
     }
-    items(files, key = { it.id }) { doc ->
-      Card(modifier = Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-          Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    if (files.isEmpty()) {
+      EmptyState(
+        icon = Icons.Default.EditNote,
+        title = "No documents in $subject",
+        description = "Upload a lecture PDF, slides or a Word file. The AI reads it into topics for the tutor, and you can make a quiz from it.",
+        modifier = Modifier.fillMaxSize()
+      )
+      return
+    }
+    LazyColumn(
+      contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 32.dp),
+      verticalArrangement = Arrangement.spacedBy(10.dp),
+      modifier = Modifier.fillMaxSize()
+    ) {
+      items(files, key = { it.id }) { doc ->
+        val reading = doc.quizStatus in listOf("queued", "reading", "topics")
+        val failed = doc.quizStatus.startsWith("failed")
+        Card(modifier = Modifier.fillMaxWidth()) {
+          Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
               SmallTag(doc.fileType.uppercase())
-              Text(doc.title, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold), maxLines = 2, overflow = TextOverflow.Ellipsis)
+              Text(doc.title, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             }
             val unit = if (doc.fileType == "pptx") "slide" else "page"
             Text(
               listOfNotNull(
                 doc.sizeBytes.takeIf { it > 0 }?.let { if (it >= 1_048_576) "%.1f MB".format(it / 1_048_576.0) else "${it / 1024} KB" },
-                doc.pageCount.takeIf { it > 0 && doc.useForStudy }?.let { countOf(it, unit) },
+                doc.pageCount.takeIf { it > 0 }?.let { countOf(it, unit) },
                 when {
-                  !doc.useForStudy -> null
-                  doc.text.isNotBlank() -> "in quizzes and tutor"
-                  onThisDevice -> "no readable text (scanned?)"
-                  else -> "your PC reads it at the next sync"
+                  reading -> "the AI is reading it"
+                  failed -> doc.quizStatus.removePrefix("failed: ").replaceFirstChar { it.uppercase() }
+                  doc.quizStatus.startsWith("ready: built-in") -> "read without AI (" + doc.quizStatus.substringAfter("(").removeSuffix(")") + ")"
+                  else -> "in your knowledge"
                 }
               ).joinToString(" · "),
-              style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+              style = MaterialTheme.typography.labelSmall,
+              color = if (failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-              if (onThisDevice && doc.localPath.isNotBlank()) {
-                TextButton(onClick = { actions.openFile(doc.localPath) }, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("Open") }
-              }
-              if (doc.url.isNotBlank()) {
-                TextButton(onClick = { actions.openUrl(doc.url) }, contentPadding = PaddingValues(horizontal = 8.dp)) {
-                  Text(if (onThisDevice) "On Canvas" else "Open on Canvas")
-                }
-              }
+            if (reading) androidx.compose.material3.LinearProgressIndicator(progress = { doc.quizProgress / 100f }, modifier = Modifier.fillMaxWidth())
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+              com.example.ui.theme.Button(onClick = { viewModel.startDocumentQuiz(doc) }, enabled = !reading && !failed, contentPadding = PaddingValues(horizontal = 14.dp)) { Text("Make quiz") }
+              if (doc.localPath.isNotBlank() && viewModel.connectsHere) TextButton(onClick = { actions.openFile(doc.localPath) }) { Text("Open") }
+              if (failed || doc.quizStatus.startsWith("ready: built-in")) TextButton(onClick = { viewModel.rescanDocument(doc) }) { Text("Read again") }
+              Spacer(Modifier.weight(1f))
+              TextButton(onClick = { viewModel.removeDocument(doc) }) { Text("Remove") }
             }
-          }
-          Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            androidx.compose.material3.Switch(checked = doc.useForStudy, onCheckedChange = { onUse(listOf(doc), it) })
-            Text("Quizzes\n& tutor", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
           }
         }
       }
     }
   }
+}
+
+/** Where making a quiz from [doc] stands, in words. */
+internal fun quizStateText(doc: com.example.data.model.CourseDocument, onThisDevice: Boolean): String? = when {
+  !doc.useForStudy -> null
+  doc.quizStatus == "ready" -> "quiz ready"
+  doc.quizStatus.startsWith("ready") -> "quiz ready, " + doc.quizStatus.removePrefix("ready: ")
+  doc.quizStatus == "queued" -> if (onThisDevice) "waiting to start" else "waiting for your PC"
+  doc.quizStatus == "reading" -> "reading the file"
+  doc.quizStatus == "topics" -> "finding its topics"
+  doc.quizStatus == "questions" -> "writing questions"
+  doc.quizStatus.startsWith("failed") -> doc.quizStatus.removePrefix("failed: ").replaceFirstChar { it.uppercase() }
+  else -> null
 }

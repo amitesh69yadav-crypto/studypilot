@@ -241,6 +241,7 @@ fun AiChatImportScreen(
           onOpenTopic = { selectedTab = 1 }
         )
         3 -> ImportChatTab(
+          uploadSlot = { UploadDocumentCard(viewModel) },
           subjects = subjects,
           isProcessing = isProcessing,
           progress = progress,
@@ -1637,6 +1638,8 @@ private fun DashboardMetricCard(
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ImportChatTab(
+  /** "Upload a document", beside importing a link. */
+  uploadSlot: @Composable () -> Unit = {},
   subjects: List<Subject>,
   isProcessing: Boolean,
   progress: Float,
@@ -1658,6 +1661,8 @@ private fun ImportChatTab(
       .padding(16.dp),
     verticalArrangement = Arrangement.spacedBy(16.dp)
   ) {
+    uploadSlot()
+
     // Guidance Card
     Card(
       modifier = Modifier.fillMaxWidth(),

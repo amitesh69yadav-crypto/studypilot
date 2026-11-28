@@ -57,6 +57,9 @@ compose.resources {
   packageOfResClass = "com.example.shared.resources"
 }
 
+// Tests don't write to the real app's log file.
+tasks.withType<Test>().configureEach { systemProperty("studypilot.log", "off") }
+
 dependencies {
   add("kspAndroid", libs.room.kmp.compiler)
   add("kspDesktop", libs.room.kmp.compiler)

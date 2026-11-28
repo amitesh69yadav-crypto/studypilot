@@ -84,7 +84,10 @@ import com.example.ui.viewmodel.StudyPilotViewModel
 fun QuizScreen(
   viewModel: StudyPilotViewModel
 ) {
-  val topics by viewModel.topics.collectAsState()
+  val allTopics by viewModel.topics.collectAsState()
+  // Course pages (info for students, overviews) are knowledge for the tutor, not quiz material.
+  val topics = remember(allTopics) { allTopics.filter { it.sourceType != "IMPORTED_LMS" } }
+  val courseFiles by viewModel.courseDocuments.collectAsState()
   val quizAttempts by viewModel.quizAttempts.collectAsState()
   var openAttempt by remember { mutableStateOf<QuizAttempt?>(null) }
   val quizConfig by viewModel.quizConfig.collectAsState()
@@ -108,6 +111,13 @@ fun QuizScreen(
     modifier = Modifier.fillMaxSize(),
     contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 32.dp)
   ) {
+    // 0. Quizzes being made from course files, with their progress.
+    // Documents the AI is still reading (or couldn't), with their progress.
+    val preparing = courseFiles.filter { it.source == "upload" && !it.quizStatus.startsWith("ready") }
+    if (preparing.isNotEmpty()) {
+      item(key = "preparing") { PreparingQuizzes(preparing, onThisDevice = true, onRetry = { viewModel.rescanDocument(it) }, onCancel = { viewModel.removeDocument(it) }) }
+    }
+
     // 1. Primary Quiz Trigger Hero Card
     item {
       ElevatedCard(
@@ -592,4 +602,48 @@ private fun QuizAttemptDialog(attempt: QuizAttempt, onDismiss: () -> Unit) {
     },
     confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }
   )
+}
+
+/** Course files being made into quizzes: what each is doing, with a progress bar. */
+@Composable
+private fun PreparingQuizzes(
+  files: List<com.example.data.model.CourseDocument>,
+  onThisDevice: Boolean,
+  onRetry: (com.example.data.model.CourseDocument) -> Unit,
+  onCancel: (com.example.data.model.CourseDocument) -> Unit
+) {
+  ElevatedCard(
+    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+    shape = RoundedCornerShape(20.dp),
+    colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface),
+    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+  ) {
+    Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+      Text("Reading documents", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+      Text(
+        "The AI finds the topics each document teaches and adds them to its subject. Then make a quiz from the subject or the document.",
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+      )
+      files.sortedByDescending { it.quizProgress }.forEach { doc ->
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+              Text(doc.title, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+              Text(
+                "${doc.subjectName} · " + (quizStateText(doc, onThisDevice) ?: ""),
+                style = MaterialTheme.typography.labelSmall,
+                color = if (doc.quizStatus.startsWith("failed")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2
+              )
+            }
+            if (doc.quizStatus.startsWith("failed")) TextButton(onClick = { onRetry(doc) }) { Text("Try again") }
+            else TextButton(onClick = { onCancel(doc) }) { Text("Remove") }
+          }
+          if (!doc.quizStatus.startsWith("failed")) {
+            LinearProgressIndicator(progress = { doc.quizProgress / 100f }, modifier = Modifier.fillMaxWidth())
+          }
+        }
+      }
+    }
+  }
 }

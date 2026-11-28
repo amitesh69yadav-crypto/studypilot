@@ -345,6 +345,8 @@ class StudyPilotRepository(
 
   suspend fun deleteTopic(id: Long, userId: String = "") {
     dao.getTopicById(id)?.let { quizSources.onTopicDeleted(it) }
+    // Its questions go with it; nothing else uses them.
+    dao.getQuestionsForTopicIds(listOf(id)).map { it.id }.takeIf { it.isNotEmpty() }?.let { dao.deleteQuestionsByIds(it) }
     dao.deleteTopicById(id)
     if (userId.isNotBlank()) {
       deleteFromFirestore("users/$userId/topics/$id")
@@ -840,6 +842,13 @@ class StudyPilotRepository(
     return (own + course).take(6)
   }
 
+  /** Removes questions whose topic no longer exists (left by older versions). Returns how many. */
+  suspend fun purgeOrphanQuestions(): Int {
+    val ids = dao.getOrphanQuestionIds()
+    ids.chunked(500).forEach { dao.deleteQuestionsByIds(it) }
+    return ids.size
+  }
+
   // --- Course files ("College notes") ---
 
   private class CachedCourseIndex(val userId: String, val signature: String, val index: KnowledgeIndex)
@@ -876,79 +885,55 @@ class StudyPilotRepository(
     courseCache = null
   }
 
-  /** What reading course files did, for the status line. */
-  data class FileImport(val added: Int = 0, val updated: Int = 0, val unreadable: Int = 0, val skipped: Int = 0, val failed: Int = 0) {
-    override fun toString(): String = listOfNotNull(
-      added.takeIf { it > 0 }?.let { "$it new file${if (it == 1) "" else "s"}" },
-      updated.takeIf { it > 0 }?.let { "$it updated" },
-      unreadable.takeIf { it > 0 }?.let { "$it without readable text" },
-      skipped.takeIf { it > 0 }?.let { "$it too large" },
-      failed.takeIf { it > 0 }?.let { "$it couldn't be downloaded" }
-    ).joinToString(", ").ifBlank { "Files up to date" }
+  /**
+   * Adds a document the student uploaded (PDF, PowerPoint or Word) under [subjectName], creating the
+   * subject if it's new. Its text is read now; a copy is kept in [saveDir] when the device keeps files
+   * (the PC). [scanDocument] then finds its topics. Returns the document's id.
+   */
+  suspend fun addUploadedDocument(userId: String, fileName: String, bytes: ByteArray, subjectName: String, saveDir: java.io.File?): Long {
+    val type = com.example.data.docs.DocumentText.typeOf(fileName) ?: throw IllegalArgumentException("Only PDF, PowerPoint (.pptx) and Word (.docx) files can be added.")
+    val name = subjectName.trim().ifBlank { "General" }
+    val subjects = dao.getSubjectsForUser(userId).first()
+    val subject = subjects.firstOrNull { it.name.equals(name, ignoreCase = true) }
+      ?: if (name.equals("General", ignoreCase = true)) null
+      else addSubject(name, name.take(8).uppercase(), listOf("#5B6CFF", "#2E9E6B", "#E0823A", "#C2477C", "#3A8FD8")[subjects.size % 5], userId)
+        .let { id -> Subject(id = id, userId = userId, name = name, code = name.take(8).uppercase(), colorHex = "") }
+    val pages = withContext(Dispatchers.Default) { com.example.data.docs.DocumentText.pages(bytes, type) }
+    val target = saveDir?.let { dir -> uniqueFile(java.io.File(dir, safeName(subject?.name ?: "General")), safeName(fileName.take(160))) }
+    if (target != null) withContext(Dispatchers.IO) { target.parentFile?.mkdirs(); target.writeBytes(bytes) }
+    return dao.upsertCourseDocument(
+      com.example.data.model.CourseDocument(
+        userId = userId,
+        subjectId = subject?.id ?: 0L,
+        subjectName = subject?.name ?: "General",
+        title = fileName.take(160),
+        source = "upload",
+        externalId = "upload:" + java.util.UUID.randomUUID().toString(),
+        url = "",
+        fileType = type,
+        remoteUpdatedAt = System.currentTimeMillis().toString(),
+        pageCount = pages.size,
+        text = pages.joinToString("\u000C").take(400_000),
+        localPath = target?.absolutePath.orEmpty(),
+        sizeBytes = bytes.size.toLong(),
+        useForStudy = true,
+        quizStatus = "queued"
+      )
+    )
   }
 
-  /**
-   * Keeps a course site's files on this PC under [filesDir]/<subject>/, as the original PDFs and
-   * slides. Unchanged files aren't downloaded again; a changed one is replaced. Text is read only for
-   * files the student chose for study ([prepareChosenFiles]). Files of removed courses ([skip]) aren't kept.
-   */
-  suspend fun importCourseFiles(
-    userId: String,
-    source: com.example.data.connect.LmsSource,
-    sourceKey: String,
-    skip: Set<String>,
-    filesDir: java.io.File,
-    maxBytes: Long = 30L * 1024 * 1024,
-    onProgress: (done: Int, total: Int) -> Unit = { _, _ -> }
-  ): FileImport {
-    val files = source.files().filter { it.courseName.take(60).lowercase() !in skip }
-    val known = dao.getCourseDocumentHeaders(userId).filter { it.source == sourceKey }.associateBy { it.externalId }
-    val subjects = dao.getSubjectsForUser(userId).first()
-    var added = 0; var updated = 0; val unreadable = 0; var skipped = 0; var failed = 0
-    files.forEachIndexed { i, f ->
-      onProgress(i, files.size)
-      val old = known[f.id]
-      val haveFile = old != null && old.localPath.isNotBlank() && java.io.File(old.localPath).isFile
-      if (old != null && old.remoteUpdatedAt == f.updatedAt && haveFile) return@forEachIndexed
-      if (f.size > maxBytes) { skipped++; return@forEachIndexed }
-      val type = com.example.data.docs.DocumentText.typeOf(f.name, f.contentType) ?: return@forEachIndexed
-      val bytes = runCatching { source.download(f) }.getOrNull()
-      if (bytes == null) { failed++; return@forEachIndexed }
-      val subject = subjects.firstOrNull { it.name.equals(f.courseName.take(60), ignoreCase = true) }
-      val subjectName = subject?.name ?: f.courseName.take(60)
-      val target = old?.localPath?.takeIf { it.isNotBlank() }?.let { java.io.File(it) }
-        ?: uniqueFile(java.io.File(filesDir, safeName(subjectName)), safeName(f.name.take(160)))
-      withContext(Dispatchers.IO) {
-        target.parentFile?.mkdirs()
-        target.writeBytes(bytes)
-      }
-      val changed = old != null && old.remoteUpdatedAt != f.updatedAt
-      dao.upsertCourseDocument(
-        com.example.data.model.CourseDocument(
-          id = old?.id ?: 0L,
-          userId = userId,
-          subjectId = subject?.id ?: 0L,
-          subjectName = subjectName,
-          title = f.name.take(160),
-          source = sourceKey,
-          externalId = f.id,
-          url = f.viewUrl,
-          fileType = type,
-          remoteUpdatedAt = f.updatedAt,
-          // A replaced file is read again when it's in use; until then its old text goes.
-          pageCount = if (changed) 0 else old?.pageCount ?: 0,
-          text = if (changed || old == null) "" else (dao.getCourseDocument(old.id)?.text ?: ""),
-          localPath = target.absolutePath,
-          sizeBytes = bytes.size.toLong(),
-          useForStudy = old?.useForStudy ?: false
-        )
-      )
-      if (old == null) added++ else updated++
-    }
-    onProgress(files.size, files.size)
-    prepareChosenFiles(userId)
-    return FileImport(added, updated, unreadable, skipped, failed)
+  /** Removes a document: its topics (and their questions), its record, and the kept copy. */
+  suspend fun removeDocument(userId: String, docId: Long) {
+    val doc = dao.getCourseDocument(docId) ?: return
+    dao.getTopicsForUser(userId).first().filter { it.uploadedFileName == doc.externalId }.forEach { deleteTopic(it.id, userId) }
+    dao.deleteCourseDocument(doc.id)
+    if (doc.localPath.isNotBlank()) runCatching { java.io.File(doc.localPath).delete() }
+    courseCache = null
   }
+
+  /** The topics read from a document, for a quiz on just that document. */
+  suspend fun topicsOfDocument(userId: String, externalId: String): List<StudyTopic> =
+    dao.getTopicsForUser(userId).first().filter { it.uploadedFileName == externalId }
 
   private fun safeName(name: String) = name.replace(Regex("""[\\/:*?"<>|\u0000-\u001F]"""), "_").trim().trimEnd('.').ifBlank { "file" }
 
@@ -963,49 +948,113 @@ class StudyPilotRepository(
   }
 
   /**
-   * Turns the student's choices into study material, on the PC where the originals are: a chosen
-   * file's text is read (once) and it becomes a topic under its subject, which quizzes and the tutor
-   * use; a file no longer chosen loses its topic. Returns how many files were read.
+   * Reads a document into knowledge: finds the topics it actually teaches (a model, your API key
+   * first; or the built-in reader) and saves them as topics under its subject, with study notes. The
+   * tutor and quizzes use them; questions are written when a quiz is made. Progress is saved on the
+   * document as it goes, so both devices show it.
    */
-  suspend fun prepareChosenFiles(userId: String): Int {
-    val docs = dao.getCourseDocumentHeaders(userId)
-    val topics = dao.getTopicsForUser(userId).first().filter { it.sourceType == "COURSE_FILE" }
-    val topicByFile = topics.associateBy { it.uploadedFileName }
-    val today = com.example.data.repository.todayIso()
-    var read = 0
-    for (header in docs) {
-      val topic = topicByFile[header.externalId]
-      if (!header.useForStudy) {
-        topic?.let { deleteTopic(it.id, userId) }
-        continue
+  suspend fun scanDocument(userId: String, docId: Long): Boolean {
+    var doc = dao.getCourseDocument(docId) ?: return false
+    suspend fun stage(status: String, progress: Int) = dao.setQuizStatus(doc.id, status, progress)
+    return try {
+      stage("reading", 5)
+      if (doc.text.isBlank() && doc.localPath.isNotBlank() && java.io.File(doc.localPath).isFile) {
+        val pages = withContext(Dispatchers.Default) { com.example.data.docs.DocumentText.pages(java.io.File(doc.localPath).readBytes(), doc.fileType) }
+        doc = doc.copy(text = pages.joinToString("\u000C").take(400_000), pageCount = pages.size, quizStatus = "reading", quizProgress = 10)
+        dao.upsertCourseDocument(doc)
       }
-      var doc = dao.getCourseDocument(header.id) ?: continue
-      if (doc.text.isBlank() && doc.localPath.isNotBlank()) {
-        val file = java.io.File(doc.localPath)
-        if (file.isFile) {
-          val pages = withContext(Dispatchers.Default) { com.example.data.docs.DocumentText.pages(file.readBytes(), doc.fileType) }
-          doc = doc.copy(text = pages.joinToString("\u000C").take(400_000), pageCount = pages.size)
-          dao.upsertCourseDocument(doc)
-          read++
+      val pages = doc.pages
+      if (doc.text.isBlank()) {
+        stage("failed: no readable text (a scan or images only)", 0)
+        return false
+      }
+
+      // 1. The topics the file teaches.
+      stage("topics", 15)
+      val sections = sections(pages, 9000)
+      val byTitle = LinkedHashMap<String, MutableList<com.example.data.ai.StudyAi.FileTopic>>()
+      val builtIn = mutableListOf<Pair<String, String>>()
+      var fallbackWhy: String? = null
+      for ((i, section) in sections.withIndex()) {
+        ai.waitForCloud()
+        val found = ai.topicsInFile(doc.title, doc.subjectName, section.text)
+        if (found != null) {
+          found.forEach { t -> byTitle.getOrPut(t.title.lowercase().replace(Regex("[^a-z0-9]+"), " ").trim()) { mutableListOf() } += t }
+        } else {
+          fallbackWhy = ai.lastError ?: "no AI model answered"
+          com.example.platform.Log.w("QuizFromFile", "Built-in reader for part of ${doc.title}: $fallbackWhy")
+          // No model answered for this part: the built-in reader takes these pages, the rest keeps the model's topics.
+          builtIn += com.example.data.ai.LectureQuiz.topicsFromPages(pages, doc.title.substringBeforeLast('.'), only = section.pages).map { it.title to it.notes }
         }
+        stage("topics", 15 + 80 * (i + 1) / sections.size)
       }
-      if (doc.text.isBlank()) continue
-      val notes = doc.text.replace('\u000C', '\n').take(60_000)
-      val title = doc.title.substringBeforeLast('.').take(80)
-      if (topic == null) {
-        addTopic(
-          StudyTopic(
-            userId = userId, subjectId = doc.subjectId, subjectName = doc.subjectName, title = title,
-            dateStudied = today, descriptionNotes = notes, sourceType = "COURSE_FILE",
-            uploadedFileName = doc.externalId, nextRevisionDate = today
-          )
+      val found: List<Pair<String, String>> = run {
+        byTitle.values.take(14).map { parts ->
+          val first = parts.first()
+          val pageList = parts.flatMap { it.pages }.distinct().sorted()
+          val excerpt = pageList.take(4).mapNotNull { pages.getOrNull(it - 1) }.joinToString("\n\n").take(2500)
+          first.title to buildString {
+            append(parts.joinToString("\n\n") { it.summary })
+            val points = parts.flatMap { it.keyPoints }.distinct()
+            if (points.isNotEmpty()) append("\n\nKey points:\n").append(points.joinToString("\n") { "- $it" })
+            if (excerpt.isNotBlank()) append("\n\nFrom the file").append(if (pageList.isNotEmpty()) " (p. ${pageList.joinToString(", ")})" else "").append(":\n").append(excerpt)
+          }
+        } + builtIn.filter { (title, _) -> byTitle.keys.none { it == title.lowercase().replace(Regex("[^a-z0-9]+"), " ").trim() } }
+      }
+      if (found.isEmpty()) {
+        stage("failed: no study topics found (only course information?)", 0)
+        return false
+      }
+
+      // 2. Topics under the file's subject, replacing what an earlier quiz made from this file.
+      dao.getTopicsForUser(userId).first().filter { it.sourceType == "COURSE_FILE" && it.uploadedFileName == doc.externalId }
+        .forEach { deleteTopic(it.id, userId) }
+      val today = todayIso()
+      val made = found.map { (title, notes) ->
+        val topic = StudyTopic(
+          userId = userId, subjectId = doc.subjectId, subjectName = doc.subjectName, title = title.take(80),
+          dateStudied = today, descriptionNotes = notes.take(60_000), sourceType = "COURSE_FILE",
+          uploadedFileName = doc.externalId, nextRevisionDate = today
         )
-      } else if (topic.descriptionNotes != notes) {
-        updateTopic(topic.copy(descriptionNotes = notes))
+        topic.copy(id = addTopic(topic))
       }
+
+      courseCache = null
+      // "ready", or "ready: built-in reader (why)" when no model could read (part of) the file.
+      stage(if (fallbackWhy == null) "ready" else "ready: built-in reader ($fallbackWhy)".take(200), 100)
+      true
+    } catch (e: kotlinx.coroutines.CancellationException) {
+      stage("failed: stopped before it finished", 0)
+      throw e
+    } catch (e: Exception) {
+      stage("failed: ${e.message ?: "something went wrong"}".take(160), 0)
+      false
     }
-    if (read > 0) courseCache = null
-    return read
+  }
+
+  private class Section(val text: String, val pages: Set<Int>)
+
+  /**
+   * Page texts joined into sections of about [size] characters, each page marked "[Page n]". Lines
+   * repeated on most pages (headers, footers, author lines) are left out.
+   */
+  private fun sections(pages: List<String>, size: Int): List<Section> {
+    val clean = com.example.data.ai.LectureQuiz.withoutBoilerplate(pages)
+    val out = mutableListOf<Section>()
+    val current = StringBuilder()
+    val inCurrent = mutableSetOf<Int>()
+    clean.forEachIndexed { i, page ->
+      if (page.isBlank()) return@forEachIndexed
+      val piece = "[Page ${i + 1}]\n" + page.take(size)
+      if (current.length + piece.length > size && current.isNotEmpty()) {
+        out += Section(current.toString(), inCurrent.toSet())
+        current.clear(); inCurrent.clear()
+      }
+      current.append(piece).append("\n\n")
+      inCurrent += i + 1
+    }
+    if (current.isNotBlank()) out += Section(current.toString(), inCurrent.toSet())
+    return out.take(12) // a long book: its first dozen sections
   }
 
   suspend fun resolveOrCreateSubjectForImport(
@@ -1114,20 +1163,24 @@ class StudyPilotRepository(
     config: QuizConfig,
     filterSubjectId: Long? = null,
     forceWeakOnly: Boolean = false,
-    userId: String = ""
+    userId: String = "",
+    /** Only these topics (a quiz on one document). */
+    onlyTopicIds: Set<Long>? = null,
+    /** Called as each topic's questions are ready: (done, total, topic title). */
+    onProgress: (Int, Int, String) -> Unit = { _, _, _ -> }
   ): GeneratedQuiz {
     // Everything stored (tutor conversations, imported chats, concepts) becomes quiz material.
     if (userId.isNotBlank()) runCatching { quizSources.refresh(userId) }
-    val allTopicsList = if (userId.isNotBlank()) {
+    val allTopicsList = (if (userId.isNotBlank()) {
       dao.getTopicsForUser(userId).first()
     } else {
       dao.getAllTopics().first()
-    }
+    }).filter { it.sourceType != "IMPORTED_LMS" } // course pages (info, overviews) aren't quiz material
     if (allTopicsList.isEmpty()) {
       return GeneratedQuiz(emptyList(), emptyList(), emptyList(), isAllCovered = true)
     }
 
-    var eligibleTopics = when (filterSubjectId) {
+    var eligibleTopics = if (onlyTopicIds != null) allTopicsList.filter { it.id in onlyTopicIds } else when (filterSubjectId) {
       null -> allTopicsList
       // "General": topics whose subject doesn't exist (none chosen, or since deleted).
       0L -> {
@@ -1191,8 +1244,14 @@ class StudyPilotRepository(
       planned += n
     }
 
+    val done = java.util.concurrent.atomic.AtomicInteger(0)
+    onProgress(0, needs.size, needs.keys.firstOrNull()?.title.orEmpty())
     val picked: List<Pair<StudyTopic, List<QuizQuestion>>> = coroutineScope {
-      needs.map { (topic, n) -> async { topic to pickQuestions(topic, n, config, history, concepts[topic.title], distractors) } }.awaitAll()
+      needs.map { (topic, n) ->
+        async {
+          (topic to pickQuestions(topic, n, config, history, concepts[topic.title], distractors)).also { onProgress(done.incrementAndGet(), needs.size, topic.title) }
+        }
+      }.awaitAll()
     }.toMutableList().also { list ->
       // A topic that came up short: take more from the topics that weren't needed.
       var total = list.sumOf { it.second.size }
@@ -1346,6 +1405,12 @@ class StudyPilotRepository(
     }
     if (fresh.size < count) {
       val local = buildList {
+        // Real questions from definitions, key terms and lists in the material; other topics'
+        // definitions make the wrong options.
+        val pool = (if (topic.userId.isNotBlank()) dao.getTopicsForUser(topic.userId).first() else dao.getAllTopics().first())
+          .filter { it.id != topic.id && it.sourceType != "IMPORTED_LMS" }
+          .flatMap { com.example.data.ai.LectureQuiz.definitions(it.descriptionNotes) }.take(80)
+        addAll(com.example.data.ai.LectureQuiz.questions(topic, count * 3, config.difficulty.takeIf { it != "MIXED" } ?: "MEDIUM", pool).filter { fits(it, config) })
         if (concept != null) {
           // It cycles through question types; ask for extra and keep the allowed ones.
           addAll(LocalAiEngine.generateLocalQuizQuestionsForConcept(concept, count * 4, config.difficulty).filter { fits(it, config) })

@@ -132,19 +132,6 @@ fun ConnectionsCard(viewModel: StudyPilotViewModel) {
         onSave = { url, token -> viewModel.setLms("moodle", url, token); openLms = null },
         onDisconnect = { viewModel.setLms("moodle", c.moodleUrl, "") }
       )
-      HorizontalDivider()
-      Row(verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-          Text("Course files", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleSmall)
-          Text(
-            (if (docs.isEmpty()) "Keeps each course's PDFs, slides and Word files on this PC, in a folder per subject."
-            else "${docs.size} files kept · ${docs.count { it.useForStudy }} used for quizzes and the tutor.") +
-              " Choose which ones to use in Notes > a subject > Course files.",
-            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
-          )
-        }
-        Switch(checked = c.includeFiles, onCheckedChange = { viewModel.setIncludeCourseFiles(it) })
-      }
       c.progress?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
       HorizontalDivider()
       GoogleConnectionRow(viewModel, c.busy)
@@ -227,8 +214,7 @@ private fun PhoneConnectionsNote(docs: List<com.example.data.model.CourseDocumen
       Column {
         Text("Connections", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
         Text(
-          "Canvas, Moodle, calendars and Google are connected on your PC. Their subjects, syllabus, deadlines and course files come here through sync" +
-            (if (docs.isNotEmpty()) " (${docs.size} files so far, ${docs.count { it.useForStudy }} used for quizzes)." else "."),
+          "Canvas, Moodle, calendars and Google are connected on your PC. Their subjects, syllabus, timetable and deadlines come here through sync.",
           style = MaterialTheme.typography.bodySmall,
           color = MaterialTheme.colorScheme.onSurfaceVariant
         )

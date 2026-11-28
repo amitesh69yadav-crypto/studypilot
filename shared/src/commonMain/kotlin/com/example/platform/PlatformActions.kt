@@ -16,6 +16,12 @@ interface PlatformActions {
   fun saveFile(fileName: String, mimeType: String, bytes: ByteArray) {
     showMessage("Saving files isn't available here.")
   }
+  /** A file the student picked: its name and contents. */
+  data class PickedFile(val name: String, val bytes: ByteArray)
+
+  /** Lets the student pick a PDF, PowerPoint or Word file; null if they cancel. */
+  val pickDocument: (suspend () -> PickedFile?)? get() = null
+
   /** Opens a file kept on this device in its usual app (a PDF viewer, PowerPoint). */
   fun openFile(path: String) {
     showMessage("Course files open on your PC.")

@@ -259,7 +259,14 @@ data class CourseDocument(
   @androidx.room.ColumnInfo(defaultValue = "") val localPath: String = "",
   @androidx.room.ColumnInfo(defaultValue = "0") val sizeBytes: Long = 0,
   /** The student chose this file for quizzes and the tutor's College notes. */
-  @androidx.room.ColumnInfo(defaultValue = "0") val useForStudy: Boolean = false
+  @androidx.room.ColumnInfo(defaultValue = "0") val useForStudy: Boolean = false,
+  /**
+   * Making a quiz from this file: "" (not asked), "queued", "reading", "topics", "questions",
+   * "ready", or "failed: why". Synced, so the phone shows the PC's progress.
+   */
+  @androidx.room.ColumnInfo(defaultValue = "") val quizStatus: String = "",
+  /** 0-100 while a quiz is being made. */
+  @androidx.room.ColumnInfo(defaultValue = "0") val quizProgress: Int = 0
 ) {
   val pages: List<String> get() = text.split('\u000C')
 }

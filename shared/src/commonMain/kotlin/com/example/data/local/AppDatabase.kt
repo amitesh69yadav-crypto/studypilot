@@ -32,7 +32,7 @@ import com.example.data.model.ExtractedConcept
     com.example.data.model.StudyNote::class,
     com.example.data.model.CourseDocument::class
   ],
-  version = 12,
+  version = 13,
   exportSchema = false
 )
 @ConstructedBy(AppDatabaseConstructor::class)
@@ -48,7 +48,7 @@ abstract class AppDatabase : RoomDatabase() {
       .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
       // Real migrations come first, so an upgrade keeps everyone's data; the destructive fallback is
       // only for versions with no migration.
-      .addMigrations(MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12)
+      .addMigrations(MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13)
       .fallbackToDestructiveMigration(dropAllTables = true)
       .build()
   }
@@ -56,6 +56,18 @@ abstract class AppDatabase : RoomDatabase() {
 
 /** Version 9 adds the user's own notes and changes nothing else. */
 /** Version 10 gives notes a topic (heading) under their chapter (title). */
+/** Version 13 tracks making a quiz from each course file (status and progress). */
+val MIGRATION_12_13 = object : androidx.room.migration.Migration(12, 13) {
+  override fun migrate(connection: androidx.sqlite.SQLiteConnection) {
+    val existing = mutableSetOf<String>()
+    connection.prepare("PRAGMA table_info(`course_documents`)").use { st -> while (st.step()) existing += st.getText(1) }
+    if ("quizStatus" !in existing) connection.prepare("ALTER TABLE `course_documents` ADD COLUMN `quizStatus` TEXT NOT NULL DEFAULT ''").use { it.step() }
+    if ("quizProgress" !in existing) connection.prepare("ALTER TABLE `course_documents` ADD COLUMN `quizProgress` INTEGER NOT NULL DEFAULT 0").use { it.step() }
+    // Files chosen before quizzes were made this way get a proper quiz.
+    connection.prepare("UPDATE `course_documents` SET `quizStatus` = 'queued' WHERE `useForStudy` = 1").use { it.step() }
+  }
+}
+
 /**
  * Version 12 keeps course files as files on the PC (their path and size) and lets the student choose
  * which ones the tutor and quizzes use; none are chosen at first.

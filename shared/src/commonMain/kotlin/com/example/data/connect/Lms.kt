@@ -26,29 +26,10 @@ data class LmsTopic(val title: String, val text: String)
 /** [dueDate] is "yyyy-MM-dd" in this device's time zone, or blank when there is none. */
 data class LmsAssignment(val title: String, val dueDate: String, val isExam: Boolean)
 
-/** A course file the app can read for "College notes". */
-data class LmsFile(
-  /** Course name, as the course's subject is named. */
-  val courseName: String,
-  val id: String,
-  val name: String,
-  /** Where the bytes are downloaded from. */
-  val downloadUrl: String,
-  /** Where the student opens it in the browser. */
-  val viewUrl: String,
-  val contentType: String,
-  val size: Long,
-  /** Changes when the file is replaced. */
-  val updatedAt: String
-)
-
 /** A learning system the app can read courses from. */
 interface LmsSource {
   val label: String
   suspend fun courses(): List<LmsCourse>
-  /** The PDF, PowerPoint and Word files in the student's courses; empty where unsupported. */
-  suspend fun files(): List<LmsFile> = emptyList()
-  suspend fun download(file: LmsFile): ByteArray = LmsHttp.bytes(file.downloadUrl)
 }
 
 class LmsException(message: String) : Exception(message)
@@ -58,28 +39,6 @@ object LmsHttp {
     .connectTimeout(10, TimeUnit.SECONDS)
     .readTimeout(30, TimeUnit.SECONDS)
     .build()
-
-  /** The body and the next page's address from a "Link: <...>; rel=\"next\"" header, if any. */
-  suspend fun page(url: String, bearer: String?): Pair<String, String?> = withContext(Dispatchers.IO) {
-    val request = Request.Builder().url(url).apply { if (bearer != null) header("Authorization", "Bearer $bearer") }.build()
-    client.newCall(request).execute().use { resp ->
-      if (!resp.isSuccessful) throw LmsException("The service answered ${resp.code}.")
-      val next = resp.header("Link")?.split(',')?.firstOrNull { it.contains("rel=\"next\"") }
-        ?.substringAfter('<')?.substringBefore('>')
-      resp.body?.string().orEmpty() to next
-    }
-  }
-
-  /** Downloads a file (following the course site's redirect to its file store). */
-  suspend fun bytes(url: String, bearer: String? = null, maxBytes: Long = 40L * 1024 * 1024): ByteArray = withContext(Dispatchers.IO) {
-    val request = Request.Builder().url(url).apply { if (bearer != null) header("Authorization", "Bearer $bearer") }.build()
-    client.newCall(request).execute().use { resp ->
-      if (!resp.isSuccessful) throw LmsException("Download failed (${resp.code}).")
-      val body = resp.body ?: throw LmsException("Empty download.")
-      if (body.contentLength() > maxBytes) throw LmsException("File too large.")
-      body.bytes()
-    }
-  }
 
   suspend fun get(url: String, bearer: String? = null): String = withContext(Dispatchers.IO) {
     val request = Request.Builder().url(url).apply { if (bearer != null) header("Authorization", "Bearer $bearer") }.build()
@@ -192,50 +151,6 @@ class CanvasSource(baseUrl: String, private val token: String) : LmsSource {
       }
   }
 
-  /** Every page of a paginated list. */
-  private suspend fun all(path: String): List<JSONObject> {
-    val out = mutableListOf<JSONObject>()
-    var url: String? = "$base/api/v1/$path"
-    var pages = 0
-    while (url != null && pages++ < 20) {
-      val (body, next) = LmsHttp.page(url, token)
-      val arr = JSONArray(body)
-      for (i in 0 until arr.length()) arr.optJSONObject(i)?.let { out += it }
-      url = next
-    }
-    return out
-  }
-
-  override suspend fun files(): List<LmsFile> {
-    val courses = all("courses?enrollment_state=active&per_page=100").filter { it.has("name") && !it.optBoolean("access_restricted_by_date", false) }
-    val out = mutableListOf<LmsFile>()
-    for (c in courses) {
-      val id = c.getLong("id")
-      val name = c.optString("name").trim()
-      fun file(f: JSONObject) = LmsFile(
-        courseName = name,
-        id = f.optString("id"),
-        name = f.optString("display_name", f.optString("filename", "File")),
-        downloadUrl = f.optString("url"),
-        viewUrl = "$base/courses/$id/files/${f.optString("id")}",
-        contentType = f.optString("content-type", f.optString("content_type")),
-        size = f.optLong("size", 0L),
-        updatedAt = f.optString("updated_at", f.optString("modified_at"))
-      )
-      // The Files list, when the course shows it; otherwise the files linked from its modules.
-      val listed = runCatching { all("courses/$id/files?per_page=100&sort=updated_at&order=desc").map(::file) }.getOrNull()
-      val found = listed ?: runCatching {
-        all("courses/$id/modules?include[]=items&per_page=50")
-          .flatMap { m -> m.optJSONArray("items")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) } }.orEmpty() }
-          .filter { it.optString("type") == "File" && it.has("content_id") }
-          .mapNotNull { item -> runCatching { file(JSONObject(LmsHttp.get("$base/api/v1/courses/$id/files/${item.getLong("content_id")}", token))) }.getOrNull() }
-      }.getOrDefault(emptyList())
-      out += found.filter { com.example.data.docs.DocumentText.typeOf(it.name, it.contentType) != null && it.downloadUrl.isNotBlank() }
-    }
-    return out.distinctBy { it.id }
-  }
-
-  override suspend fun download(file: LmsFile): ByteArray = LmsHttp.bytes(file.downloadUrl, token)
 }
 
 /**
@@ -298,40 +213,6 @@ class MoodleSource(baseUrl: String, private val token: String) : LmsSource {
       }
       LmsCourse(Html.toText(c.optString("fullname")).ifBlank { c.optString("shortname") }, c.optString("shortname").trim(), topics, assignmentsByCourse[id].orEmpty())
     }
-  }
-
-  override suspend fun files(): List<LmsFile> {
-    val me = call("core_webservice_get_site_info") as JSONObject
-    val list = call("core_enrol_get_users_courses", "userid" to me.getLong("userid").toString()) as JSONArray
-    val out = mutableListOf<LmsFile>()
-    for (c in (0 until list.length()).mapNotNull { list.optJSONObject(it) }) {
-      val courseName = Html.toText(c.optString("fullname")).ifBlank { c.optString("shortname") }
-      val sections = runCatching { call("core_course_get_contents", "courseid" to c.getLong("id").toString()) as JSONArray }.getOrNull() ?: continue
-      for (si in 0 until sections.length()) {
-        val modules = sections.optJSONObject(si)?.optJSONArray("modules") ?: continue
-        for (mi in 0 until modules.length()) {
-          val mod = modules.optJSONObject(mi) ?: continue
-          val contents = mod.optJSONArray("contents") ?: continue
-          for (ci in 0 until contents.length()) {
-            val f = contents.optJSONObject(ci) ?: continue
-            val name = f.optString("filename")
-            if (f.optString("type") != "file" || com.example.data.docs.DocumentText.typeOf(name, f.optString("mimetype")) == null) continue
-            val url = f.optString("fileurl")
-            out += LmsFile(
-              courseName = courseName,
-              id = "${mod.optLong("id")}/$name",
-              name = name,
-              downloadUrl = url + (if ('?' in url) "&" else "?") + "token=" + token,
-              viewUrl = mod.optString("url", url),
-              contentType = f.optString("mimetype"),
-              size = f.optLong("filesize", 0L),
-              updatedAt = f.optLong("timemodified", 0L).toString()
-            )
-          }
-        }
-      }
-    }
-    return out.distinctBy { it.id }
   }
 }
 

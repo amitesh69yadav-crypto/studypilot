@@ -126,6 +126,34 @@ class AndroidActions(private val context: Context) : PlatformActions {
     }
   }
 
+  override val pickDocument: (suspend () -> PlatformActions.PickedFile?) = suspend {
+    val activity = context as? androidx.activity.ComponentActivity
+      ?: throw IllegalStateException("Open the app to add a document.")
+    val answer = kotlinx.coroutines.CompletableDeferred<android.net.Uri?>()
+    val launcher = activity.activityResultRegistry.register(
+      "pick-document-" + System.nanoTime(),
+      androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
+    ) { answer.complete(it) }
+    try {
+      launcher.launch(arrayOf(
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      ))
+      val uri = answer.await()
+      if (uri == null) null else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val resolver = context.contentResolver
+        val name = resolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+          if (c.moveToFirst()) c.getString(0) else null
+        } ?: uri.lastPathSegment ?: "document.pdf"
+        val bytes = resolver.openInputStream(uri)?.use { it.readBytes() } ?: throw IllegalStateException("Couldn't open that file.")
+        PlatformActions.PickedFile(name, bytes)
+      }
+    } finally {
+      launcher.unregister()
+    }
+  }
+
   private companion object {
     val CLASSROOM_SCOPES = listOf(
       "https://www.googleapis.com/auth/classroom.courses.readonly",

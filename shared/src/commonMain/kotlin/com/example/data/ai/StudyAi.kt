@@ -60,23 +60,59 @@ class StudyAi(
   /** The model that will answer next, or null for built-in answers. */
   suspend fun backend(task: AiTask = AiTask.ANSWER): LlmBackend? = backends(task).firstOrNull()
 
+  /**
+   * Models for quiz work: the cloud chatbot first whenever a key is set (it's fast and writes the best
+   * questions), whatever this device's AI setting, then the usual order.
+   */
+  suspend fun quizBackends(): List<LlmBackend> =
+    if (!quizCloudFirst) backends(AiTask.ANSWER)
+    else (listOfNotNull(cloud.backendOrNull()) + backends(AiTask.ANSWER)).distinctBy { it.label }
+
+  /** Quizzes and document reading use the API key's model first; off uses the AI setting's order. */
+  @Volatile var quizCloudFirst: Boolean = true
+
   /** Runs a one-off prompt, trying each model in turn. Null when none is available or all fail. */
   suspend fun prompt(
     prompt: String,
     system: String = DEFAULT_SYSTEM_PROMPT,
     temperature: Double = 0.5,
     json: Boolean = false,
-    task: AiTask = AiTask.ANSWER
+    task: AiTask = AiTask.ANSWER,
+    /** Quiz work: the cloud key first, see [quizBackends]. */
+    preferCloud: Boolean = false,
+    /** Room for the answer; quiz work writes long JSON, which is useless when cut off. */
+    maxTokens: Int = if (preferCloud) 4096 else 1024
   ): String? {
-    for (backend in backends(task)) {
-      try {
-        backend.generate(LlmRequest(system, listOf(LlmTurn(true, prompt)), temperature, json)).takeIf { it.isNotBlank() }?.let { return it }
+    for (backend in if (preferCloud) quizBackends() else backends(task)) {
+      // Quiz work runs in the background, so a free plan's "slow down" is waited out (up to three
+      // times) rather than handing the work to a weaker model.
+      var tries = if (preferCloud && backend.label.startsWith("Cloud")) 4 else 1
+      while (tries-- > 0) try {
+        backend.generate(LlmRequest(system, listOf(LlmTurn(true, prompt)), temperature, json, maxOutputTokens = maxTokens)).takeIf { it.isNotBlank() }?.let { return it }
+        break
       } catch (e: Exception) {
+        val pause = cloud.pausedForMs()
+        if (tries > 0 && backend.label.startsWith("Cloud") && pause in 1..90_000) {
+          Log.w(TAG, "${backend.label} asked to wait ${pause / 1000}s; waiting")
+          kotlinx.coroutines.delay(pause + 500)
+          continue
+        }
+        tries = 0
+        // Some providers' strict JSON mode rejects an answer it would give as plain text; the JSON is
+        // pulled out of plain replies anyway, so ask once more without it.
+        if (json && Regex("(?i)validate json|json_validate|failed_generation").containsMatchIn(e.message.orEmpty())) {
+          val plain = runCatching { backend.generate(LlmRequest(system, listOf(LlmTurn(true, prompt)), temperature, false, maxOutputTokens = maxTokens)) }.getOrNull()
+          if (!plain.isNullOrBlank()) return plain
+        }
         Log.w(TAG, "${backend.label} failed", e)
+        lastError = "${backend.label}: ${e.message ?: e.javaClass.simpleName}"
       }
     }
     return null
   }
+
+  /** Why the last prompt got no answer from a model ("Cloud · llama…: 429 …"), for status lines. */
+  @Volatile var lastError: String? = null
 
   // --- Tutor chat ---
 
@@ -231,6 +267,94 @@ class StudyAi(
   }
 
   /**
+   * Free cloud plans allow only so much text a minute; after a "slow down" the key pauses for a
+   * little while. Long quiz work waits that out (up to [maxMs]) instead of dropping to a weaker model.
+   */
+  suspend fun waitForCloud(maxMs: Long = 90_000) {
+    if (!cloud.isConfigured) return
+    val wait = cloud.pausedForMs()
+    if (wait in 1..maxMs) kotlinx.coroutines.delay(wait + 500)
+  }
+
+  /** The complete {...} objects with a "title" in a JSON reply that may be cut off at the end. */
+  internal fun completeObjects(raw: String): List<JSONObject> {
+    val start = raw.indexOf('[').takeIf { it >= 0 } ?: return emptyList()
+    val out = mutableListOf<JSONObject>()
+    var depth = 0
+    var from = -1
+    var inString = false
+    var escaped = false
+    for (i in start + 1 until raw.length) {
+      val c = raw[i]
+      if (inString) {
+        if (escaped) escaped = false else if (c == '\\') escaped = true else if (c == '"') inString = false
+        continue
+      }
+      when (c) {
+        '"' -> inString = true
+        '{' -> { if (depth == 0) from = i; depth++ }
+        '}' -> {
+          depth--
+          if (depth == 0 && from >= 0) {
+            runCatching { JSONObject(raw.substring(from, i + 1)) }.getOrNull()?.takeIf { it.has("title") }?.let { out += it }
+            from = -1
+          }
+        }
+      }
+    }
+    return out
+  }
+
+  /** A topic a model found in a course file. */
+  data class FileTopic(val title: String, val summary: String, val keyPoints: List<String>, val pages: List<Int>)
+
+  /**
+   * The study topics a part of a lecture file teaches, with notes for each, found by a model (cloud
+   * first). Course administration is left out. Null when no model answered; then the built-in
+   * [LectureQuiz.topicsFromPages] is used.
+   */
+  suspend fun topicsInFile(fileTitle: String, subject: String, section: String): List<FileTopic>? {
+    val request = """
+      This is part of the lecture file "$fileTitle" from the course "$subject". Page numbers are marked [Page n].
+
+      $section
+
+      List the subject-matter topics this material actually teaches: concepts, methods, algorithms,
+      protocols, definitions, formulas, results. Leave out course administration (schedules, grading,
+      exams and deadlines, contact details, attendance, assignment logistics, announcements, welcome text).
+      For each topic give:
+      - "title": a short name (2-6 words)
+      - "summary": 3-6 sentences explaining it as study notes, in plain language, from this material
+      - "keyPoints": 3-8 short facts, definitions or formulas stated in the material
+      - "pages": the page numbers where it is covered
+      Reply only with JSON: {"topics": [{"title": "...", "summary": "...", "keyPoints": ["..."], "pages": [1]}]}
+      If it teaches nothing (only administration), reply {"topics": []}.
+    """.trimIndent()
+    lastError = null
+    if (quizBackends().isEmpty()) lastError = "no AI model is set up (add a Groq or other key in Settings > AI)"
+    // Plain text: some providers' strict JSON mode rejects long answers; the JSON is read from the reply.
+    val raw = prompt(request, "You turn lecture material into clear, accurate study notes. You only use what the material says.", 0.2, json = false, preferCloud = true)
+      ?: return null
+    return runCatching {
+      // A reply cut off mid-way still holds the topics before the cut: keep each complete one.
+      val objects = runCatching { JSONObject(extractJson(raw) ?: raw).optJSONArray("topics")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) } } }
+        .getOrNull() ?: completeObjects(raw)
+      if (objects.isEmpty() && !raw.contains("\"topics\"")) error("no topics in the reply")
+      objects.mapNotNull { t ->
+        val title = t.optString("title").trim().take(80)
+        val summary = PlainMath.convert(t.optString("summary")).trim()
+        if (title.isBlank() || summary.length < 20 || LectureQuiz.isAdministrative(title, summary)) return@mapNotNull null
+        val points = t.optJSONArray("keyPoints")?.let { a -> (0 until a.length()).map { PlainMath.convert(a.optString(it)).trim() }.filter { it.isNotBlank() } }.orEmpty()
+        val pages = t.optJSONArray("pages")?.let { a -> (0 until a.length()).mapNotNull { a.optInt(it, -1).takeIf { n -> n > 0 } } }.orEmpty()
+        FileTopic(title, summary, points, pages)
+      }
+    }.onFailure {
+      lastError = "couldn't read the model's answer (${it.message})"
+      Log.w(TAG, "Unreadable topics answer: ${raw.take(300)}", it)
+    }.getOrNull()
+  }
+
+  /**
    * About 3,000 characters of [notes] to write questions from. Long material (a whole lecture file)
    * gives a different stretch each time, starting at a paragraph, so quizzes cover all of it.
    */
@@ -261,7 +385,7 @@ class StudyAi(
 
       ${questionFormatSpec(difficulty, types)}
     """.trimIndent()
-    val raw = prompt(prompt, QUIZ_SYSTEM_PROMPT, if (avoid.isEmpty()) 0.4 else 0.7, json = true) ?: return emptyList()
+    val raw = prompt(prompt, QUIZ_SYSTEM_PROMPT, if (avoid.isEmpty()) 0.4 else 0.7, json = true, preferCloud = true) ?: return emptyList()
     return parseQuestions(raw, difficulty) { q -> q.copy(topicId = topic.id, subjectName = topic.subjectName, topicTitle = topic.title) }
       .filter { types.isEmpty() || it.questionType in types }
       .take(count)
@@ -293,7 +417,7 @@ class StudyAi(
 
       ${questionFormatSpec(difficulty, types)}
     """.trimIndent()
-    val raw = prompt(prompt, QUIZ_SYSTEM_PROMPT, if (avoid.isEmpty()) 0.4 else 0.7, json = true) ?: return emptyList()
+    val raw = prompt(prompt, QUIZ_SYSTEM_PROMPT, if (avoid.isEmpty()) 0.4 else 0.7, json = true, preferCloud = true) ?: return emptyList()
     return parseQuestions(raw, difficulty) { q ->
       q.copy(
         topicId = concept.id,

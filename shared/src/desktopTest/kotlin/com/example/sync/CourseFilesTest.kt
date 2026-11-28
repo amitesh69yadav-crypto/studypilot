@@ -4,7 +4,6 @@ import androidx.room.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import androidx.sqlite.execSQL
 import com.example.data.ai.rag.KnowledgePassage
-import com.example.data.connect.CanvasSource
 import com.example.data.docs.DocumentText
 import com.example.data.local.AppDatabase
 import com.example.data.repository.StudyPilotRepository
@@ -71,97 +70,6 @@ class CourseFilesTest {
 
     assertEquals("pdf", DocumentText.typeOf("Lecture 5.PDF"))
     assertEquals(null, DocumentText.typeOf("old.ppt"))
-  }
-
-  @Test
-  fun canvasFilesAreReadOnceAndAnswerWithFileAndPage() = runBlocking<Unit> {
-    val downloads = AtomicInteger()
-    var updatedAt = "2026-11-01T10:00:00Z"
-    val lecture = pdf("Introduction to networks.", "Distance-vector routing sends the whole table to neighbours every 30 seconds.")
-    val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
-    val base = { "http://127.0.0.1:${server.address.port}" }
-    fun route(path: String, link: String? = null, body: () -> ByteArray) = server.createContext(path) { ex ->
-      val bytes = body()
-      link?.let { ex.responseHeaders.add("Link", it) }
-      ex.sendResponseHeaders(200, bytes.size.toLong())
-      ex.responseBody.use { it.write(bytes) }
-    }
-    route("/api/v1/courses") { """[{"id":7,"name":"Advanced IT Networks","course_code":"AIN"}]""".toByteArray() }
-    // Two pages of files, joined through the Link header.
-    server.createContext("/api/v1/courses/7/files") { ex ->
-      val second = ex.requestURI.query.orEmpty().contains("page=2")
-      val body = if (second) {
-        """[{"id":2,"display_name":"old.ppt","url":"${base()}/dl/2","content-type":"application/vnd.ms-powerpoint","size":10,"updated_at":"x"}]"""
-      } else {
-        ex.responseHeaders.add("Link", "<${base()}/api/v1/courses/7/files?page=2>; rel=\"next\"")
-        """[{"id":1,"display_name":"Lecture 5 - Routing.pdf","url":"${base()}/dl/1","content-type":"application/pdf","size":${lecture.size},"updated_at":"$updatedAt"}]"""
-      }
-      val bytes = body.toByteArray()
-      ex.sendResponseHeaders(200, bytes.size.toLong())
-      ex.responseBody.use { it.write(bytes) }
-    }
-    route("/dl/1") { downloads.incrementAndGet(); lecture }
-    server.start()
-
-    val file = File.createTempFile("course-files", ".db").also { it.delete() }
-    val db = AppDatabase.configure(Room.databaseBuilder<AppDatabase>(name = file.absolutePath).setDriver(BundledSQLiteDriver()).setQueryCoroutineContext(Dispatchers.IO))
-    try {
-      val repo = StudyPilotRepository(db.studyPilotDao())
-      repo.addSubject("Advanced IT Networks", "AIN", "#5B6CFF", "u")
-      val canvas = CanvasSource(base(), "token")
-      val dir = kotlin.io.path.createTempDirectory("course-files").toFile()
-
-      val first = repo.importCourseFiles("u", canvas, "canvas", emptySet(), dir)
-      assertEquals(1, first.added) // the old .ppt is ignored
-      assertEquals(1, downloads.get())
-      var doc = db.studyPilotDao().getCourseDocumentsForUser("u").first().single()
-      assertEquals("Advanced IT Networks", doc.subjectName)
-      assertEquals("${base()}/courses/7/files/1", doc.url)
-      // The original is kept under its subject, and nothing is read until the student chooses it.
-      assertEquals(File(File(dir, "Advanced IT Networks"), "Lecture 5 - Routing.pdf").absolutePath, doc.localPath)
-      assertTrue(lecture.contentEquals(File(doc.localPath).readBytes()))
-      assertTrue(doc.text.isBlank() && !doc.useForStudy)
-      assertTrue(repo.searchCourseMaterial("u", "distance vector routing table", null).isEmpty())
-
-      // Unchanged: nothing downloaded again. Replaced on Canvas: downloaded again.
-      assertEquals("Files up to date", repo.importCourseFiles("u", canvas, "canvas", emptySet(), dir).toString())
-      assertEquals(1, downloads.get())
-      updatedAt = "2026-11-20T10:00:00Z"
-      assertEquals(1, repo.importCourseFiles("u", canvas, "canvas", emptySet(), dir).updated)
-      assertEquals(2, downloads.get())
-
-      // Chosen for study: read, made a quiz topic under its subject.
-      repo.setUseForStudy(listOf(doc.id), true)
-      assertEquals(1, repo.prepareChosenFiles("u"))
-      doc = db.studyPilotDao().getCourseDocumentsForUser("u").first().single()
-      assertEquals(2, doc.pageCount)
-      val topic = db.studyPilotDao().getTopicsForUser("u").first().single { it.sourceType == "COURSE_FILE" }
-      assertEquals("Lecture 5 - Routing" to "Advanced IT Networks", topic.title to topic.subjectName)
-      assertTrue("Distance-vector" in topic.descriptionNotes)
-
-      // College notes finds the right page and cites it.
-      val hits = repo.searchCourseMaterial("u", "how often does distance vector routing send its table", "Advanced IT Networks")
-      assertEquals("Lecture 5 - Routing.pdf, p. 2", hits.first().sourceTitle)
-      val instruction = KnowledgePassage.strictInstruction(hits)
-      assertTrue("Answer ONLY from this course material" in instruction && "[1] (Lecture 5 - Routing.pdf, p. 2)" in instruction)
-      // Nothing on an unrelated question.
-      assertTrue(repo.searchCourseMaterial("u", "photosynthesis chlorophyll", null).isEmpty())
-
-      // No longer chosen: its quiz topic goes, the file stays.
-      repo.setUseForStudy(listOf(doc.id), false)
-      repo.prepareChosenFiles("u")
-      assertTrue(db.studyPilotDao().getTopicsForUser("u").first().none { it.sourceType == "COURSE_FILE" })
-      assertTrue(File(doc.localPath).isFile)
-
-      // Removing the course removes its files, from the app and the disk.
-      repo.deleteSubject(db.studyPilotDao().getSubjectsForUser("u").first().single())
-      assertTrue(db.studyPilotDao().getCourseDocumentsForUser("u").first().isEmpty())
-      assertTrue(!File(doc.localPath).exists())
-      dir.deleteRecursively()
-    } finally {
-      server.stop(0)
-      db.close(); file.delete()
-    }
   }
 
   @Test

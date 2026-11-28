@@ -37,7 +37,7 @@ class SubjectQuizTest {
 
   private fun topic(subjectId: Long, subjectName: String, title: String) = StudyTopic(
     userId = "u", subjectId = subjectId, subjectName = subjectName, title = title, dateStudied = "2026-11-26",
-    descriptionNotes = "Notes on $title. This sentence is long enough to become a question about $title for the quiz."
+    descriptionNotes = "$title is the idea in this course that the lecture about $title explains in detail."
   )
 
   @Test

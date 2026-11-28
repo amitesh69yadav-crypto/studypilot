@@ -386,10 +386,8 @@ object LocalAiEngine {
       val correct = optionText(firstSentences(a, 1))
       mcq(question, correct, anyOther, "From your $source on ${topic.title}: ${firstSentences(a, 2)}")
     }
-    val fromSentences = noteSentences(topic.descriptionNotes).shuffled().mapNotNull { sentence ->
-      mcq("Which of these is from your $source on ${topic.title}?", optionText(sentence), otherTopics, "This is what your $source on ${topic.title} say.")
-    }
-    return (fromPairs + fromSentences)
+    // Questions about what the material says (not "which of these is from your notes"): see LectureQuiz.
+    return fromPairs
       .filter { questionKey(it) !in skip }
       .distinctBy { questionKey(it) }
       .take(desiredCount.coerceAtLeast(1))

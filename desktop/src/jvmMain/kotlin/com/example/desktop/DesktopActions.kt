@@ -17,6 +17,20 @@ class DesktopActions : PlatformActions {
   /** Short messages for the window's snackbar. */
   val messages: SharedFlow<String> = _messages
 
+  override val pickDocument: (suspend () -> PlatformActions.PickedFile?) = suspend {
+    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+      val dialog = java.awt.FileDialog(null as java.awt.Frame?, "Add a document (PDF, PowerPoint or Word)", java.awt.FileDialog.LOAD).apply {
+        file = "*.pdf;*.pptx;*.docx" // Windows shows this as the filter
+        setFilenameFilter { _, name -> name.lowercase().let { it.endsWith(".pdf") || it.endsWith(".pptx") || it.endsWith(".docx") } }
+        isVisible = true
+      }
+      val name = dialog.file ?: return@withContext null
+      val file = java.io.File(dialog.directory, name)
+      if (file.length() > 60L * 1024 * 1024) throw IllegalArgumentException("That file is over 60 MB.")
+      PlatformActions.PickedFile(file.name, file.readBytes())
+    }
+  }
+
   override fun openFile(path: String) {
     val file = java.io.File(path)
     if (!file.isFile) {

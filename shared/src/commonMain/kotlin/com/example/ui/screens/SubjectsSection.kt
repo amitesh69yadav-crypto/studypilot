@@ -196,7 +196,7 @@ private fun SubjectCard(group: SubjectGroup, quizBusy: Boolean, onClick: () -> U
       ) {
         Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
         Spacer(Modifier.width(6.dp))
-        Text("Quiz")
+        Text("Make quiz")
       }
     }
   }

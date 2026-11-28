@@ -372,7 +372,7 @@ interface StudyPilotDao {
   @Query("SELECT * FROM course_documents WHERE userId = :userId ORDER BY subjectName, title")
   fun getCourseDocumentsForUser(userId: String): Flow<List<com.example.data.model.CourseDocument>>
 
-  @Query("SELECT id, userId, subjectId, subjectName, title, source, externalId, url, fileType, remoteUpdatedAt, pageCount, '' AS text, fetchedAt, localPath, sizeBytes, useForStudy FROM course_documents WHERE userId = :userId")
+  @Query("SELECT id, userId, subjectId, subjectName, title, source, externalId, url, fileType, remoteUpdatedAt, pageCount, '' AS text, fetchedAt, localPath, sizeBytes, useForStudy, quizStatus, quizProgress FROM course_documents WHERE userId = :userId")
   suspend fun getCourseDocumentHeaders(userId: String): List<com.example.data.model.CourseDocument>
 
   @Query("SELECT COUNT(*) || ':' || IFNULL(MAX(fetchedAt), 0) || ':' || IFNULL(SUM(useForStudy), 0) || ':' || IFNULL(SUM(LENGTH(text)), 0) FROM course_documents WHERE userId = :userId AND useForStudy = 1")
@@ -384,12 +384,18 @@ interface StudyPilotDao {
   @Query("SELECT * FROM course_documents WHERE id = :id")
   suspend fun getCourseDocument(id: Long): com.example.data.model.CourseDocument?
 
-  @Query("UPDATE course_documents SET useForStudy = :use WHERE id IN (:ids)")
+  @Query("UPDATE course_documents SET useForStudy = :use, quizStatus = CASE WHEN :use THEN 'queued' ELSE '' END, quizProgress = 0 WHERE id IN (:ids)")
   suspend fun setUseForStudy(ids: List<Long>, use: Boolean)
+
+  @Query("UPDATE course_documents SET quizStatus = :status, quizProgress = :progress WHERE id = :id")
+  suspend fun setQuizStatus(id: Long, status: String, progress: Int)
 
   @Query("DELETE FROM course_documents WHERE id = :id")
   suspend fun deleteCourseDocument(id: Long)
 
   @Query("DELETE FROM course_documents WHERE userId = :userId AND subjectId = :subjectId")
   suspend fun deleteCourseDocumentsForSubject(userId: String, subjectId: Long)
+
+  @Query("SELECT id FROM quiz_questions WHERE topicId NOT IN (SELECT id FROM study_topics)")
+  suspend fun getOrphanQuestionIds(): List<Long>
 }

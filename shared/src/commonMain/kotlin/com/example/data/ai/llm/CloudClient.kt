@@ -59,6 +59,9 @@ class CloudClient(
 
   val isConfigured: Boolean get() = apiKey.isNotBlank() && baseUrl.startsWith("http")
 
+  /** How long the provider asked to wait after a rate limit (0 when it can be used now). */
+  fun pausedForMs(): Long = (pausedUntil - System.currentTimeMillis()).coerceAtLeast(0L)
+
   /** Requests sent today (UTC, when the free limits reset). */
   val requestsToday: Int get() = if (usedDay == today()) usedToday else 0
 
@@ -82,12 +85,23 @@ class CloudClient(
     }
   }
 
+  /** Models the provider refused ("does not exist", retired); skipped from then on. */
+  private val refused = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+
   fun chosenModel(): String {
-    model.trim().takeIf { it.isNotBlank() }?.let { return it }
-    val preferred = provider.preferredModels
-    val available = models
+    model.trim().takeIf { it.isNotBlank() && it !in refused }?.let { return it }
+    val preferred = provider.preferredModels.filter { it !in refused }
+    val available = models?.filter { it !in refused }
     return preferred.firstOrNull { available == null || it in available } ?: available?.firstOrNull() ?: preferred.firstOrNull().orEmpty()
   }
+
+  /** Providers retire models; learn which ones this key can use before the first request. */
+  private suspend fun ensureModels() {
+    if (models == null && isConfigured) runCatching { status() }
+  }
+
+  private fun isModelGone(message: String?): Boolean =
+    message != null && Regex("(?i)model.*(does not exist|not found|decommissioned|deprecated|no longer supported|not available|do not have access)|model_not_found").containsMatchIn(message)
 
   /** Anthropic wants its own headers; everyone else takes a bearer token. */
   private fun authorized(builder: Request.Builder): Request.Builder =
@@ -108,8 +122,23 @@ class CloudClient(
   private inner class Backend(private val model: String) : LlmBackend {
     override val label = "Cloud · ${model.substringAfterLast('/')}"
 
-    override suspend fun generate(request: LlmRequest, onPartial: ((String) -> Unit)?): String =
-      withContext(Dispatchers.IO) { complete(model, request, onPartial) }
+    override suspend fun generate(request: LlmRequest, onPartial: ((String) -> Unit)?): String = withContext(Dispatchers.IO) {
+      ensureModels()
+      // The model picked before the list was known may not be offered; use one that is.
+      val first = chosenModel().ifBlank { model }
+      try {
+        complete(first, request, onPartial)
+      } catch (e: Exception) {
+        if (!isModelGone(e.message)) throw e
+        // Retired or not offered to this key: remember, refresh the list, and try the next model once.
+        refused += first
+        models = null
+        ensureModels()
+        val next = chosenModel()
+        if (next.isBlank() || next == first) throw e
+        complete(next, request, onPartial)
+      }
+    }
   }
 
   private fun complete(model: String, request: LlmRequest, onPartial: ((String) -> Unit)?): String =

@@ -538,6 +538,9 @@ fun StudyPilotApp(viewModel: StudyPilotViewModel) {
   }
 }
 
+  // While a quiz is being made: the loading screen, on every page.
+  com.example.ui.screens.QuizPrepOverlay(viewModel)
+
   ringingAlarmSession?.let { ringingSession ->
     ActiveAlarmAlertDialog(
       session = ringingSession,

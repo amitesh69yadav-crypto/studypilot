@@ -641,17 +641,11 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
     // Lets the phone-PC sync carry cloud keys (see KeyShare).
     com.example.data.sync.KeyShare.export = ::exportCloudKeys
     com.example.data.sync.KeyShare.import = ::importCloudKeys
+    repository.ai.quizCloudFirst = aiPrefs.getBoolean("quiz_cloud_first", true)
     viewModelScope.launch {
       kotlinx.coroutines.delay(5_000) // after sign-in and the first sync settle
       refreshConnectionsIfDue()
-    }
-    // Started after setup (the file list is declared further down), on the PC only.
-    if (connectsHere) viewModelScope.launch {
-      kotlinx.coroutines.delay(3_000)
-      courseDocuments
-        .map { docs -> docs.filter { it.useForStudy }.joinToString { "${it.id}:${it.text.isNotBlank()}" } to docs.count { !it.useForStudy } }
-        .distinctUntilChanged()
-        .collect { runCatching { repository.prepareChosenFiles(_currentUser.value.id) } }
+      runCatching { repository.purgeOrphanQuestions() }
     }
   }
 
@@ -1804,8 +1798,6 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
     /** Source label -> what the last import did, or why it failed. */
     val results: Map<String, String> = emptyMap(),
     val lastImportAt: Long = 0L,
-    /** Read the text of course PDFs and slides too, for "College notes". */
-    val includeFiles: Boolean = true,
     /** "Reading files 12 of 140" while course files are being read. */
     val progress: String? = null,
     val classroomEnabled: Boolean = false
@@ -1833,30 +1825,74 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
     moodleUrl = connectPrefs.getString("moodle_url", "").orEmpty(),
     moodleConnected = !connectPrefs.getString("moodle_token", null).isNullOrBlank(),
     lastImportAt = connectPrefs.getLong("last_import_at", 0L),
-    includeFiles = connectPrefs.getBoolean("include_files", true),
     classroomEnabled = connectPrefs.getBoolean("classroom_enabled", false)
   )
 
+  // --- Uploaded documents: read into knowledge, quizzed on demand ---
+
   /**
-   * Chooses course files for quizzes and the tutor (or stops using them). On the PC the chosen files
-   * are read and become topics right away; on the phone the choice syncs to the PC, which does it.
+   * Adds a document (PDF, PowerPoint or Word) under [subjectName] and has the AI read it into topics
+   * with study notes, which the tutor and quizzes use. Runs on this device; progress shows on the
+   * document (Notes > subject > Files, and Quizzes).
    */
-  fun setUseForStudy(docs: List<com.example.data.model.CourseDocument>, use: Boolean) {
+  fun uploadDocument(fileName: String, bytes: ByteArray, subjectName: String) {
     viewModelScope.launch {
-      repository.setUseForStudy(docs.map { it.id }, use)
-      if (connectsHere) {
-        _connections.value = _connections.value.copy(progress = if (use) "Reading ${docs.size} file${if (docs.size == 1) "" else "s"}…" else null)
-        runCatching { repository.prepareChosenFiles(_currentUser.value.id) }
-        _connections.value = _connections.value.copy(progress = null)
-      }
-      _snackbarMessage.emit(
-        when {
-          !use -> "No longer used for quizzes and the tutor"
-          connectsHere -> "Ready for quizzes and the tutor"
-          else -> "Chosen. Your PC reads ${if (docs.size == 1) "it" else "them"} at the next sync"
-        }
-      )
+      val uid = _currentUser.value.id
+      val id = runCatching { repository.addUploadedDocument(uid, fileName, bytes, subjectName, platform.courseFilesDir?.let { java.io.File(it, "Uploads") }) }
+        .getOrElse { _snackbarMessage.emit(it.message ?: "Couldn't add that file"); return@launch }
+      _snackbarMessage.emit("Reading $fileName…")
+      val ok = repository.scanDocument(uid, id)
+      _snackbarMessage.emit(if (ok) "$fileName added to ${subjectName.ifBlank { "General" }}. Make a quiz from it any time" else "Couldn't read $fileName; see its status in Notes")
     }
+  }
+
+  /** Reads a document again (after a failure, or to use a better AI). */
+  fun rescanDocument(doc: com.example.data.model.CourseDocument) {
+    viewModelScope.launch {
+      repository.setUseForStudy(listOf(doc.id), true)
+      repository.scanDocument(_currentUser.value.id, doc.id)
+    }
+  }
+
+  fun removeDocument(doc: com.example.data.model.CourseDocument) {
+    viewModelScope.launch {
+      repository.removeDocument(_currentUser.value.id, doc.id)
+      _snackbarMessage.emit("${doc.title} removed")
+    }
+  }
+
+  /** A quiz on one document's topics. */
+  fun startDocumentQuiz(doc: com.example.data.model.CourseDocument) {
+    viewModelScope.launch {
+      val topics = repository.topicsOfDocument(_currentUser.value.id, doc.externalId)
+      if (topics.isEmpty()) {
+        _snackbarMessage.emit(if (doc.quizStatus.startsWith("failed")) "This file couldn't be read. Try reading it again." else "Still reading ${doc.title}. Try again in a moment.")
+        return@launch
+      }
+      startWeekendQuiz(title = "${doc.title.substringBeforeLast('.')} quiz", onlyTopicIds = topics.map { it.id }.toSet())
+    }
+  }
+
+  /** While a quiz is being made: what it's for and how far it got, for the loading screen. */
+  data class QuizPrep(val title: String, val done: Int = 0, val total: Int = 0, val current: String = "")
+
+  private val _quizPrep = MutableStateFlow<QuizPrep?>(null)
+  val quizPrep: StateFlow<QuizPrep?> = _quizPrep.asStateFlow()
+  private var quizPrepJob: Job? = null
+
+  fun cancelQuizPrep() {
+    quizPrepJob?.cancel()
+    _quizPrep.value = null
+  }
+
+  /** Quizzes use the API key's model first (faster, better questions); the student can turn this off. */
+  private val _quizCloudFirst = MutableStateFlow(aiPrefs.getBoolean("quiz_cloud_first", true))
+  val quizCloudFirst: StateFlow<Boolean> = _quizCloudFirst.asStateFlow()
+
+  fun setQuizCloudFirst(on: Boolean) {
+    _quizCloudFirst.value = on
+    aiPrefs.edit { putBoolean("quiz_cloud_first", on) }
+    repository.ai.quizCloudFirst = on
   }
 
   // --- Storage: on the devices, or also in Google Drive (managed on the PC) ---
@@ -1988,12 +2024,6 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
     }
   }
 
-  fun setIncludeCourseFiles(on: Boolean) {
-    connectPrefs.edit { putBoolean("include_files", on) }
-    _connections.value = _connections.value.copy(includeFiles = on)
-    if (on && _connections.value.hasAny) importConnections()
-  }
-
   /** Course files read into the app, for Notes and the tutor's "College notes". */
   @OptIn(ExperimentalCoroutinesApi::class)
   val courseDocuments: StateFlow<List<com.example.data.model.CourseDocument>> = _currentUser
@@ -2053,15 +2083,6 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
       for (source in lms) {
         results[source.label] = runCatching { repository.importCourses(uid, source.courses(), today, skippedCourses()).toString() }
           .getOrElse { "Couldn't import: ${it.message}" }
-        if (connectPrefs.getBoolean("include_files", true) && results[source.label]?.startsWith("Couldn't") != true) {
-          val key = source.label.lowercase()
-          results["${source.label} files"] = runCatching {
-            repository.importCourseFiles(uid, source, key, skippedCourses(), platform.courseFilesDir!!) { done, total ->
-              _connections.value = _connections.value.copy(progress = if (done < total) "Reading ${source.label} files ${done + 1} of $total" else null)
-            }.toString()
-          }.getOrElse { "Couldn't read files: ${it.message}" }
-          _connections.value = _connections.value.copy(progress = null)
-        }
       }
       val google = platform.google
       if (google != null && google.email != null && connectPrefs.getBoolean("classroom_enabled", false)) {
@@ -2479,18 +2500,22 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
   /** Writing the next quiz's questions in the background, after a quiz is submitted. */
   private var lookAhead: Job? = null
 
-  fun startWeekendQuiz(forceWeakOnly: Boolean = false, filterSubjectId: Long? = null, title: String? = null) {
+  fun startWeekendQuiz(forceWeakOnly: Boolean = false, filterSubjectId: Long? = null, title: String? = null, onlyTopicIds: Set<Long>? = null) {
     lookAhead?.cancel() // the quiz being made now writes what it needs
-    viewModelScope.launch {
+    quizPrepJob?.cancel()
+    quizPrepJob = viewModelScope.launch {
       _isAiLoading.value = true
+      _quizPrep.value = QuizPrep(title ?: "Your quiz")
       try {
         // The quiz card's subject choice applies unless a subject was picked directly.
         val subjectId = filterSubjectId ?: _quizConfig.value.subjectId
         val generated = repository.assembleWeekendQuiz(
           config = _quizConfig.value,
-          filterSubjectId = subjectId,
+          filterSubjectId = if (onlyTopicIds != null) null else subjectId,
           forceWeakOnly = forceWeakOnly,
-          userId = _currentUser.value.id
+          userId = _currentUser.value.id,
+          onlyTopicIds = onlyTopicIds,
+          onProgress = { done, total, topic -> _quizPrep.value = _quizPrep.value?.copy(done = done, total = total, current = topic) }
         )
 
         if (generated.questions.isEmpty()) {
@@ -2527,6 +2552,7 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
         _currentScreen.value = Screen.ActiveQuiz
       } finally {
         _isAiLoading.value = false
+        _quizPrep.value = null
       }
     }
   }

@@ -91,6 +91,19 @@ fun AiSettingsCard(viewModel: StudyPilotViewModel) {
       }
 
       Spacer(Modifier.height(12.dp))
+      // Quizzes and documents: the API key's model first (faster, better questions), or the choice below.
+      val quizCloudFirst by viewModel.quizCloudFirst.collectAsState()
+      Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.weight(1f)) {
+          Text("Quizzes use your API key first", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+          Text(
+            "Faster quizzes and better reading of uploaded documents. Off: quizzes use the AI chosen below.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+          )
+        }
+        androidx.compose.material3.Switch(checked = quizCloudFirst, onCheckedChange = { viewModel.setQuizCloudFirst(it) })
+      }
+      Spacer(Modifier.height(12.dp))
       Text("Use", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
       val onDesktop = !viewModel.hasPhoneModels
       // The desktop has no phone model; there "PC" means the Ollama on this computer.
