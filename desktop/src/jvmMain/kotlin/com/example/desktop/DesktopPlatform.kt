@@ -43,11 +43,30 @@ class DesktopPlatform : Platform {
 
   override val courseFilesDir: File = File(dataDir, "Course files")
 
+  /**
+   * Once a day, before the database opens, a copy goes to "Backups" (the last 7 are kept), with its
+   * write-ahead log, so a mistake can always be undone.
+   */
+  private fun backUpDatabase() = runCatching {
+    val db = File(dataDir, AppDatabase.FILE_NAME)
+    if (!db.isFile) return@runCatching
+    val dir = File(dataDir, "Backups").apply { mkdirs() }
+    val day = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+    val target = File(dir, "studypilot_db-$day")
+    if (target.exists()) return@runCatching
+    db.copyTo(target)
+    File(dataDir, AppDatabase.FILE_NAME + "-wal").takeIf { it.isFile }?.copyTo(File(dir, "studypilot_db-$day-wal"))
+    dir.listFiles { f -> f.name.startsWith("studypilot_db-") && !f.name.endsWith("-wal") }
+      ?.sortedByDescending { it.name }?.drop(7)
+      ?.forEach { old -> old.delete(); File(dir, old.name + "-wal").delete() }
+  }
+
   override val google: com.example.data.connect.GoogleAuth by lazy { DesktopGoogleAuth(prefs("studypilot_google")) }
 
   val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
   override val database: AppDatabase by lazy {
+    backUpDatabase()
     AppDatabase.configure(
       Room.databaseBuilder<AppDatabase>(name = File(dataDir, AppDatabase.FILE_NAME).absolutePath)
         .setDriver(BundledSQLiteDriver())

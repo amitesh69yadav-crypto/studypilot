@@ -46,10 +46,11 @@ abstract class AppDatabase : RoomDatabase() {
     /** Shared settings for a builder from either platform. */
     fun configure(builder: Builder<AppDatabase>): AppDatabase = builder
       .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
-      // Real migrations come first, so an upgrade keeps everyone's data; the destructive fallback is
-      // only for versions with no migration.
+      // Real migrations come first, so an upgrade keeps everyone's data. Only the old versions before
+      // them start over. A database from a NEWER version is never emptied: opening it fails instead
+      // (an older copy of the app must not wipe a newer one's data).
       .addMigrations(MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13)
-      .fallbackToDestructiveMigration(dropAllTables = true)
+      .fallbackToDestructiveMigrationFrom(true, 1, 2, 3, 4, 5, 6, 7)
       .build()
   }
 }

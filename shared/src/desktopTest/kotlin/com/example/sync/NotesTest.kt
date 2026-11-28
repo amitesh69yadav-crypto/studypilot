@@ -113,4 +113,20 @@ class NotesTest {
       db.close(); file.delete()
     }
   }
+
+  @Test
+  fun aNewerDatabaseIsNeverEmptied() = runBlocking<Unit> {
+    val file = File.createTempFile("newer", ".db").also { it.delete() }
+    open(file).also { db -> db.studyPilotDao().insertNote(StudyNote(userId = "u", title = "keep me", body = "")); db.close() }
+    // As if a newer version of the app had written it.
+    BundledSQLiteDriver().open(file.absolutePath).use { it.execSQL("PRAGMA user_version = 99") }
+    val opened = open(file)
+    assertTrue(runCatching { opened.studyPilotDao().getNotesForUser("u").first() }.isFailure)
+    runCatching { opened.close() }
+    // The data is still there.
+    BundledSQLiteDriver().open(file.absolutePath).use { c ->
+      c.prepare("SELECT title FROM notes").use { assertTrue(it.step()); assertEquals("keep me", it.getText(0)) }
+    }
+    file.delete()
+  }
 }
