@@ -234,6 +234,7 @@ class StudyPilotRepository(
     val owned = if (subject.userId.isNotBlank()) dao.getTopicsForUser(subject.userId).first() else dao.getAllTopics().first()
     val (imported, own) = owned.filter { it.subjectId == subject.id }.partition { it.sourceType == "IMPORTED_LMS" }
     imported.forEach { deleteTopic(it.id, subject.userId) }
+    dao.deleteCourseDocumentsForSubject(subject.userId, subject.id)
     val moved = own.map { it.copy(subjectId = 0L, subjectName = "General") }
     if (moved.isNotEmpty()) dao.updateTopics(moved)
     dao.deleteSubject(subject)
@@ -554,9 +555,10 @@ class StudyPilotRepository(
     systemInstruction: String,
     subjectContext: String? = null,
     onPartial: ((String) -> Unit)? = null,
-    knowledge: List<KnowledgePassage> = emptyList()
+    knowledge: List<KnowledgePassage> = emptyList(),
+    strict: Boolean = false
   ): com.example.data.remote.ChatResponse {
-    return ai.chat(history, systemInstruction, subjectContext, onPartial, knowledge)
+    return ai.chat(history, systemInstruction, subjectContext, onPartial, knowledge, strict)
   }
 
   // --- AI Tutor History & Persistence ---
@@ -827,10 +829,105 @@ class StudyPilotRepository(
   }
 
   /** Passages from the student's material that answer [query], leaving out the conversation in progress. */
-  suspend fun searchKnowledge(userId: String, query: String, currentSessionTitle: String? = null): List<KnowledgePassage> =
-    knowledgeIndex(userId).search(query, limit = 6)
+  suspend fun searchKnowledge(userId: String, query: String, currentSessionTitle: String? = null): List<KnowledgePassage> {
+    val own = knowledgeIndex(userId).search(query, limit = 6)
       .filterNot { currentSessionTitle != null && it.sourceTitle == "Tutor chat: $currentSessionTitle" }
-      .take(5)
+      .filter { it.subject.isBlank() } // course pages come from the course-material search below
+      .take(3)
+    val course = searchCourseMaterial(userId, query, subjectName = null, limit = 3)
+    return (own + course).take(6)
+  }
+
+  // --- Course files ("College notes") ---
+
+  private class CachedCourseIndex(val userId: String, val signature: String, val index: KnowledgeIndex)
+
+  @Volatile private var courseCache: CachedCourseIndex? = null
+
+  /** Course files and course pages, indexed; rebuilt only when files or topics change. */
+  private suspend fun courseIndex(userId: String): KnowledgeIndex {
+    val topics = dao.getTopicsForUser(userId).first().filter { it.sourceType == "IMPORTED_LMS" }
+    val signature = dao.courseDocumentsSignature(userId) + "|" + topics.size + ":" + topics.sumOf { it.descriptionNotes.length }
+    courseCache?.let { if (it.userId == userId && it.signature == signature) return it.index }
+    val docs = dao.getCourseDocumentsForUser(userId).first()
+    val index = withContext(Dispatchers.Default) { KnowledgeIndex.buildCourseMaterial(docs, topics) }
+    courseCache = CachedCourseIndex(userId, signature, index)
+    return index
+  }
+
+  /**
+   * The best passages from the student's course files and pages for [query]. With [subjectName],
+   * that course's material first, then the rest if it has nothing.
+   */
+  suspend fun searchCourseMaterial(userId: String, query: String, subjectName: String?, limit: Int = 6): List<KnowledgePassage> {
+    val found = courseIndex(userId).search(query, limit = limit * 4)
+    if (subjectName == null) return found.take(limit)
+    val inSubject = found.filter { it.subject.equals(subjectName, ignoreCase = true) }
+    return (inSubject.ifEmpty { found }).take(limit)
+  }
+
+  fun courseDocuments(userId: String) = dao.getCourseDocumentsForUser(userId)
+
+  /** What reading course files did, for the status line. */
+  data class FileImport(val added: Int = 0, val updated: Int = 0, val unreadable: Int = 0, val skipped: Int = 0, val failed: Int = 0) {
+    override fun toString(): String = listOfNotNull(
+      added.takeIf { it > 0 }?.let { "$it new file${if (it == 1) "" else "s"}" },
+      updated.takeIf { it > 0 }?.let { "$it updated" },
+      unreadable.takeIf { it > 0 }?.let { "$it without readable text" },
+      skipped.takeIf { it > 0 }?.let { "$it too large" },
+      failed.takeIf { it > 0 }?.let { "$it couldn't be downloaded" }
+    ).joinToString(", ").ifBlank { "Files up to date" }
+  }
+
+  /**
+   * Reads the text of course files into the app. Files already read and unchanged are skipped, so a
+   * refresh only downloads what's new. Files of removed courses ([skip]) aren't read.
+   */
+  suspend fun importCourseFiles(
+    userId: String,
+    source: com.example.data.connect.LmsSource,
+    sourceKey: String,
+    skip: Set<String>,
+    maxBytes: Long = 30L * 1024 * 1024,
+    onProgress: (done: Int, total: Int) -> Unit = { _, _ -> }
+  ): FileImport {
+    val files = source.files().filter { it.courseName.take(60).lowercase() !in skip }
+    val known = dao.getCourseDocumentHeaders(userId).filter { it.source == sourceKey }.associateBy { it.externalId }
+    val subjects = dao.getSubjectsForUser(userId).first()
+    var added = 0; var updated = 0; var unreadable = 0; var skipped = 0; var failed = 0
+    files.forEachIndexed { i, f ->
+      onProgress(i, files.size)
+      val old = known[f.id]
+      if (old != null && old.remoteUpdatedAt == f.updatedAt) return@forEachIndexed
+      if (f.size > maxBytes) { skipped++; return@forEachIndexed }
+      val type = com.example.data.docs.DocumentText.typeOf(f.name, f.contentType) ?: return@forEachIndexed
+      val bytes = runCatching { source.download(f) }.getOrNull()
+      if (bytes == null) { failed++; return@forEachIndexed }
+      val pages = withContext(Dispatchers.Default) { com.example.data.docs.DocumentText.pages(bytes, type) }
+      if (pages.none { it.isNotBlank() }) unreadable++
+      val subject = subjects.firstOrNull { it.name.equals(f.courseName.take(60), ignoreCase = true) }
+      dao.upsertCourseDocument(
+        com.example.data.model.CourseDocument(
+          id = old?.id ?: 0L,
+          userId = userId,
+          subjectId = subject?.id ?: 0L,
+          subjectName = subject?.name ?: f.courseName.take(60),
+          title = f.name.take(160),
+          source = sourceKey,
+          externalId = f.id,
+          url = f.viewUrl,
+          fileType = type,
+          remoteUpdatedAt = f.updatedAt,
+          pageCount = pages.size,
+          // Very long books are cut; a lecture's worth of text fits easily.
+          text = pages.joinToString("\u000C").take(400_000)
+        )
+      )
+      if (old == null) added++ else updated++
+    }
+    onProgress(files.size, files.size)
+    return FileImport(added, updated, unreadable, skipped, failed)
+  }
 
   suspend fun resolveOrCreateSubjectForImport(
     userId: String,

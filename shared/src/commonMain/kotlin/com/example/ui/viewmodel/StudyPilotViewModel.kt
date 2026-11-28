@@ -1417,6 +1417,41 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
    * follow-up button on it ("Explain example", "Summarize", ...): the reply is then generated from the
    * conversation up to that answer only, so it is about that question rather than the latest one.
    */
+  /**
+   * "College notes": the tutor answers only from the student's course files and course pages, citing
+   * file and page, and says so when they don't cover the question.
+   */
+  private val _collegeNotes = MutableStateFlow(aiPrefs.getBoolean("college_notes", false))
+  val collegeNotes: StateFlow<Boolean> = _collegeNotes.asStateFlow()
+
+  fun setCollegeNotes(on: Boolean) {
+    _collegeNotes.value = on
+    aiPrefs.edit { putBoolean("college_notes", on) }
+  }
+
+  /** The answer when "College notes" can't ask a model: the best passages, quoted with their sources. */
+  private fun collegeNotesWithoutModel(query: String, passages: List<com.example.data.ai.rag.KnowledgePassage>, subject: String?): com.example.data.remote.ChatResponse {
+    if (passages.isEmpty()) {
+      return com.example.data.remote.ChatResponse(
+        text = "Your course material doesn't cover this" + (subject?.let { " for $it" } ?: "") +
+          ". Try other words, or import your course files in Settings > Connections.",
+        modelName = "College notes"
+      )
+    }
+    val text = buildString {
+      append("From your course material:\n\n")
+      passages.take(3).forEachIndexed { i, p ->
+        append("**[${i + 1}] ${p.sourceTitle}**\n")
+        append("> ").append(p.text.take(700).replace("\n", "\n> ")).append("\n\n")
+      }
+    }
+    return com.example.data.remote.ChatResponse(
+      text = text.trim(),
+      modelName = "College notes",
+      groundingSources = passages.take(3).map { com.example.data.model.GroundingSource(it.sourceTitle, it.url) }
+    )
+  }
+
   fun sendChatMessage(text: String, replyingTo: String? = null) {
     val trimmed = text.trim()
     if (trimmed.isBlank() || _isChatLoading.value) return
@@ -1447,13 +1482,22 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
         // With a model, answers come from it, grounded in the student's own material (RAG).
         // Without one, the rule-based answer from imported chats is used when it covers the question.
         val hasModel = repository.ai.backend() != null
-        val knowledge = if (hasModel) {
+        val collegeMode = _collegeNotes.value
+        val knowledge = if (collegeMode) {
+          runCatching {
+            val q = followUpContext(_chatMessages.value, replyingTo).takeLast(2).joinToString(" ") { it.text.take(300) } + " " + trimmed
+            repository.searchCourseMaterial(_currentUser.value.id, q, activeSub?.name, limit = 6)
+          }.getOrDefault(emptyList())
+        } else if (hasModel) {
           runCatching {
             val sessionTitle = repository.getTutorSessionsForUser(_currentUser.value.id).first().firstOrNull { it.id == sessionId }?.title
             repository.searchKnowledge(_currentUser.value.id, followUpContext(_chatMessages.value, replyingTo).takeLast(4).joinToString(" ") { it.text.take(300) } + " " + trimmed, sessionTitle)
           }.getOrDefault(emptyList())
         } else emptyList()
-        val linkedChatResponse = if (hasModel) null else withContext(Dispatchers.Default) {
+        val linkedChatResponse = if (collegeMode) {
+          // No model, or nothing in the course material: answer here instead of guessing.
+          if (!hasModel || knowledge.isEmpty()) collegeNotesWithoutModel(trimmed, knowledge, activeSub?.name) else null
+        } else if (hasModel) null else withContext(Dispatchers.Default) {
           com.example.data.ai.ChatHistoryAssistant.answerFromLinkedChats(
             query = trimmed,
             history = currentHistory,
@@ -1478,7 +1522,8 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
           systemInstruction = _systemInstruction.value,
           subjectContext = activeSub?.let { "${it.name} (${it.code})" },
           onPartial = onPartial,
-          knowledge = knowledge
+          knowledge = knowledge,
+          strict = collegeMode
         )
 
         val (cleanText, finalTopics) = withContext(Dispatchers.Default) {
@@ -1750,7 +1795,11 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
     val busy: Boolean = false,
     /** Source label -> what the last import did, or why it failed. */
     val results: Map<String, String> = emptyMap(),
-    val lastImportAt: Long = 0L
+    val lastImportAt: Long = 0L,
+    /** Read the text of course PDFs and slides too, for "College notes". */
+    val includeFiles: Boolean = true,
+    /** "Reading files 12 of 140" while course files are being read. */
+    val progress: String? = null
   ) {
     val hasAny get() = calendarFeeds.isNotEmpty() || canvasConnected || moodleConnected
   }
@@ -1768,8 +1817,21 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
     canvasConnected = !connectPrefs.getString("canvas_token", null).isNullOrBlank(),
     moodleUrl = connectPrefs.getString("moodle_url", "").orEmpty(),
     moodleConnected = !connectPrefs.getString("moodle_token", null).isNullOrBlank(),
-    lastImportAt = connectPrefs.getLong("last_import_at", 0L)
+    lastImportAt = connectPrefs.getLong("last_import_at", 0L),
+    includeFiles = connectPrefs.getBoolean("include_files", true)
   )
+
+  fun setIncludeCourseFiles(on: Boolean) {
+    connectPrefs.edit { putBoolean("include_files", on) }
+    _connections.value = _connections.value.copy(includeFiles = on)
+    if (on && _connections.value.hasAny) importConnections()
+  }
+
+  /** Course files read into the app, for Notes and the tutor's "College notes". */
+  @OptIn(ExperimentalCoroutinesApi::class)
+  val courseDocuments: StateFlow<List<com.example.data.model.CourseDocument>> = _currentUser
+    .flatMapLatest { user -> repository.courseDocuments(user.id) }
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
   /** Adds a calendar subscription link ("webcal://", "https://...ics") and imports it. */
   fun addCalendarFeed(url: String) {
@@ -1824,6 +1886,15 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
       for (source in lms) {
         results[source.label] = runCatching { repository.importCourses(uid, source.courses(), today, skippedCourses()).toString() }
           .getOrElse { "Couldn't import: ${it.message}" }
+        if (connectPrefs.getBoolean("include_files", true) && results[source.label]?.startsWith("Couldn't") != true) {
+          val key = source.label.lowercase()
+          results["${source.label} files"] = runCatching {
+            repository.importCourseFiles(uid, source, key, skippedCourses()) { done, total ->
+              _connections.value = _connections.value.copy(progress = if (done < total) "Reading ${source.label} files ${done + 1} of $total" else null)
+            }.toString()
+          }.getOrElse { "Couldn't read files: ${it.message}" }
+          _connections.value = _connections.value.copy(progress = null)
+        }
       }
       connectPrefs.edit { putLong("last_import_at", now) }
       _connections.value = _connections.value.copy(busy = false, results = results, lastImportAt = now)

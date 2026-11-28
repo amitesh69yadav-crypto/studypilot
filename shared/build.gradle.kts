@@ -33,11 +33,15 @@ kotlin {
     }
     androidMain.dependencies {
       implementation(libs.androidx.activity.compose)
+      // Reads lecture PDFs on the phone.
+      implementation(libs.pdfbox.android)
     }
     val desktopMain by getting {
       dependencies {
         api(libs.org.json)
         api(libs.sqlite.bundled)
+        // Reads lecture PDFs on the PC.
+        implementation(libs.pdfbox)
       }
     }
     val desktopTest by getting {

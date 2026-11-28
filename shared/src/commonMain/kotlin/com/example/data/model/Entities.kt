@@ -228,3 +228,33 @@ data class StudyNote(
   val createdAt: Long = System.currentTimeMillis(),
   val updatedAt: Long = System.currentTimeMillis()
 )
+
+/**
+ * A course file (lecture PDF, slides, document) read from a learning system. Only its text is kept,
+ * page by page, for the tutor's "College notes" answers; the file itself stays on the course site.
+ */
+@Entity(tableName = "course_documents")
+data class CourseDocument(
+  @PrimaryKey(autoGenerate = true) val id: Long = 0,
+  val userId: String = "",
+  val subjectId: Long = 0,
+  val subjectName: String,
+  /** File name, e.g. "Lecture 5 - Routing.pdf". */
+  val title: String,
+  /** "canvas", "moodle" */
+  val source: String,
+  /** The file's id on the course site, so a changed file is read again and an unchanged one isn't. */
+  val externalId: String,
+  /** Where the student can open the original. */
+  val url: String,
+  /** "pdf", "pptx", "docx" */
+  val fileType: String,
+  /** The course site's last-modified stamp for the file. */
+  val remoteUpdatedAt: String,
+  val pageCount: Int,
+  /** Page (or slide) texts separated by form feeds, so answers can cite "p. 12". */
+  val text: String,
+  val fetchedAt: Long = System.currentTimeMillis()
+) {
+  val pages: List<String> get() = text.split('\u000C')
+}

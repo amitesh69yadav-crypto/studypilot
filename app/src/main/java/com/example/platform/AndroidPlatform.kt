@@ -19,6 +19,11 @@ class AndroidPlatform private constructor(private val context: Context) : Platfo
 
   override val name = "Android"
 
+  init {
+    // Course PDFs are read on the phone for "College notes".
+    com.example.data.docs.PdfSupport.init(context)
+  }
+
   override val database: AppDatabase by lazy {
     AppDatabase.configure(Room.databaseBuilder(context, AppDatabase::class.java, AppDatabase.FILE_NAME))
   }

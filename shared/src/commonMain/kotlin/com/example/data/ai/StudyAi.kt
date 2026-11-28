@@ -86,7 +86,9 @@ class StudyAi(
     subjectContext: String? = null,
     onPartial: ((String) -> Unit)? = null,
     /** Passages from the student's own chats and notes that match the question (RAG). */
-    knowledge: List<KnowledgePassage> = emptyList()
+    knowledge: List<KnowledgePassage> = emptyList(),
+    /** "College notes": answer only from [knowledge], citing it. */
+    strict: Boolean = false
   ): ChatResponse {
     val lastUserMsg = history.lastOrNull { it.role == "user" }?.text.orEmpty()
 
@@ -111,7 +113,7 @@ class StudyAi(
     val turns = withLengthHint(toTurns(history)).let { t ->
       val last = t.lastOrNull()
       if (knowledge.isEmpty() || last == null || !last.fromUser) t
-      else t.dropLast(1) + last.copy(text = last.text + KnowledgePassage.groundingInstruction(knowledge))
+      else t.dropLast(1) + last.copy(text = last.text + if (strict) KnowledgePassage.strictInstruction(knowledge) else KnowledgePassage.groundingInstruction(knowledge))
     }
     var lastError: String? = null
     for (backend in chain) {

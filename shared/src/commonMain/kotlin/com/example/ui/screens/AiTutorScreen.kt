@@ -803,6 +803,32 @@ private fun ChatTabContent(
       modifier = Modifier.fillMaxWidth()
     ) {
       Column(modifier = Modifier.fillMaxWidth()) {
+        // "College notes": answers only from the student's course files and pages.
+        val collegeNotes by viewModel.collegeNotes.collectAsState()
+        val courseFiles by viewModel.courseDocuments.collectAsState()
+        Row(
+          modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 6.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+          FilterChip(
+            selected = collegeNotes,
+            onClick = { viewModel.setCollegeNotes(!collegeNotes) },
+            label = { Text("College notes", fontSize = 12.sp, fontWeight = if (collegeNotes) FontWeight.Bold else FontWeight.Normal) },
+            leadingIcon = { Icon(Icons.Default.School, contentDescription = null, modifier = Modifier.size(16.dp)) }
+          )
+          Text(
+            when {
+              !collegeNotes -> "Answer from anything"
+              courseFiles.isEmpty() -> "Only your course pages. Import files in Settings > Connections"
+              else -> "Only your course material (${courseFiles.size} files)" + (selectedSubject?.let { ", ${it.code} first" } ?: "")
+            },
+            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+          )
+        }
         Row(
           modifier = Modifier
             .fillMaxWidth()

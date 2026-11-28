@@ -114,6 +114,7 @@ fun NotesScreen(viewModel: StudyPilotViewModel) {
   val notes by viewModel.notes.collectAsState()
   val chats by viewModel.importedChats.collectAsState()
   val concepts by viewModel.extractedConcepts.collectAsState()
+  val courseDocs by viewModel.courseDocuments.collectAsState()
   val subjects by viewModel.subjects.collectAsState()
   var openSubject by rememberSaveable { mutableStateOf<String?>(null) }
   var editing by remember { mutableStateOf<StudyNote?>(null) }
@@ -167,7 +168,8 @@ fun NotesScreen(viewModel: StudyPilotViewModel) {
       onBack = { openSubject = null },
       onOpenNote = { editing = it },
       onNewNote = { chapter -> editing = StudyNote(title = chapter, body = "", subjectName = current) },
-      onSaveAsNote = { thread, pair -> viewModel.saveNote(noteFrom(thread, pair)) }
+      onSaveAsNote = { thread, pair -> viewModel.saveNote(noteFrom(thread, pair)) },
+      courseFiles = courseDocs.filter { sameSubject(it.subjectName, current) }
     )
   }
 
@@ -252,6 +254,7 @@ private fun SubjectNotes(
   notes: List<StudyNote>,
   tutorThreads: List<QaThread>,
   linkThreads: List<Pair<Long, QaThread>>,
+  courseFiles: List<com.example.data.model.CourseDocument> = emptyList(),
   conceptsByChat: Map<Long, List<ExtractedConcept>>,
   onBack: () -> Unit,
   onOpenNote: (StudyNote) -> Unit,
@@ -264,7 +267,7 @@ private fun SubjectNotes(
   fun matches(text: String) = q.isEmpty() || text.contains(q, ignoreCase = true)
   fun threadMatches(t: QaThread) = matches(t.title) || t.pairs.any { matches(it.question) || matches(it.answer) }
 
-  val tabs = listOf("My notes", "Tutor Q&A", "From links")
+  val tabs = listOf("My notes", "Tutor Q&A", "From links", "Course files")
   val tabRow: @Composable () -> Unit = {
     TabRow(selectedTabIndex = tab, modifier = Modifier.padding(horizontal = 16.dp)) {
       tabs.forEachIndexed { i, label ->
@@ -292,7 +295,7 @@ private fun SubjectNotes(
       OutlinedTextField(
         value = query,
         onValueChange = { query = it },
-        placeholder = { Text(if (tab == 0) "Search chapters, topics, notes…" else "Search questions and answers…", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        placeholder = { Text(when (tab) { 0 -> "Search chapters, topics, notes…"; 3 -> "Search your course files…"; else -> "Search questions and answers…" }, maxLines = 1, overflow = TextOverflow.Ellipsis) },
         leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
         singleLine = true,
         shape = RoundedCornerShape(24.dp),
@@ -321,6 +324,7 @@ private fun SubjectNotes(
         onSaveAsNote = onSaveAsNote,
         conceptsFor = { thread -> linkThreads.firstOrNull { it.second == thread }?.first?.let { conceptsByChat[it] }.orEmpty() }
       )
+      3 -> CourseFileList(courseFiles.filter { matches(it.title) || matches(it.text) }, subject)
     }
   }
 }
@@ -600,4 +604,54 @@ private fun NoteEditor(
       }
     }
   )
+}
+
+/** Course files read from Canvas or Moodle: what the tutor's "College notes" answers from. */
+@Composable
+private fun CourseFileList(files: List<com.example.data.model.CourseDocument>, subject: String) {
+  if (files.isEmpty()) {
+    EmptyState(
+      icon = Icons.Default.EditNote,
+      title = "No course files for $subject",
+      description = "Connect Canvas or Moodle in Settings > Connections with \"Course files\" on. Their PDFs and slides show up here, and College notes in the tutor answers from them.",
+      modifier = Modifier.fillMaxSize()
+    )
+    return
+  }
+  val actions = LocalPlatformActions.current
+  var open by rememberSaveable { mutableStateOf<Long?>(null) }
+  LazyColumn(
+    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 32.dp),
+    verticalArrangement = Arrangement.spacedBy(10.dp),
+    modifier = Modifier.fillMaxSize()
+  ) {
+    items(files, key = { it.id }) { doc ->
+      val expanded = open == doc.id
+      Card(onClick = { open = if (expanded) null else doc.id }, modifier = Modifier.fillMaxWidth().animateContentSize()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+          Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SmallTag(doc.fileType.uppercase())
+            Text(doc.title, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, contentDescription = null)
+          }
+          val unit = if (doc.fileType == "pptx") "slide" else "page"
+          Text(
+            if (doc.text.isBlank()) "No readable text (scanned or image-only)" else "${countOf(doc.pageCount, unit)} · read ${friendlyTime(doc.fetchedAt)}",
+            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+          )
+          if (expanded) {
+            val preview = doc.pages.firstOrNull { it.isNotBlank() }.orEmpty().take(1200)
+            if (preview.isNotBlank()) Text(preview, style = MaterialTheme.typography.bodySmall)
+            if (doc.url.isNotBlank()) {
+              TextButton(onClick = { actions.openUrl(doc.url) }) {
+                Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Open the original")
+              }
+            }
+          }
+        }
+      }
+    }
+  }
 }

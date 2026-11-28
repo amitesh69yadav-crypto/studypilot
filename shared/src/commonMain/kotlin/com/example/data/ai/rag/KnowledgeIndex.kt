@@ -13,9 +13,11 @@ data class KnowledgePassage(
   val text: String,
   /** e.g. "Imported chat: OS scheduling" */
   val sourceTitle: String,
-  /** The share link for an imported chat; blank for notes and tutor chats. */
+  /** The share link for an imported chat, or the course file's page; blank for notes and tutor chats. */
   val url: String = "",
-  val score: Double = 0.0
+  val score: Double = 0.0,
+  /** The subject a course file or course page belongs to; blank for other material. */
+  val subject: String = ""
 ) {
   companion object {
     /**
@@ -30,6 +32,17 @@ data class KnowledgePassage(
         append("\nAnswer my question using this material where it covers it, and cite it inline like [1]. ")
         append("Where it doesn't cover something, say so briefly and answer from general knowledge, carefully; don't invent citations.")
       }
+    }
+
+    /**
+     * For "College notes": answer only from the student's course material, cite every point, and say
+     * plainly when the material doesn't cover the question instead of filling in from elsewhere.
+     */
+    fun strictInstruction(passages: List<KnowledgePassage>): String = buildString {
+      append("\n\n---\nFrom my course material (numbered):\n")
+      passages.forEachIndexed { i, p -> append("\n[${i + 1}] (${p.sourceTitle})\n${p.text}\n") }
+      append("\nAnswer ONLY from this course material, citing it inline like [1] for every point. ")
+      append("If it doesn't contain the answer, say \"Your course material doesn't cover this\" and stop; don't add outside knowledge or invent citations.")
     }
 
     /**
@@ -111,6 +124,10 @@ class KnowledgeIndex private constructor(private val passages: List<KnowledgePas
       for (topic in topics.filter { it.sourceType == "MANUAL" || it.sourceType == "PASTED" || it.sourceType == "UPLOAD" }) {
         chunk(topic.title + ". " + topic.descriptionNotes).forEach { out += KnowledgePassage(it, "Notes: ${topic.title}") }
       }
+      // Syllabus and pages from a course site.
+      for (topic in topics.filter { it.sourceType == "IMPORTED_LMS" }) {
+        chunk(topic.title + ". " + topic.descriptionNotes).forEach { out += KnowledgePassage(it, "${topic.subjectName}: ${topic.title}", subject = topic.subjectName) }
+      }
       for (c in concepts) {
         val text = buildString {
           append(c.conceptName).append(": ").append(c.definition)
@@ -119,6 +136,25 @@ class KnowledgeIndex private constructor(private val passages: List<KnowledgePas
           if (c.misconceptionsAndCorrections.isNotBlank()) append(" Common mistake: ").append(c.misconceptionsAndCorrections)
         }
         out += KnowledgePassage(text.take(PASSAGE_CHARS * 2), "Concept: ${c.conceptName} (${c.sourceChatTitle})")
+      }
+      return KnowledgeIndex(out)
+    }
+
+    /**
+     * Course files, page by page (slide by slide), each passage citing its file and page; plus the
+     * course pages imported from the same site. This is what "College notes" answers from.
+     */
+    fun buildCourseMaterial(docs: List<com.example.data.model.CourseDocument>, topics: List<StudyTopic>): KnowledgeIndex {
+      val out = ArrayList<KnowledgePassage>()
+      for (doc in docs) {
+        val unit = if (doc.fileType == "pptx") "slide" else "p."
+        doc.pages.forEachIndexed { i, page ->
+          val where = if (doc.fileType == "docx") doc.title else "${doc.title}, $unit ${i + 1}"
+          chunk(page).forEach { out += KnowledgePassage(it, where, doc.url, subject = doc.subjectName) }
+        }
+      }
+      for (topic in topics.filter { it.sourceType == "IMPORTED_LMS" }) {
+        chunk(topic.title + ". " + topic.descriptionNotes).forEach { out += KnowledgePassage(it, "${topic.subjectName}: ${topic.title}", subject = topic.subjectName) }
       }
       return KnowledgeIndex(out)
     }

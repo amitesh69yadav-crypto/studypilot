@@ -367,4 +367,23 @@ interface StudyPilotDao {
 
   @Query("DELETE FROM notes WHERE id = :id")
   suspend fun deleteNote(id: Long)
+
+  // --- Course files ---
+  @Query("SELECT * FROM course_documents WHERE userId = :userId ORDER BY subjectName, title")
+  fun getCourseDocumentsForUser(userId: String): Flow<List<com.example.data.model.CourseDocument>>
+
+  @Query("SELECT id, userId, subjectId, subjectName, title, source, externalId, url, fileType, remoteUpdatedAt, pageCount, '' AS text, fetchedAt FROM course_documents WHERE userId = :userId")
+  suspend fun getCourseDocumentHeaders(userId: String): List<com.example.data.model.CourseDocument>
+
+  @Query("SELECT COUNT(*) || ':' || IFNULL(MAX(fetchedAt), 0) FROM course_documents WHERE userId = :userId")
+  suspend fun courseDocumentsSignature(userId: String): String
+
+  @Insert(onConflict = OnConflictStrategy.REPLACE)
+  suspend fun upsertCourseDocument(doc: com.example.data.model.CourseDocument): Long
+
+  @Query("DELETE FROM course_documents WHERE id = :id")
+  suspend fun deleteCourseDocument(id: Long)
+
+  @Query("DELETE FROM course_documents WHERE userId = :userId AND subjectId = :subjectId")
+  suspend fun deleteCourseDocumentsForSubject(userId: String, subjectId: Long)
 }

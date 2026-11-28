@@ -24,6 +24,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -57,6 +58,7 @@ import java.util.Locale
 @Composable
 fun ConnectionsCard(viewModel: StudyPilotViewModel) {
   val c by viewModel.connections.collectAsState()
+  val docs by viewModel.courseDocuments.collectAsState()
   val actions = LocalPlatformActions.current
   val scope = rememberCoroutineScope()
   var feed by remember { mutableStateOf("") }
@@ -126,6 +128,20 @@ fun ConnectionsCard(viewModel: StudyPilotViewModel) {
         onSave = { url, token -> viewModel.setLms("moodle", url, token); openLms = null },
         onDisconnect = { viewModel.setLms("moodle", c.moodleUrl, "") }
       )
+      HorizontalDivider()
+      Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+          Text("Course files", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleSmall)
+          Text(
+            (if (docs.isEmpty()) "Reads the text of PDFs, slides (.pptx) and Word files from Canvas and Moodle"
+            else "${docs.size} files read · ${docs.sumOf { it.pageCount }} pages") +
+              ". The tutor's College notes answers from them.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+          )
+        }
+        Switch(checked = c.includeFiles, onCheckedChange = { viewModel.setIncludeCourseFiles(it) })
+      }
+      c.progress?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
       HorizontalDivider()
       Row(verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {

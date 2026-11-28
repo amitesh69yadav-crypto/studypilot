@@ -29,9 +29,10 @@ import com.example.data.model.ExtractedConcept
     com.example.data.model.ScheduleFormat::class,
     ImportedChat::class,
     ExtractedConcept::class,
-    com.example.data.model.StudyNote::class
+    com.example.data.model.StudyNote::class,
+    com.example.data.model.CourseDocument::class
   ],
-  version = 10,
+  version = 11,
   exportSchema = false
 )
 @ConstructedBy(AppDatabaseConstructor::class)
@@ -47,7 +48,7 @@ abstract class AppDatabase : RoomDatabase() {
       .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
       // Real migrations come first, so an upgrade keeps everyone's data; the destructive fallback is
       // only for versions with no migration.
-      .addMigrations(MIGRATION_8_9, MIGRATION_9_10)
+      .addMigrations(MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
       .fallbackToDestructiveMigration(dropAllTables = true)
       .build()
   }
@@ -55,6 +56,18 @@ abstract class AppDatabase : RoomDatabase() {
 
 /** Version 9 adds the user's own notes and changes nothing else. */
 /** Version 10 gives notes a topic (heading) under their chapter (title). */
+/** Version 11 adds course files' text for "College notes". */
+val MIGRATION_10_11 = object : androidx.room.migration.Migration(10, 11) {
+  override fun migrate(connection: androidx.sqlite.SQLiteConnection) {
+    connection.prepare(
+      "CREATE TABLE IF NOT EXISTS `course_documents` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `userId` TEXT NOT NULL, " +
+        "`subjectId` INTEGER NOT NULL, `subjectName` TEXT NOT NULL, `title` TEXT NOT NULL, `source` TEXT NOT NULL, " +
+        "`externalId` TEXT NOT NULL, `url` TEXT NOT NULL, `fileType` TEXT NOT NULL, `remoteUpdatedAt` TEXT NOT NULL, " +
+        "`pageCount` INTEGER NOT NULL, `text` TEXT NOT NULL, `fetchedAt` INTEGER NOT NULL)"
+    ).use { it.step() }
+  }
+}
+
 val MIGRATION_9_10 = object : androidx.room.migration.Migration(9, 10) {
   override fun migrate(connection: androidx.sqlite.SQLiteConnection) {
     connection.prepare("ALTER TABLE `notes` ADD COLUMN `heading` TEXT NOT NULL DEFAULT ''").use { it.step() }
