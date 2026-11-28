@@ -44,6 +44,7 @@ class CloudClient(
     get() = when {
       provider == CloudProvider.CUSTOM -> customBaseUrl
       provider.anthropic && anthropicBaseUrlForTests != null -> anthropicBaseUrlForTests!!
+      provider == CloudProvider.GEMINI && geminiBaseUrlForTests != null -> geminiBaseUrlForTests!! + "/openai"
       else -> provider.baseUrl
     }.trim().trimEnd('/')
   @Volatile var apiKey: String = ""
@@ -89,11 +90,29 @@ class CloudClient(
   /** Models the provider refused ("does not exist", retired); skipped from then on. */
   private val refused = java.util.Collections.synchronizedSet(mutableSetOf<String>())
 
+  /** Models the provider said are overloaded ("high demand"), until when; others are used meanwhile. */
+  private val busyUntil = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+  private fun usable(id: String) = id !in refused && (busyUntil[id] ?: 0L) < System.currentTimeMillis()
+
   fun chosenModel(): String {
-    model.trim().takeIf { it.isNotBlank() && it !in refused }?.let { return it }
-    val preferred = provider.preferredModels.filter { it !in refused }
-    val available = models?.filter { it !in refused }
-    return preferred.firstOrNull { available == null || it in available } ?: available?.firstOrNull() ?: preferred.firstOrNull().orEmpty()
+    model.trim().takeIf { it.isNotBlank() && usable(it) }?.let { return it }
+    val preferred = provider.preferredModels.filter { usable(it) }
+    val available = models?.filter { usable(it) }
+    return preferred.firstOrNull { available == null || it in available }
+      ?: available?.let { newestFlash(it) }
+      ?: available?.firstOrNull() ?: preferred.firstOrNull().orEmpty()
+  }
+
+  /**
+   * Gemini retires models often (and new keys can't use older ones): the newest "gemini-N-flash" the
+   * key lists (a stable one before a preview of the same version). Null for other providers or none.
+   */
+  private fun newestFlash(available: List<String>): String? {
+    if (provider != CloudProvider.GEMINI) return null
+    fun version(id: String) = Regex("""gemini-(\d+(?:\.\d+)?)-flash""").find(id)?.groupValues?.get(1)?.toDoubleOrNull()
+    val flash = available.filter { Regex("""^gemini-\d+(\.\d+)?-flash(-preview(-[\w-]+)?)?$""").matches(it) }
+    return flash.sortedWith(compareByDescending<String> { version(it) ?: 0.0 }.thenBy { it.contains("preview") }).firstOrNull()
   }
 
   /** Providers retire models; learn which ones this key can use before the first request. */
@@ -101,8 +120,11 @@ class CloudClient(
     if (models == null && isConfigured) runCatching { status() }
   }
 
+  private fun isOverloaded(message: String?): Boolean =
+    message != null && Regex("(?i)high demand|overloaded|try again later|HTTP 50[23]").containsMatchIn(message)
+
   private fun isModelGone(message: String?): Boolean =
-    message != null && Regex("(?i)model.*(does not exist|not found|decommissioned|deprecated|no longer supported|not available|do not have access)|model_not_found").containsMatchIn(message)
+    message != null && Regex("(?i)model.*(does not exist|not found|decommissioned|deprecated|no longer (supported|available)|not available|not supported for|do not have access)|model_not_found|Daily limit reached for this model").containsMatchIn(message)
 
   /** Anthropic wants its own headers; everyone else takes a bearer token. */
   private fun authorized(builder: Request.Builder): Request.Builder =
@@ -128,18 +150,40 @@ class CloudClient(
     override suspend fun generate(request: LlmRequest, onPartial: ((String) -> Unit)?): String = withContext(Dispatchers.IO) {
       ensureModels()
       // The model picked before the list was known may not be offered; use one that is.
-      val first = chosenModel().ifBlank { model }
+      withWorkingModel(chosenModel().ifBlank { model }) { complete(it, request, onPartial) }
+    }
+  }
+
+  /**
+   * Runs [block] with [first], and when the provider says that model is gone (retired, "no longer
+   * available to new users", not offered to this key) remembers that and tries the next one, a few times.
+   */
+  private suspend fun withWorkingModel(first: String, block: (String) -> String): String {
+    var current = first
+    var tries = 0
+    while (true) {
       try {
-        complete(first, request, onPartial)
+        return block(current)
       } catch (e: Exception) {
-        if (!isModelGone(e.message)) throw e
-        // Retired or not offered to this key: remember, refresh the list, and try the next model once.
-        refused += first
-        models = null
-        ensureModels()
+        val timedOut = e is java.net.SocketTimeoutException || e is java.io.InterruptedIOException
+        val busy = timedOut || isOverloaded(e.message)
+        if (!(busy || isModelGone(e.message)) || ++tries > 4) throw e
+        if (busy) {
+          // Overloaded for now: another of the key's models meanwhile, or this one again shortly.
+          busyUntil[current] = System.currentTimeMillis() + 3 * 60_000L
+        } else {
+          refused += current
+          models = null
+          ensureModels()
+        }
         val next = chosenModel()
-        if (next.isBlank() || next == first) throw e
-        complete(next, request, onPartial)
+        if (next.isBlank() || next in refused) throw e
+        if (next == current) {
+          // Only this model: after a timeout, waiting minutes more for it isn't worth it.
+          if (timedOut) throw e
+          kotlinx.coroutines.delay(10_000L * tries)
+        }
+        current = next
       }
     }
   }
@@ -200,44 +244,60 @@ class CloudClient(
   fun canReadPdf(bytes: Int): Boolean = isConfigured && provider.readsPdf &&
     bytes <= if (provider == CloudProvider.GEMINI) 50_000_000 else 24_000_000
 
-  /**
-   * Sends a whole PDF with [prompt] to Gemini or Claude, which read the pages themselves (layout,
-   * tables, scanned pages, formulas), and returns the reply. Gemini takes big files through its
-   * Files API.
-   */
-  suspend fun readPdf(pdf: ByteArray, fileName: String, system: String, prompt: String, maxTokens: Int = 16_000): String = withContext(Dispatchers.IO) {
+  /** A PDF ready to send. Gemini gets a big file uploaded once, so several requests can share it. */
+  class PdfDoc internal constructor(internal val bytes: ByteArray, internal val geminiPart: JSONObject?)
+
+  /** Gets [pdf] ready for [readPdf] (uploads it to Gemini's Files API when it's big). */
+  suspend fun preparePdf(pdf: ByteArray, fileName: String): PdfDoc = withContext(Dispatchers.IO) {
     if (!canReadPdf(pdf.size)) throw LlmException("${provider.label} can't read this PDF")
+    if (provider != CloudProvider.GEMINI) return@withContext PdfDoc(pdf, null)
+    PdfDoc(
+      pdf,
+      if (pdf.size <= GEMINI_INLINE_BYTES) {
+        JSONObject().put("inline_data", JSONObject().put("mime_type", "application/pdf").put("data", pdf.toByteString().base64()))
+      } else {
+        JSONObject().put("file_data", JSONObject().put("mime_type", "application/pdf").put("file_uri", geminiUpload(pdf, fileName)))
+      }
+    )
+  }
+
+  /**
+   * Sends a PDF with [prompt] to Gemini or Claude, which read the pages themselves (layout, tables,
+   * scanned pages, formulas), and returns the reply.
+   */
+  suspend fun readPdf(doc: PdfDoc, system: String, prompt: String, maxTokens: Int = 8_000): String = withContext(Dispatchers.IO) {
     if (System.currentTimeMillis() < pausedUntil) throw LlmException("The free limit is used up for now")
     if (model.isBlank()) ensureModels()
-    fun read(model: String) =
-      if (provider == CloudProvider.GEMINI) geminiPdf(model, pdf, fileName, system, prompt, maxTokens)
-      else anthropicPdf(model, pdf, system, prompt, maxTokens)
-    val first = chosenModel()
-    try {
-      read(first)
-    } catch (e: Exception) {
-      if (!isModelGone(e.message)) throw e
-      refused += first
-      val next = chosenModel()
-      if (next.isBlank() || next == first) throw e
-      read(next)
+    withWorkingModel(chosenModel()) { m ->
+      if (provider == CloudProvider.GEMINI) geminiPdf(m, doc.geminiPart!!, system, prompt, maxTokens)
+      else anthropicPdf(m, doc.bytes, system, prompt, maxTokens)
     }
   }
 
-  private fun geminiPdf(model: String, pdf: ByteArray, fileName: String, system: String, prompt: String, maxTokens: Int): String {
-    val document = if (pdf.size <= GEMINI_INLINE_BYTES) {
-      JSONObject().put("inline_data", JSONObject().put("mime_type", "application/pdf").put("data", pdf.toByteString().base64()))
-    } else {
-      JSONObject().put("file_data", JSONObject().put("mime_type", "application/pdf").put("file_uri", geminiUpload(pdf, fileName)))
-    }
-    val body = JSONObject()
+  /** Little thinking: reading notes off a page doesn't need it, and it makes replies much slower. */
+  private fun geminiThinking(model: String): JSONObject? = when {
+    Regex("gemini-2\\.").containsMatchIn(model) -> JSONObject().put("thinkingBudget", 512)
+    model.startsWith("gemini") -> JSONObject().put("thinkingLevel", "low")
+    else -> null
+  }
+
+  private fun geminiPdf(model: String, document: JSONObject, system: String, prompt: String, maxTokens: Int): String {
+    fun body(thinking: JSONObject?) = JSONObject()
       .put("system_instruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", system))))
       .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(document).put(JSONObject().put("text", prompt)))))
-      .put("generationConfig", JSONObject().put("temperature", 0.2).put("maxOutputTokens", maxTokens))
-    val reply = call(
+      .put("generationConfig", JSONObject().put("temperature", 0.2).put("maxOutputTokens", maxTokens).apply { thinking?.let { put("thinkingConfig", it) } })
+    fun send(thinking: JSONObject?) = call(
       Request.Builder().url("$geminiBase/models/${model.removePrefix("models/")}:generateContent")
-        .header("x-goog-api-key", apiKey).post(body.toString().toRequestBody(JSON)).build()
+        .header("x-goog-api-key", apiKey).post(body(thinking).toString().toRequestBody(JSON)).build()
     ).first
+    val thinking = geminiThinking(model)
+    val reply = try {
+      send(thinking)
+    } catch (e: LlmException) {
+      // A model that doesn't take this thinking setting: ask again without it.
+      if (thinking == null || e.message?.contains("thinking", ignoreCase = true) != true) throw e
+      send(null)
+    }
     val parts = JSONObject(reply).optJSONArray("candidates")?.optJSONObject(0)?.optJSONObject("content")?.optJSONArray("parts") ?: JSONArray()
     return stripThinking((0 until parts.length()).mapNotNull { parts.optJSONObject(it) }.filterNot { it.optBoolean("thought") }.joinToString("") { it.optString("text") })
   }
@@ -286,10 +346,7 @@ class CloudClient(
     slowHttp.newCall(request).execute().use { resp ->
       val text = resp.body?.string().orEmpty()
       if (!resp.isSuccessful) {
-        if (resp.code == 429) {
-          val wait = resp.header("retry-after")?.toDoubleOrNull()?.times(1000)?.toLong() ?: 60_000L
-          pausedUntil = System.currentTimeMillis() + wait.coerceIn(5_000L, 6 * 3_600_000L)
-        }
+        rateLimited(resp.code, resp.header("retry-after"), text)
         throw LlmException(errorText(resp.code, text))
       }
       return text to resp.headers
@@ -306,10 +363,7 @@ class CloudClient(
     call.execute().use { resp ->
       if (!resp.isSuccessful) {
         val text = resp.body?.string().orEmpty()
-        if (resp.code == 429) {
-          val wait = resp.header("retry-after")?.toDoubleOrNull()?.times(1000)?.toLong() ?: 60_000L
-          pausedUntil = System.currentTimeMillis() + wait.coerceIn(5_000L, 6 * 3_600_000L)
-        }
+        rateLimited(resp.code, resp.header("retry-after"), text)
         throw LlmException(errorText(resp.code, text))
       }
       val source = resp.body ?: throw LlmException("Empty reply")
@@ -350,8 +404,23 @@ class CloudClient(
     usedToday++
   }
 
+  /**
+   * A 429: when one model's daily allowance is spent (free plans count per model), that model is
+   * dropped for now and the next one is used; otherwise the key pauses as long as the provider asks.
+   */
+  private fun rateLimited(code: Int, retryAfter: String?, body: String) {
+    if (code != 429) return
+    if (Regex("(?i)per ?day|daily|RPD|TPD").containsMatchIn(body)) throw LlmException("Daily limit reached for this model")
+    val wait = retryAfter?.toDoubleOrNull()?.times(1000)?.toLong() ?: 60_000L
+    pausedUntil = System.currentTimeMillis() + wait.coerceIn(5_000L, 6 * 3_600_000L)
+  }
+
   private fun errorText(code: Int, body: String): String {
-    val message = runCatching { JSONObject(body).optJSONObject("error")?.optString("message") }.getOrNull()?.takeIf { it.isNotBlank() }
+    // Most send {"error": {...}}; Gemini's OpenAI-style API wraps it in a list.
+    val message = runCatching {
+      val json = if (body.trimStart().startsWith("[")) JSONArray(body).optJSONObject(0) else JSONObject(body)
+      json?.optJSONObject("error")?.optString("message")
+    }.getOrNull()?.takeIf { it.isNotBlank() }
     return when (code) {
       401, 403 -> "The API key was rejected"
       429 -> "The free limit is used up for now"

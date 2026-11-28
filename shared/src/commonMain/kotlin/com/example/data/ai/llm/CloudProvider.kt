@@ -29,7 +29,8 @@ enum class CloudProvider(
   ),
   GEMINI(
     "Google Gemini", "https://generativelanguage.googleapis.com/v1beta/openai",
-    listOf("gemini-2.5-flash", "gemini-2.5-flash-lite"),
+    // "-latest" follows Google's newest Flash; otherwise the newest Flash the key lists is used.
+    listOf("gemini-flash-latest"),
     "https://aistudio.google.com/apikey", "Small free tier; Google may use free-tier prompts to improve its products.", 100
   ),
   OPENAI(

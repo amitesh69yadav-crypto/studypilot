@@ -2,6 +2,9 @@ package com.example.data.ai
 
 import com.example.platform.Log
 import com.example.data.ai.llm.CloudClient
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.sync.withPermit
 import com.example.data.ai.llm.CloudProvider
 import com.example.data.ai.llm.LlmBackend
 import com.example.data.ai.rag.KnowledgePassage
@@ -368,6 +371,8 @@ class StudyAi(
     return out
   }
 
+  private val PDF_PART_PAGES = 15
+
   private val FILE_SYSTEM_PROMPT = "You turn lecture material into clear, accurate study notes. You only use what the material says."
 
   /** A topic a model found in a course file. */
@@ -388,10 +393,11 @@ class StudyAi(
 
       $section
 
-      List the subject-matter topics this material actually teaches: concepts, methods, algorithms,
-      protocols, definitions, formulas, results. Leave out course administration (schedules, grading,
-      exams and deadlines, contact details, attendance, assignment logistics, announcements, welcome text).
-      For each topic give:
+      List the main subject-matter topics this material teaches: concepts, methods, algorithms,
+      protocols, definitions, formulas, results. Give at most 4: join small related points into one
+      topic (e.g. a class's methods are one topic, not one each). Leave out course administration
+      (schedules, grading, exams and deadlines, contact details, attendance, assignment logistics,
+      announcements, welcome text). For each topic give:
       - "title": a short name (2-6 words)
       - "summary": 3-6 sentences explaining it as study notes, in plain language, from this material
       - "keyPoints": 3-8 short facts, definitions or formulas stated in the material
@@ -410,34 +416,93 @@ class StudyAi(
   fun canReadPdf(bytes: Int): Boolean = cloudsFor(AiJob.READ).any { it.canReadPdf(bytes) }
 
   /**
-   * The study topics a whole PDF teaches, read by Gemini or Claude from the file itself (layout,
-   * tables, formulas and scanned pages, not just the text). Null when no key could read it; then
-   * the text is read part by part with [topicsInFile].
+   * The study topics a PDF teaches, read by Gemini or Claude from the file itself (layout, tables,
+   * formulas and scanned pages, not just the text). A long file is read in parts of about
+   * [PDF_PART_PAGES] pages at the same time, which is much faster than one long answer. Pages no
+   * key could read are added to [missed]. Null when no key could read any of it.
    */
-  suspend fun topicsInPdf(fileTitle: String, subject: String, pdf: ByteArray): List<FileTopic>? {
-    val request = """
-      This PDF is the course file "$fileTitle" from the course "$subject". Read all of it, pictures,
-      tables and formulas included. Running headers, footers and page numbers are not topics.
+  suspend fun topicsInPdf(
+    fileTitle: String,
+    subject: String,
+    pdf: ByteArray,
+    pageCount: Int = 0,
+    missed: MutableSet<Int> = mutableSetOf(),
+    onProgress: suspend (done: Int, total: Int) -> Unit = { _, _ -> }
+  ): List<FileTopic>? {
+    val ranges: List<IntRange?> =
+      if (pageCount <= PDF_PART_PAGES + 5) listOf(null)
+      else (1..pageCount step PDF_PART_PAGES).map { it..minOf(pageCount, it + PDF_PART_PAGES - 1) }
+    for (key in cloudsFor(AiJob.READ).filter { it.canReadPdf(pdf.size) }) {
+      val doc = runCatching { key.preparePdf(pdf, fileTitle) }
+        .onFailure { lastError = "${key.provider.label}: ${it.message}"; Log.w(TAG, "${key.provider.label} couldn't take $fileTitle", it) }
+        .getOrNull() ?: continue
+      val done = java.util.concurrent.atomic.AtomicInteger()
+      val gate = kotlinx.coroutines.sync.Semaphore(6)
+      val parts = kotlinx.coroutines.coroutineScope {
+        ranges.map { range ->
+          async {
+            gate.withPermit {
+              val raw = runCatching { key.readPdf(doc, FILE_SYSTEM_PROMPT, pdfRequest(fileTitle, subject, range)) }
+                .onFailure { lastError = "${key.provider.label}: ${it.message}"; Log.w(TAG, "${key.provider.label} couldn't read ${range ?: "all"} of $fileTitle", it) }
+                .getOrNull()?.takeIf { it.isNotBlank() }
+              onProgress(done.incrementAndGet(), ranges.size)
+              range to raw?.let { fileTopics(it) }
+            }
+          }
+        }.awaitAll()
+      }
+      if (parts.all { it.second == null }) continue
+      parts.filter { it.second == null }.forEach { (range, _) -> range?.let { missed += it } }
+      // Models often stray past their pages: keep each part's own topics, then join the ones
+      // that cover the same pages.
+      return mergeOverlapping(parts.flatMap { (range, topics) ->
+        topics.orEmpty().filter { t -> range == null || t.pages.isEmpty() || t.pages.count { it in range } * 2 >= t.pages.size }
+      })
+    }
+    return null
+  }
 
-      List the subject-matter topics it actually teaches or practises: concepts, methods, algorithms,
+  /** Topics covering mostly the same pages, joined into one (the longer notes, all key points and pages). */
+  internal fun mergeOverlapping(topics: List<FileTopic>): List<FileTopic> {
+    val out = mutableListOf<FileTopic>()
+    for (t in topics) {
+      val i = out.indexOfFirst { o ->
+        val shared = o.pages.intersect(t.pages.toSet()).size
+        // Most of the smaller one and at least half of the larger: a section inside a chapter stays apart.
+        shared > 0 && shared * 10 >= minOf(o.pages.size, t.pages.size) * 6 && shared * 2 >= maxOf(o.pages.size, t.pages.size)
+      }
+      if (i < 0) { out += t; continue }
+      val o = out[i]
+      out[i] = FileTopic(
+        title = if (o.summary.length >= t.summary.length) o.title else t.title,
+        summary = if (o.summary.length >= t.summary.length) o.summary else t.summary,
+        keyPoints = (o.keyPoints + t.keyPoints).distinct().take(14),
+        pages = (o.pages + t.pages).distinct().sorted()
+      )
+    }
+    return out
+  }
+
+  private fun pdfRequest(fileTitle: String, subject: String, range: IntRange?): String {
+    val scope = if (range == null) "Read all of it" else "Read pages ${range.first}-${range.last} (the other pages are only context; leave them to other requests)"
+    val count = if (range == null) "Give between 3 and 25 topics" else "Give 1-5 topics for these pages"
+    return """
+      This PDF is the course file "$fileTitle" from the course "$subject". $scope, pictures, tables
+      and formulas included. Running headers, footers and page numbers are not topics.
+
+      List the main subject-matter topics it teaches or practises: concepts, methods, algorithms,
       data structures, proofs, definitions, formulas, results. For an exercise sheet, a topic is what
-      the exercises practise. Leave out course administration (schedules, grading, exams and deadlines,
+      the exercises practise. Join small related points into one topic (a class's methods are one
+      topic, not one each). Leave out course administration (schedules, grading, exams and deadlines,
       contact details, attendance, assignment logistics, announcements, welcome text).
-      Give between 3 and 25 topics, in the order of the file. For each topic give:
+      $count, in the order of the file. For each topic give:
       - "title": a short name (2-6 words)
       - "summary": 4-8 sentences explaining it as study notes, in plain language, from this file
       - "keyPoints": 4-10 short facts, definitions, formulas (in plain text, e.g. O(n log n)) or worked results from the file
       - "pages": the PDF page numbers where it is covered (the first page is 1)
       Reply only with JSON: {"topics": [{"title": "...", "summary": "...", "keyPoints": ["..."], "pages": [1]}]}
-      If it teaches nothing (only administration), reply {"topics": []}.
+      If these pages teach nothing (only administration), reply {"topics": []}.
     """.trimIndent()
-    for (key in cloudsFor(AiJob.READ).filter { it.canReadPdf(pdf.size) }) {
-      val raw = runCatching { key.readPdf(pdf, fileTitle, FILE_SYSTEM_PROMPT, request) }
-        .onFailure { lastError = "${key.provider.label}: ${it.message}"; Log.w(TAG, "${key.provider.label} couldn't read $fileTitle", it) }
-        .getOrNull()?.takeIf { it.isNotBlank() } ?: continue
-      fileTopics(raw)?.let { return it }
-    }
-    return null
   }
 
   /** The topics in a model's {"topics": [...]} answer (also when it was cut off), or null. */
@@ -563,8 +628,8 @@ class StudyAi(
   }
 
   private fun toQuestion(obj: JSONObject, difficulty: String): QuizQuestion? {
-    var text = PlainMath.convert(obj.optString("questionText")).trim()
-    var answer = PlainMath.convert(obj.optString("correctAnswer")).trim()
+    var text = unescape(PlainMath.convert(obj.optString("questionText"))).trim()
+    var answer = unescape(PlainMath.convert(obj.optString("correctAnswer"))).trim()
     if (text.isBlank() || answer.isBlank()) return null
     var type = obj.optString("questionType", "SHORT_ANSWER").uppercase()
       .takeIf { it in setOf("MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "CODING") } ?: "SHORT_ANSWER"
@@ -572,7 +637,7 @@ class StudyAi(
       is JSONArray -> (0 until rawOptions.length()).map { rawOptions.optString(it) }
       is String -> rawOptions.split(if ('|' in rawOptions) "|" else ",")
       else -> emptyList()
-    }.map { PlainMath.convert(it).trim() }.filter { it.isNotBlank() }
+    }.map { unescape(PlainMath.convert(it)).trim() }.filter { it.isNotBlank() }
 
     // Some models list "A) ... B) ..." inside the question and give only letters as options.
     if (options.isNotEmpty() && options.all { it.length == 1 && it[0].isLetter() }) {
@@ -586,6 +651,8 @@ class StudyAi(
 
     // A choice question whose answer isn't one of its options can't be graded; keep it as short answer.
     if (type == "MULTIPLE_CHOICE" && options.none { it.equals(answer, ignoreCase = true) }) type = "SHORT_ANSWER"
+    // Grading compares exactly, so the answer is spelled as its option is.
+    if (type == "MULTIPLE_CHOICE") answer = options.firstOrNull { it == answer } ?: options.first { it.equals(answer, ignoreCase = true) }
     if (type == "SHORT_ANSWER" || type == "CODING") options = emptyList()
     // Models tend to put the right answer first; mix the choices once, when the question is made.
     if (type == "MULTIPLE_CHOICE") options = options.shuffled()
@@ -647,7 +714,10 @@ class StudyAi(
     )
 
     /** Options are stored joined by "," (or "|" when an option has a comma); the quiz screen reads either. */
-    fun encodeOptions(options: List<String>): String = options.joinToString(if (options.any { ',' in it }) "|" else ",")
+    fun encodeOptions(options: List<String>): String = options.joinToString(if (options.any { ',' in it || '\n' in it }) "|" else ",")
+
+    /** Models sometimes write line breaks in code as a literal backslash-n; show them as line breaks. */
+    fun unescape(text: String): String = text.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\t", "    ")
     private val BRIEF = Regex(
       """\b(in short|short answer|keep it short|briefly|in brief|brief|in a nutshell|one sentence|two sentences|one line|one-liner|tl;?dr|quick(ly)? summary|summari[sz]e|summary)\b"""
     )

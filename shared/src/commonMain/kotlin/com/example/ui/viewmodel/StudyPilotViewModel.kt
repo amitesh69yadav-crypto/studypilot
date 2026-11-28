@@ -665,6 +665,7 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
       kotlinx.coroutines.delay(5_000) // after sign-in and the first sync settle
       refreshConnectionsIfDue()
       runCatching { repository.purgeOrphanQuestions() }
+      resumeUnfinishedReads()
     }
   }
 
@@ -1887,8 +1888,19 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
     }
   }
 
-  /** Reads a document into topics with the API keys best suited to it (see StudyAi.readingBackends). */
+  /** Reads a document into topics with the API keys best suited to it (see StudyAi.cloudsFor). */
   private suspend fun scanWithChosenReader(uid: String, id: Long): Boolean = repository.scanDocument(uid, id)
+
+  /**
+   * Documents whose reading was cut off (the app was closed part way) would show "reading" for ever:
+   * the device that has the file starts them again.
+   */
+  private suspend fun resumeUnfinishedReads() {
+    val uid = _currentUser.value.id
+    val unfinished = runCatching { repository.courseDocuments(uid).first() }.getOrDefault(emptyList())
+      .filter { it.quizStatus in listOf("queued", "reading", "topics") && it.localPath.isNotBlank() && java.io.File(it.localPath).isFile }
+    for (doc in unfinished) runCatching { scanWithChosenReader(uid, doc.id) }
+  }
 
   /** A quiz on one document's topics. */
   fun startDocumentQuiz(doc: com.example.data.model.CourseDocument) {

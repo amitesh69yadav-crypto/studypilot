@@ -668,7 +668,7 @@ private fun DocumentList(files: List<com.example.data.model.CourseDocument>, sub
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
               com.example.ui.theme.Button(onClick = { viewModel.startDocumentQuiz(doc) }, enabled = !reading && !failed, contentPadding = PaddingValues(horizontal = 14.dp)) { Text("Make quiz") }
               if (doc.localPath.isNotBlank() && viewModel.connectsHere) TextButton(onClick = { actions.openFile(doc.localPath) }) { Text("Open") }
-              if (failed || doc.quizStatus.startsWith("ready: built-in")) TextButton(onClick = { viewModel.rescanDocument(doc) }) { Text("Read again") }
+              if (!reading) TextButton(onClick = { viewModel.rescanDocument(doc) }) { Text("Read again") }
               Spacer(Modifier.weight(1f))
               TextButton(onClick = { viewModel.removeDocument(doc) }) { Text("Remove") }
             }

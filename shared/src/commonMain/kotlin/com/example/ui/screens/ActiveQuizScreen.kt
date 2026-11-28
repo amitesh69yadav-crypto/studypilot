@@ -274,7 +274,7 @@ fun ActiveQuizScreen(
 
               Spacer(modifier = Modifier.height(16.dp))
               Text(
-                text = currentQuestion.questionText,
+                text = com.example.data.ai.StudyAi.unescape(currentQuestion.questionText),
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold, lineHeight = 24.sp),
                 color = MaterialTheme.colorScheme.onSurface
               )
@@ -291,7 +291,7 @@ fun ActiveQuizScreen(
                 .map { it.trim() }.filter { it.isNotBlank() }
               Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 options.forEach { opt ->
-                  val isSelected = userAnswer.equals(opt, ignoreCase = true)
+                  val isSelected = userAnswer == opt
                   Card(
                     onClick = { viewModel.answerCurrentQuestion(opt) },
                     modifier = Modifier
@@ -315,7 +315,7 @@ fun ActiveQuizScreen(
                       )
                       Spacer(modifier = Modifier.width(8.dp))
                       Text(
-                        text = opt,
+                        text = com.example.data.ai.StudyAi.unescape(opt),
                         style = MaterialTheme.typography.bodyMedium.copy(
                           fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                         ),

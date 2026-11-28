@@ -966,11 +966,14 @@ class StudyPilotRepository(
       // A PDF and a key that reads PDFs (Gemini, Claude): the model reads the whole file itself,
       // pictures and formulas included, which beats its extracted text.
       val file = doc.localPath.takeIf { it.isNotBlank() }?.let { java.io.File(it) }?.takeIf { it.isFile }
+      val missed = mutableSetOf<Int>()
       val wholePdf = file?.takeIf { doc.fileType.equals("pdf", true) || it.name.endsWith(".pdf", true) }
         ?.takeIf { ai.canReadPdf(it.length().toInt()) }
         ?.let { f ->
           stage("topics", 15)
-          ai.topicsInPdf(doc.title, doc.subjectName, withContext(Dispatchers.IO) { f.readBytes() })?.takeIf { it.isNotEmpty() }
+          ai.topicsInPdf(doc.title, doc.subjectName, withContext(Dispatchers.IO) { f.readBytes() }, doc.pageCount, missed) { done, total ->
+            stage("topics", 15 + 70 * done / total)
+          }?.takeIf { it.isNotEmpty() }
         }
       if (doc.text.isBlank() && doc.localPath.isNotBlank() && java.io.File(doc.localPath).isFile) {
         val pages = withContext(Dispatchers.Default) { com.example.data.docs.DocumentText.pages(java.io.File(doc.localPath).readBytes(), doc.fileType) }
@@ -983,28 +986,43 @@ class StudyPilotRepository(
         return false
       }
 
-      // 1. The topics the file teaches: from the whole PDF, or part by part from its text.
-      stage("topics", 15)
-      val sections = if (wholePdf != null) emptyList() else sections(pages, 9000)
+      // 1. The topics the file teaches: from the PDF itself, or part by part from its text (also
+      // the pages of the PDF no key could read).
+      if (wholePdf == null) stage("topics", 15)
+      val sections = sections(pages, 9000).let { all -> if (wholePdf != null) all.filter { s -> s.pages.any { it in missed } } else all }
       val byTitle = LinkedHashMap<String, MutableList<com.example.data.ai.StudyAi.FileTopic>>()
       wholePdf?.forEach { t -> byTitle.getOrPut(t.title.lowercase().replace(Regex("[^a-z0-9]+"), " ").trim()) { mutableListOf() } += t }
       val builtIn = mutableListOf<Pair<String, String>>()
       var fallbackWhy: String? = null
-      for ((i, section) in sections.withIndex()) {
-        ai.waitForCloud()
-        val found = ai.topicsInFile(doc.title, doc.subjectName, section.text)
+      // Up to three parts at once: each key answers in turn, and a busy one hands over to the next.
+      val read = java.util.concurrent.atomic.AtomicInteger()
+      val gate = kotlinx.coroutines.sync.Semaphore(3)
+      val answers = kotlinx.coroutines.coroutineScope {
+        sections.map { section ->
+          async {
+            gate.withPermit {
+              ai.waitForCloud()
+              val topics = ai.topicsInFile(doc.title, doc.subjectName, section.text)
+              val why = if (topics == null) ai.lastError ?: "no AI model answered" else null
+              stage("topics", (if (wholePdf != null) 85 else 15) + (if (wholePdf != null) 10 else 80) * read.incrementAndGet() / sections.size)
+              Triple(section, topics, why)
+            }
+          }
+        }.awaitAll()
+      }
+      for ((section, found, why) in answers) {
         if (found != null) {
-          found.forEach { t -> byTitle.getOrPut(t.title.lowercase().replace(Regex("[^a-z0-9]+"), " ").trim()) { mutableListOf() } += t }
+          // A share of the topics per part, so a long file's later chapters aren't crowded out.
+          found.take(maxOf(2, 24 / sections.size)).forEach { t -> byTitle.getOrPut(t.title.lowercase().replace(Regex("[^a-z0-9]+"), " ").trim()) { mutableListOf() } += t }
         } else {
-          fallbackWhy = ai.lastError ?: "no AI model answered"
+          fallbackWhy = why
           com.example.platform.Log.w("QuizFromFile", "Built-in reader for part of ${doc.title}: $fallbackWhy")
           // No model answered for this part: the built-in reader takes these pages, the rest keeps the model's topics.
           builtIn += com.example.data.ai.LectureQuiz.topicsFromPages(pages, doc.title.substringBeforeLast('.'), only = section.pages).map { it.title to it.notes }
         }
-        stage("topics", 15 + 80 * (i + 1) / sections.size)
       }
       val found: List<Pair<String, String>> = run {
-        byTitle.values.take(if (wholePdf != null) 25 else 14).map { parts ->
+        byTitle.values.take(25).map { parts ->
           val first = parts.first()
           val pageList = parts.flatMap { it.pages }.distinct().sorted()
           val excerpt = pageList.take(4).mapNotNull { pages.getOrNull(it - 1) }.joinToString("\n\n").take(2500)

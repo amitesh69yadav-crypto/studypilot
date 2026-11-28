@@ -727,6 +727,16 @@ object LocalAiEngine {
     val trimmedUser = userAnswer.trim()
     val expected = question.correctAnswer.trim()
 
+    // A choice is right only when it's the right option: options may differ only in letter case
+    // ("Car" and "car" in code), and a different option sharing words with the answer is still wrong.
+    if (question.questionType == "MULTIPLE_CHOICE") {
+      val right = trimmedUser == expected
+      return EvaluationResult(
+        isCorrect = right,
+        feedback = if (right) "✅ Correct. ${question.explanation}" else "❌ The answer is \"$expected\". ${question.explanation}"
+      )
+    }
+
     if (trimmedUser.equals(expected, ignoreCase = true)) {
       return EvaluationResult(
         isCorrect = true,
