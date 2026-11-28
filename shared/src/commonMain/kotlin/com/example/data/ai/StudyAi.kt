@@ -2,6 +2,7 @@ package com.example.data.ai
 
 import com.example.platform.Log
 import com.example.data.ai.llm.CloudClient
+import com.example.data.ai.llm.CloudProvider
 import com.example.data.ai.llm.LlmBackend
 import com.example.data.ai.rag.KnowledgePassage
 import com.example.data.ai.llm.LlmRequest
@@ -34,6 +35,13 @@ enum class AiSource(val label: String, val description: String) {
  */
 enum class AiTask { ANSWER, BACKGROUND }
 
+/** The jobs API keys are picked for, each from the keys best at it. */
+enum class AiJob(val label: String) {
+  CHAT("Tutor chat"),
+  QUIZ("Quizzes"),
+  READ("Reading documents")
+}
+
 /**
  * Everything the app asks AI for. Runs on Ollama (PC) or LiteRT-LM (phone), and falls back to
  * [LocalAiEngine]'s built-in answers when no model is available.
@@ -48,10 +56,59 @@ class StudyAi(
 
   @Volatile var source: AiSource = AiSource.AUTO
 
+  // --- Several API keys, each used for what it does best ---
+
+  /** A saved API key (besides the one picked in Settings, which is [cloud]). */
+  data class CloudKey(val provider: CloudProvider, val apiKey: String, val model: String = "", val baseUrl: String = "")
+
+  private val otherKeys = java.util.concurrent.ConcurrentHashMap<CloudProvider, CloudClient>()
+
+  /** The student's other saved keys; a client is kept per provider, so its rate-limit pause holds. */
+  fun setOtherKeys(keys: List<CloudKey>) {
+    val wanted = keys.filter { it.apiKey.isNotBlank() && it.provider != cloud.provider }.associateBy { it.provider }
+    otherKeys.keys.retainAll(wanted.keys)
+    wanted.values.forEach { k ->
+      val client = otherKeys.getOrPut(k.provider) { CloudClient().also { it.provider = k.provider } }
+      client.apiKey = k.apiKey
+      client.model = k.model
+      client.customBaseUrl = k.baseUrl
+    }
+  }
+
+  /** The client for [provider]'s key, if one is saved. */
+  fun keyFor(provider: CloudProvider): CloudClient? =
+    if (cloud.provider == provider && cloud.isConfigured) cloud else otherKeys[provider]?.takeIf { it.isConfigured }
+
+  /** A provider the student picked for a job in Settings; jobs not in here are "Auto". */
+  @Volatile var jobProvider: Map<AiJob, CloudProvider> = emptyMap()
+
+  val hasCloudKey: Boolean get() = cloud.isConfigured || otherKeys.values.any { it.isConfigured }
+
+  /**
+   * The keys to use for [job], best first. Tutor chat starts with the key picked in Settings;
+   * quizzes with the fastest (Groq); reading documents with one that reads PDFs itself (Gemini,
+   * then Claude). A provider picked for the job comes before all of them.
+   */
+  fun cloudsFor(job: AiJob): List<CloudClient> {
+    val all = (listOf(cloud) + otherKeys.values).filter { it.isConfigured }.distinctBy { it.provider }
+    val auto = when (job) {
+      AiJob.CHAT -> all.sortedWith(compareBy({ it !== cloud }, { it.provider.speedRank }))
+      AiJob.QUIZ -> all.sortedBy { it.provider.speedRank }
+      AiJob.READ -> all.sortedWith(compareBy({ !it.provider.readsPdf }, { it.provider.speedRank }))
+    }
+    val picked = jobProvider[job] ?: return auto
+    return auto.sortedBy { it.provider != picked }
+  }
+
+  /** Which job each saved key does first, for Settings ("Groq: Quizzes"). */
+  fun jobsByKey(): Map<CloudProvider, List<AiJob>> =
+    AiJob.entries.mapNotNull { job -> cloudsFor(job).firstOrNull()?.let { it.provider to job } }
+      .groupBy({ it.first }, { it.second })
+
   /** Models to try for [task], best first; the next one is used when one fails or hits its limit. */
   suspend fun backends(task: AiTask = AiTask.ANSWER): List<LlmBackend> = when (source) {
-    AiSource.AUTO -> listOfNotNull(cloud.backendOrNull(background = task == AiTask.BACKGROUND), pc.backendOrNull(), phone?.backendOrNull())
-    AiSource.CLOUD -> listOfNotNull(cloud.backendOrNull())
+    AiSource.AUTO -> cloudsFor(AiJob.CHAT).mapNotNull { it.backendOrNull(background = task == AiTask.BACKGROUND) } + listOfNotNull(pc.backendOrNull(), phone?.backendOrNull())
+    AiSource.CLOUD -> cloudsFor(AiJob.CHAT).mapNotNull { it.backendOrNull() }
     AiSource.PC -> listOfNotNull(pc.backendOrNull())
     AiSource.PHONE -> listOfNotNull(phone?.backendOrNull())
     AiSource.BUILT_IN -> emptyList()
@@ -64,9 +121,9 @@ class StudyAi(
    * Models for quiz work: the cloud chatbot first whenever a key is set (it's fast and writes the best
    * questions), whatever this device's AI setting, then the usual order.
    */
-  suspend fun quizBackends(): List<LlmBackend> =
+  suspend fun quizBackends(job: AiJob = AiJob.QUIZ): List<LlmBackend> =
     if (!quizCloudFirst) backends(AiTask.ANSWER)
-    else (listOfNotNull(cloud.backendOrNull()) + backends(AiTask.ANSWER)).distinctBy { it.label }
+    else (cloudsFor(job).mapNotNull { it.backendOrNull() } + backends(AiTask.ANSWER)).distinctBy { it.label }
 
   /** Quizzes and document reading use the API key's model first; off uses the AI setting's order. */
   @Volatile var quizCloudFirst: Boolean = true
@@ -81,9 +138,12 @@ class StudyAi(
     /** Quiz work: the cloud key first, see [quizBackends]. */
     preferCloud: Boolean = false,
     /** Room for the answer; quiz work writes long JSON, which is useless when cut off. */
-    maxTokens: Int = if (preferCloud) 4096 else 1024
+    maxTokens: Int = if (preferCloud) 4096 else 1024,
+    /** With [preferCloud]: which job's keys go first. */
+    job: AiJob = AiJob.QUIZ
   ): String? {
-    for (backend in if (preferCloud) quizBackends() else backends(task)) {
+    val chain = if (preferCloud) quizBackends(job) else backends(task)
+    for ((index, backend) in chain.withIndex()) {
       // Quiz work runs in the background, so a free plan's "slow down" is waited out (up to three
       // times) rather than handing the work to a weaker model.
       var tries = if (preferCloud && backend.label.startsWith("Cloud")) 4 else 1
@@ -91,8 +151,10 @@ class StudyAi(
         backend.generate(LlmRequest(system, listOf(LlmTurn(true, prompt)), temperature, json, maxOutputTokens = maxTokens)).takeIf { it.isNotBlank() }?.let { return it }
         break
       } catch (e: Exception) {
-        val pause = cloud.pausedForMs()
-        if (tries > 0 && backend.label.startsWith("Cloud") && pause in 1..90_000) {
+        val pause = (backend as? CloudClient.Backend)?.client?.pausedForMs() ?: 0L
+        // Another saved key is free: use it rather than waiting.
+        val anotherKey = chain.drop(index + 1).any { it is CloudClient.Backend && it.client.pausedForMs() == 0L }
+        if (tries > 0 && !anotherKey && backend.label.startsWith("Cloud") && pause in 1..90_000) {
           Log.w(TAG, "${backend.label} asked to wait ${pause / 1000}s; waiting")
           kotlinx.coroutines.delay(pause + 500)
           continue
@@ -136,7 +198,7 @@ class StudyAi(
     val chain = backends(AiTask.ANSWER)
     if (chain.isEmpty()) {
       val note = when (source) {
-        AiSource.CLOUD -> if (cloud.isConfigured) "The cloud model isn't available right now (free limit), so this is a built-in answer." else "No cloud API key is set, so this is a built-in answer."
+        AiSource.CLOUD -> if (hasCloudKey) "The cloud model isn't available right now (free limit), so this is a built-in answer." else "No cloud API key is set, so this is a built-in answer."
         AiSource.PC -> "Your PC isn't reachable, so this is a built-in answer."
         AiSource.PHONE -> "No phone model is downloaded yet, so this is a built-in answer."
         else -> null
@@ -271,8 +333,9 @@ class StudyAi(
    * little while. Long quiz work waits that out (up to [maxMs]) instead of dropping to a weaker model.
    */
   suspend fun waitForCloud(maxMs: Long = 90_000) {
-    if (!cloud.isConfigured) return
-    val wait = cloud.pausedForMs()
+    val keys = cloudsFor(AiJob.QUIZ)
+    if (keys.isEmpty() || keys.any { it.pausedForMs() == 0L }) return
+    val wait = keys.minOf { it.pausedForMs() }
     if (wait in 1..maxMs) kotlinx.coroutines.delay(wait + 500)
   }
 
@@ -305,6 +368,8 @@ class StudyAi(
     return out
   }
 
+  private val FILE_SYSTEM_PROMPT = "You turn lecture material into clear, accurate study notes. You only use what the material says."
+
   /** A topic a model found in a course file. */
   data class FileTopic(val title: String, val summary: String, val keyPoints: List<String>, val pages: List<Int>)
 
@@ -316,9 +381,7 @@ class StudyAi(
   suspend fun topicsInFile(
     fileTitle: String,
     subject: String,
-    section: String,
-    /** A specific model (e.g. Qwen3-VL on this PC) instead of the usual order. */
-    model: LlmBackend? = null
+    section: String
   ): List<FileTopic>? {
     val request = """
       This is part of the lecture file "$fileTitle" from the course "$subject". Page numbers are marked [Page n].
@@ -337,16 +400,48 @@ class StudyAi(
       If it teaches nothing (only administration), reply {"topics": []}.
     """.trimIndent()
     lastError = null
-    if (quizBackends().isEmpty()) lastError = "no AI model is set up (add a Groq or other key in Settings > AI)"
+    if (quizBackends(AiJob.READ).isEmpty()) lastError = "no AI model is set up (add a Groq, Gemini or other key in Settings > AI)"
     // Plain text: some providers' strict JSON mode rejects long answers; the JSON is read from the reply.
-    val system = "You turn lecture material into clear, accurate study notes. You only use what the material says."
-    val raw = if (model != null) {
-      runCatching { model.generate(LlmRequest(system, listOf(LlmTurn(true, request)), 0.2, false, maxOutputTokens = 4096)) }
-        .onFailure { lastError = "${model.label}: ${it.message}"; Log.w(TAG, "${model.label} failed", it) }
-        .getOrNull()?.takeIf { it.isNotBlank() } ?: return null
-    } else {
-      prompt(request, system, 0.2, json = false, preferCloud = true) ?: return null
+    val raw = prompt(request, FILE_SYSTEM_PROMPT, 0.2, json = false, preferCloud = true, job = AiJob.READ) ?: return null
+    return fileTopics(raw)
+  }
+
+  /** Whether a saved key can read this PDF itself (Gemini or Claude). */
+  fun canReadPdf(bytes: Int): Boolean = cloudsFor(AiJob.READ).any { it.canReadPdf(bytes) }
+
+  /**
+   * The study topics a whole PDF teaches, read by Gemini or Claude from the file itself (layout,
+   * tables, formulas and scanned pages, not just the text). Null when no key could read it; then
+   * the text is read part by part with [topicsInFile].
+   */
+  suspend fun topicsInPdf(fileTitle: String, subject: String, pdf: ByteArray): List<FileTopic>? {
+    val request = """
+      This PDF is the course file "$fileTitle" from the course "$subject". Read all of it, pictures,
+      tables and formulas included. Running headers, footers and page numbers are not topics.
+
+      List the subject-matter topics it actually teaches or practises: concepts, methods, algorithms,
+      data structures, proofs, definitions, formulas, results. For an exercise sheet, a topic is what
+      the exercises practise. Leave out course administration (schedules, grading, exams and deadlines,
+      contact details, attendance, assignment logistics, announcements, welcome text).
+      Give between 3 and 25 topics, in the order of the file. For each topic give:
+      - "title": a short name (2-6 words)
+      - "summary": 4-8 sentences explaining it as study notes, in plain language, from this file
+      - "keyPoints": 4-10 short facts, definitions, formulas (in plain text, e.g. O(n log n)) or worked results from the file
+      - "pages": the PDF page numbers where it is covered (the first page is 1)
+      Reply only with JSON: {"topics": [{"title": "...", "summary": "...", "keyPoints": ["..."], "pages": [1]}]}
+      If it teaches nothing (only administration), reply {"topics": []}.
+    """.trimIndent()
+    for (key in cloudsFor(AiJob.READ).filter { it.canReadPdf(pdf.size) }) {
+      val raw = runCatching { key.readPdf(pdf, fileTitle, FILE_SYSTEM_PROMPT, request) }
+        .onFailure { lastError = "${key.provider.label}: ${it.message}"; Log.w(TAG, "${key.provider.label} couldn't read $fileTitle", it) }
+        .getOrNull()?.takeIf { it.isNotBlank() } ?: continue
+      fileTopics(raw)?.let { return it }
     }
+    return null
+  }
+
+  /** The topics in a model's {"topics": [...]} answer (also when it was cut off), or null. */
+  private fun fileTopics(raw: String): List<FileTopic>? {
     return runCatching {
       // A reply cut off mid-way still holds the topics before the cut: keep each complete one.
       val objects = runCatching { JSONObject(extractJson(raw) ?: raw).optJSONArray("topics")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) } } }

@@ -61,8 +61,6 @@ class DesktopPlatform : Platform {
       ?.forEach { old -> old.delete(); File(dir, old.name + "-wal").delete() }
   }
 
-  override val localDocumentReader: com.example.platform.LocalDocumentReader by lazy { DoclingReader() }
-
   override val google: com.example.data.connect.GoogleAuth by lazy { DesktopGoogleAuth(prefs("studypilot_google")) }
 
   val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)

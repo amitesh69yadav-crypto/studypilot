@@ -957,45 +957,42 @@ class StudyPilotRepository(
    */
   suspend fun scanDocument(
     userId: String,
-    docId: Long,
-    /** Read on this PC (Docling): the document as Markdown, used instead of the plain text. */
-    markdown: (suspend () -> String)? = null,
-    /** The model that finds topics (e.g. Qwen3-VL on this PC); null uses the usual order. */
-    model: com.example.data.ai.llm.LlmBackend? = null
+    docId: Long
   ): Boolean {
     var doc = dao.getCourseDocument(docId) ?: return false
     suspend fun stage(status: String, progress: Int) = dao.setQuizStatus(doc.id, status, progress)
     return try {
       stage("reading", 5)
+      // A PDF and a key that reads PDFs (Gemini, Claude): the model reads the whole file itself,
+      // pictures and formulas included, which beats its extracted text.
+      val file = doc.localPath.takeIf { it.isNotBlank() }?.let { java.io.File(it) }?.takeIf { it.isFile }
+      val wholePdf = file?.takeIf { doc.fileType.equals("pdf", true) || it.name.endsWith(".pdf", true) }
+        ?.takeIf { ai.canReadPdf(it.length().toInt()) }
+        ?.let { f ->
+          stage("topics", 15)
+          ai.topicsInPdf(doc.title, doc.subjectName, withContext(Dispatchers.IO) { f.readBytes() })?.takeIf { it.isNotEmpty() }
+        }
       if (doc.text.isBlank() && doc.localPath.isNotBlank() && java.io.File(doc.localPath).isFile) {
         val pages = withContext(Dispatchers.Default) { com.example.data.docs.DocumentText.pages(java.io.File(doc.localPath).readBytes(), doc.fileType) }
         doc = doc.copy(text = pages.joinToString("\u000C").take(400_000), pageCount = pages.size, quizStatus = "reading", quizProgress = 10)
         dao.upsertCourseDocument(doc)
       }
-      if (markdown != null) {
-        // Docling's Markdown keeps headings, lists and tables, and reads scanned pages; its sections
-        // (split at headings) take the place of pages.
-        val sectionsMd = markdownSections(markdown())
-        if (sectionsMd.isNotEmpty()) {
-          doc = doc.copy(text = sectionsMd.joinToString("\u000C").take(400_000), pageCount = sectionsMd.size, quizStatus = "reading", quizProgress = 12)
-          dao.upsertCourseDocument(doc)
-        }
-      }
       val pages = doc.pages
-      if (doc.text.isBlank()) {
+      if (doc.text.isBlank() && wholePdf == null) {
         stage("failed: no readable text (a scan or images only)", 0)
         return false
       }
 
-      // 1. The topics the file teaches.
+      // 1. The topics the file teaches: from the whole PDF, or part by part from its text.
       stage("topics", 15)
-      val sections = sections(pages, 9000)
+      val sections = if (wholePdf != null) emptyList() else sections(pages, 9000)
       val byTitle = LinkedHashMap<String, MutableList<com.example.data.ai.StudyAi.FileTopic>>()
+      wholePdf?.forEach { t -> byTitle.getOrPut(t.title.lowercase().replace(Regex("[^a-z0-9]+"), " ").trim()) { mutableListOf() } += t }
       val builtIn = mutableListOf<Pair<String, String>>()
       var fallbackWhy: String? = null
       for ((i, section) in sections.withIndex()) {
-        if (model == null) ai.waitForCloud()
-        val found = ai.topicsInFile(doc.title, doc.subjectName, section.text, model)
+        ai.waitForCloud()
+        val found = ai.topicsInFile(doc.title, doc.subjectName, section.text)
         if (found != null) {
           found.forEach { t -> byTitle.getOrPut(t.title.lowercase().replace(Regex("[^a-z0-9]+"), " ").trim()) { mutableListOf() } += t }
         } else {
@@ -1007,7 +1004,7 @@ class StudyPilotRepository(
         stage("topics", 15 + 80 * (i + 1) / sections.size)
       }
       val found: List<Pair<String, String>> = run {
-        byTitle.values.take(14).map { parts ->
+        byTitle.values.take(if (wholePdf != null) 25 else 14).map { parts ->
           val first = parts.first()
           val pageList = parts.flatMap { it.pages }.distinct().sorted()
           val excerpt = pageList.take(4).mapNotNull { pages.getOrNull(it - 1) }.joinToString("\n\n").take(2500)
@@ -1048,22 +1045,6 @@ class StudyPilotRepository(
       stage("failed: ${e.message ?: "something went wrong"}".take(160), 0)
       false
     }
-  }
-
-  /** Markdown split at headings into parts of a reasonable size, each starting with its heading. */
-  private fun markdownSections(md: String): List<String> {
-    val out = mutableListOf<StringBuilder>()
-    var current = StringBuilder()
-    for (line in md.lines()) {
-      val heading = line.trimStart().startsWith("#")
-      if ((heading && current.length > 400) || current.length > 6000) {
-        out += current
-        current = StringBuilder()
-      }
-      if (line.trim() != "<!-- image -->") current.append(line).append('\n')
-    }
-    if (current.isNotBlank()) out += current
-    return out.map { it.toString().trim() }.filter { it.isNotBlank() }
   }
 
   private class Section(val text: String, val pages: Set<Int>)

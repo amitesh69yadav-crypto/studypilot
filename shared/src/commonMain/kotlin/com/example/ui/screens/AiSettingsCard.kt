@@ -95,42 +95,13 @@ fun AiSettingsCard(viewModel: StudyPilotViewModel) {
       val quizCloudFirst by viewModel.quizCloudFirst.collectAsState()
       Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.weight(1f)) {
-          Text("Quizzes use your API key first", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+          Text("Quizzes use your API keys first", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
           Text(
             "Faster quizzes and better reading of uploaded documents. Off: quizzes use the AI chosen below.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
           )
         }
         androidx.compose.material3.Switch(checked = quizCloudFirst, onCheckedChange = { viewModel.setQuizCloudFirst(it) })
-      }
-      Spacer(Modifier.height(12.dp))
-      // Reading uploaded documents: the API key's model, or locally on the PC with Docling + Qwen3-VL.
-      val docReader by viewModel.docReader.collectAsState()
-      val localStatus by viewModel.localReaderStatus.collectAsState()
-      LaunchedEffect(docReader) { if (docReader == "local" && viewModel.canReadLocally) viewModel.checkLocalReader() }
-      Text("Read uploaded documents with", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-      listOf(
-        Triple("api", "Your API key", "Fast and accurate; the document's text goes to your AI provider."),
-        Triple("local", "This PC: Docling + Qwen3-VL", if (viewModel.canReadLocally) "Runs entirely on this PC. Docling reads layout, tables and scanned pages; Qwen3-VL in Ollama finds the topics. Slower, private." else "Available on the PC app. Uploads from this phone use your API key.")
-      ).forEach { (key, title, about) ->
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-          RadioButton(selected = docReader == key, onClick = { viewModel.setDocReader(key) }, enabled = key == "api" || viewModel.canReadLocally)
-          Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-            Text(about, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-          }
-        }
-      }
-      if (docReader == "local" && viewModel.canReadLocally) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-          Text(
-            localStatus ?: "",
-            style = MaterialTheme.typography.bodySmall,
-            color = if (localStatus?.startsWith("Ready") == true) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-            modifier = Modifier.weight(1f).padding(start = 12.dp)
-          )
-          androidx.compose.material3.TextButton(onClick = { viewModel.checkLocalReader() }) { Text("Check again") }
-        }
       }
       Spacer(Modifier.height(12.dp))
       Text("Use", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
@@ -294,6 +265,7 @@ private fun CloudSection(viewModel: StudyPilotViewModel) {
     Spacer(Modifier.height(6.dp))
     Text(it, style = MaterialTheme.typography.bodySmall)
   }
+  KeyJobs(viewModel, withKeys)
   Spacer(Modifier.height(8.dp))
   Row(verticalAlignment = Alignment.Top) {
     Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(14.dp).padding(top = 2.dp))
@@ -463,4 +435,58 @@ private fun SectionTitle(icon: androidx.compose.ui.graphics.vector.ImageVector, 
     Text(title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
   }
   Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+/**
+ * The saved keys and the jobs each one does. The app picks on its own (Auto): Groq for quizzes as
+ * it's fastest, Gemini or Claude for reading documents as they read PDFs themselves, the key picked
+ * above for tutor chat. Each job can be given to a key instead, and another key takes over when one
+ * is out of its free limit.
+ */
+@Composable
+private fun KeyJobs(viewModel: StudyPilotViewModel, withKeys: Set<com.example.data.ai.llm.CloudProvider>) {
+  if (withKeys.isEmpty()) return
+  val jobsByKey by viewModel.keyJobs.collectAsState()
+  val picked by viewModel.jobProviders.collectAsState()
+  Spacer(Modifier.height(16.dp))
+  Text("Your keys", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+  Text(
+    "Save keys from several providers (pick another provider above) and each job uses the one best at it. " +
+      "When a key reaches its free limit, the next one takes over.",
+    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+  )
+  Spacer(Modifier.height(6.dp))
+  com.example.data.ai.llm.CloudProvider.entries.filter { it in withKeys }.forEach { p ->
+    val jobs = jobsByKey[p].orEmpty()
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+      Icon(Icons.Default.Key, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+      Spacer(Modifier.width(8.dp))
+      Column(Modifier.weight(1f)) {
+        Text(p.label + if (p.readsPdf) " · reads PDFs" else "", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+        Text(
+          if (jobs.isEmpty()) "Backup when another key is busy" else jobs.joinToString(", ") { it.label },
+          style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+      }
+    }
+  }
+  if (withKeys.size > 1) {
+    Spacer(Modifier.height(8.dp))
+    com.example.data.ai.AiJob.entries.forEach { job ->
+      val options = listOf("" to "Auto") + com.example.data.ai.llm.CloudProvider.entries.filter { it in withKeys }.map { it.name to it.label }
+      Dropdown(
+        label = job.label,
+        options = options,
+        selected = picked[job]?.name ?: "",
+        onSelect = { name -> viewModel.setJobProvider(job, com.example.data.ai.llm.CloudProvider.entries.firstOrNull { it.name == name }) },
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+      )
+    }
+    if (picked[com.example.data.ai.AiJob.READ]?.readsPdf == false) {
+      Text(
+        "${picked[com.example.data.ai.AiJob.READ]!!.label} reads only a document's text; PDFs still go to a key that reads them whole when there is one.",
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+      )
+    }
+  }
 }

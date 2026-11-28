@@ -6,6 +6,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okio.ByteString.Companion.toByteString
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -119,8 +120,10 @@ class CloudClient(
     return Backend(chosenModel())
   }
 
-  private inner class Backend(private val model: String) : LlmBackend {
+  inner class Backend(private val model: String) : LlmBackend {
     override val label = "Cloud · ${model.substringAfterLast('/')}"
+    /** The key this model runs on (for its rate-limit pause). */
+    val client: CloudClient get() = this@CloudClient
 
     override suspend fun generate(request: LlmRequest, onPartial: ((String) -> Unit)?): String = withContext(Dispatchers.IO) {
       ensureModels()
@@ -179,6 +182,117 @@ class CloudClient(
     }.toString()
     return send("$baseUrl/chat/completions", body, onPartial) { event ->
       JSONObject(event).optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("delta")?.optString("content").orEmpty()
+    }
+  }
+
+  // --- Whole PDFs, for the providers that read them (Gemini, Claude) ---
+
+  /** Lets tests point Gemini's own API at a local fake. */
+  @Volatile internal var geminiBaseUrlForTests: String? = null
+
+  private val geminiBase: String
+    get() = (geminiBaseUrlForTests ?: provider.baseUrl.removeSuffix("/openai")).trim().trimEnd('/')
+
+  /** A whole document takes a while to read; allow it. */
+  private val slowHttp: OkHttpClient by lazy { http.newBuilder().readTimeout(5, TimeUnit.MINUTES).writeTimeout(2, TimeUnit.MINUTES).build() }
+
+  /** Whether this key can read a PDF of [bytes] itself (Gemini takes up to 50 MB, Claude about 24 MB). */
+  fun canReadPdf(bytes: Int): Boolean = isConfigured && provider.readsPdf &&
+    bytes <= if (provider == CloudProvider.GEMINI) 50_000_000 else 24_000_000
+
+  /**
+   * Sends a whole PDF with [prompt] to Gemini or Claude, which read the pages themselves (layout,
+   * tables, scanned pages, formulas), and returns the reply. Gemini takes big files through its
+   * Files API.
+   */
+  suspend fun readPdf(pdf: ByteArray, fileName: String, system: String, prompt: String, maxTokens: Int = 16_000): String = withContext(Dispatchers.IO) {
+    if (!canReadPdf(pdf.size)) throw LlmException("${provider.label} can't read this PDF")
+    if (System.currentTimeMillis() < pausedUntil) throw LlmException("The free limit is used up for now")
+    if (model.isBlank()) ensureModels()
+    fun read(model: String) =
+      if (provider == CloudProvider.GEMINI) geminiPdf(model, pdf, fileName, system, prompt, maxTokens)
+      else anthropicPdf(model, pdf, system, prompt, maxTokens)
+    val first = chosenModel()
+    try {
+      read(first)
+    } catch (e: Exception) {
+      if (!isModelGone(e.message)) throw e
+      refused += first
+      val next = chosenModel()
+      if (next.isBlank() || next == first) throw e
+      read(next)
+    }
+  }
+
+  private fun geminiPdf(model: String, pdf: ByteArray, fileName: String, system: String, prompt: String, maxTokens: Int): String {
+    val document = if (pdf.size <= GEMINI_INLINE_BYTES) {
+      JSONObject().put("inline_data", JSONObject().put("mime_type", "application/pdf").put("data", pdf.toByteString().base64()))
+    } else {
+      JSONObject().put("file_data", JSONObject().put("mime_type", "application/pdf").put("file_uri", geminiUpload(pdf, fileName)))
+    }
+    val body = JSONObject()
+      .put("system_instruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", system))))
+      .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(document).put(JSONObject().put("text", prompt)))))
+      .put("generationConfig", JSONObject().put("temperature", 0.2).put("maxOutputTokens", maxTokens))
+    val reply = call(
+      Request.Builder().url("$geminiBase/models/${model.removePrefix("models/")}:generateContent")
+        .header("x-goog-api-key", apiKey).post(body.toString().toRequestBody(JSON)).build()
+    ).first
+    val parts = JSONObject(reply).optJSONArray("candidates")?.optJSONObject(0)?.optJSONObject("content")?.optJSONArray("parts") ?: JSONArray()
+    return stripThinking((0 until parts.length()).mapNotNull { parts.optJSONObject(it) }.filterNot { it.optBoolean("thought") }.joinToString("") { it.optString("text") })
+  }
+
+  /** Gemini's Files API: start a resumable upload, send the bytes, wait until the file is ready. */
+  private fun geminiUpload(pdf: ByteArray, fileName: String): String {
+    val start = call(
+      Request.Builder().url(geminiBase.substringBefore("/v1beta") + "/upload/v1beta/files")
+        .header("x-goog-api-key", apiKey)
+        .header("X-Goog-Upload-Protocol", "resumable")
+        .header("X-Goog-Upload-Command", "start")
+        .header("X-Goog-Upload-Header-Content-Length", pdf.size.toString())
+        .header("X-Goog-Upload-Header-Content-Type", "application/pdf")
+        .post(JSONObject().put("file", JSONObject().put("display_name", fileName.take(100))).toString().toRequestBody(JSON))
+        .build()
+    )
+    val uploadUrl = start.second["x-goog-upload-url"] ?: throw LlmException("Gemini didn't accept the upload")
+    val done = call(
+      Request.Builder().url(uploadUrl).header("X-Goog-Upload-Offset", "0").header("X-Goog-Upload-Command", "upload, finalize")
+        .post(pdf.toRequestBody("application/pdf".toMediaType())).build()
+    )
+    var file = JSONObject(done.first).optJSONObject("file") ?: throw LlmException("Gemini didn't keep the file")
+    for (i in 0 until 60) {
+      if (file.optString("state", "ACTIVE") != "PROCESSING") break
+      Thread.sleep(2_000)
+      file = JSONObject(call(Request.Builder().url("$geminiBase/${file.optString("name")}").header("x-goog-api-key", apiKey).get().build()).first)
+    }
+    if (file.optString("state") == "FAILED") throw LlmException("Gemini couldn't read the file")
+    return file.optString("uri").ifBlank { throw LlmException("Gemini didn't keep the file") }
+  }
+
+  private fun anthropicPdf(model: String, pdf: ByteArray, system: String, prompt: String, maxTokens: Int): String {
+    val content = JSONArray()
+      .put(JSONObject().put("type", "document").put("source", JSONObject().put("type", "base64").put("media_type", "application/pdf").put("data", pdf.toByteString().base64())))
+      .put(JSONObject().put("type", "text").put("text", prompt))
+    val body = JSONObject().put("model", model).put("max_tokens", maxTokens).put("temperature", 0.2).put("system", system)
+      .put("messages", JSONArray().put(JSONObject().put("role", "user").put("content", content)))
+    val reply = call(authorized(Request.Builder().url("$baseUrl/messages")).post(body.toString().toRequestBody(JSON)).build()).first
+    val parts = JSONObject(reply).optJSONArray("content") ?: JSONArray()
+    return stripThinking((0 until parts.length()).joinToString("") { parts.optJSONObject(it)?.optString("text").orEmpty() })
+  }
+
+  /** Sends [request] on the slow client; the reply body and headers, or the provider's reason. */
+  private fun call(request: Request): Pair<String, okhttp3.Headers> {
+    countRequest()
+    slowHttp.newCall(request).execute().use { resp ->
+      val text = resp.body?.string().orEmpty()
+      if (!resp.isSuccessful) {
+        if (resp.code == 429) {
+          val wait = resp.header("retry-after")?.toDoubleOrNull()?.times(1000)?.toLong() ?: 60_000L
+          pausedUntil = System.currentTimeMillis() + wait.coerceIn(5_000L, 6 * 3_600_000L)
+        }
+        throw LlmException(errorText(resp.code, text))
+      }
+      return text to resp.headers
     }
   }
 
@@ -250,6 +364,8 @@ class CloudClient(
   companion object {
     private const val ANTHROPIC_VERSION = "2023-06-01"
     private const val BACKGROUND_SHARE = 0.7
+    /** Gemini takes a request up to 20 MB; base64 makes the file a third bigger. */
+    private const val GEMINI_INLINE_BYTES = 14_000_000
     private val NOT_CHAT = listOf("whisper", "tts", "guard", "embed", "orpheus", "playai")
     private val JSON = "application/json; charset=utf-8".toMediaType()
   }

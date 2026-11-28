@@ -158,6 +158,25 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
   val providersWithKeys: StateFlow<Set<CloudProvider>> = _providersWithKeys.asStateFlow()
   private val _cloudStatus = MutableStateFlow<String?>(null)
   val cloudStatus: StateFlow<String?> = _cloudStatus.asStateFlow()
+
+  /** A key picked for a job in Settings (missing = Auto: the app picks the best saved key). */
+  private val _jobProviders = MutableStateFlow(
+    com.example.data.ai.AiJob.entries.mapNotNull { job ->
+      aiPrefs.getString("job_${job.name}", null)?.takeIf { it.isNotBlank() }?.let { name -> CloudProvider.entries.firstOrNull { it.name == name }?.let { job to it } }
+    }.toMap()
+  )
+  val jobProviders: StateFlow<Map<com.example.data.ai.AiJob, CloudProvider>> = _jobProviders.asStateFlow()
+
+  /** Which job each saved key does first ("Groq: Quizzes", "Gemini: Reading documents"). */
+  private val _keyJobs = MutableStateFlow<Map<CloudProvider, List<com.example.data.ai.AiJob>>>(emptyMap())
+  val keyJobs: StateFlow<Map<CloudProvider, List<com.example.data.ai.AiJob>>> = _keyJobs.asStateFlow()
+
+  /** Uses [provider]'s key for [job] first, or null for Auto. */
+  fun setJobProvider(job: com.example.data.ai.AiJob, provider: CloudProvider?) {
+    _jobProviders.value = if (provider == null) _jobProviders.value - job else _jobProviders.value + (job to provider)
+    aiPrefs.edit { putString("job_${job.name}", provider?.name ?: "") }
+    applyCloudConfig()
+  }
   private val _cloudModels = MutableStateFlow<List<String>>(emptyList())
   val cloudModels: StateFlow<List<String>> = _cloudModels.asStateFlow()
   private val _isCheckingCloud = MutableStateFlow(false)
@@ -807,6 +826,13 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
     repository.ai.cloud.customBaseUrl = _cloudBaseUrl.value
     repository.ai.cloud.apiKey = _cloudKey.value
     repository.ai.cloud.model = _cloudModel.value
+    // Every other saved key too: each job uses the key best at it (see StudyAi.cloudsFor).
+    repository.ai.setOtherKeys(CloudProvider.entries.filter { it != _cloudProvider.value }.mapNotNull { p ->
+      val key = keyPrefs.getString("key_${p.name}", null)?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+      StudyAi.CloudKey(p, key, keyPrefs.getString("model_${p.name}", "") ?: "", if (p == CloudProvider.CUSTOM) keyPrefs.getString("custom_base_url", "") ?: "" else "")
+    })
+    repository.ai.jobProvider = _jobProviders.value
+    _keyJobs.value = repository.ai.jobsByKey()
   }
 
   /** Switches to [provider], with the key and model saved for it on this device (if any). */
@@ -1861,64 +1887,8 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
     }
   }
 
-  // --- Which AI reads documents: the API key's model, or this PC (Docling + Qwen3-VL) ---
-
-  /** "api" (the API key's model, then the usual order) or "local" (Docling + Qwen3-VL on this PC). */
-  private val _docReader = MutableStateFlow(aiPrefs.getString("doc_reader", "api") ?: "api")
-  val docReader: StateFlow<String> = _docReader.asStateFlow()
-
-  /** Whether local reading can run here, in words ("Ready: Docling + qwen3-vl:8b", or what's missing). */
-  private val _localReaderStatus = MutableStateFlow<String?>(null)
-  val localReaderStatus: StateFlow<String?> = _localReaderStatus.asStateFlow()
-
-  val canReadLocally: Boolean get() = platform.localDocumentReader != null
-
-  /** This PC's Ollama (where Qwen3-VL runs), at the address in AI settings or the default. */
-  private val localOllama by lazy { com.example.data.ai.llm.OllamaClient() }
-
-  private suspend fun localQwen(): com.example.data.ai.llm.LlmBackend? {
-    localOllama.baseUrl = _pcUrl.value.ifBlank { "127.0.0.1" }
-    return localOllama.backendFor("qwen3-vl")
-  }
-
-  fun setDocReader(reader: String) {
-    _docReader.value = reader
-    aiPrefs.edit { putString("doc_reader", reader) }
-    if (reader == "local") checkLocalReader()
-  }
-
-  fun checkLocalReader() {
-    viewModelScope.launch {
-      _localReaderStatus.value = "Checking…"
-      val docling = platform.localDocumentReader?.isAvailable() == true
-      val qwen = runCatching { localQwen() }.getOrNull()
-      _localReaderStatus.value = when {
-        docling && qwen != null -> "Ready: Docling + ${qwen.label.removePrefix("PC · ")}"
-        else -> "Not ready: " + listOfNotNull(
-          if (!docling) "Docling isn't installed (pip install docling)" else null,
-          if (qwen == null) "no Qwen3-VL model in Ollama (ollama pull qwen3-vl:8b)" else null
-        ).joinToString("; ")
-      }
-    }
-  }
-
-  /**
-   * Reads a document with the chosen reader. On this PC: Docling turns it into Markdown (layout,
-   * tables, scanned pages) and Qwen3-VL finds its topics. If that isn't set up, the API key's model
-   * (or the built-in reader) does it, and the student is told.
-   */
-  private suspend fun scanWithChosenReader(uid: String, id: Long): Boolean {
-    if (_docReader.value == "local" && canReadLocally) {
-      val reader = platform.localDocumentReader!!
-      val file = repository.document(id)?.localPath?.takeIf { it.isNotBlank() }?.let { java.io.File(it) }?.takeIf { it.isFile }
-      val qwen = runCatching { localQwen() }.getOrNull()
-      if (file != null && qwen != null && reader.isAvailable()) {
-        return repository.scanDocument(uid, id, markdown = { reader.toMarkdown(file) }, model = qwen)
-      }
-      _snackbarMessage.emit("Reading on this PC isn't ready (see Settings > AI), so the API is used this time")
-    }
-    return repository.scanDocument(uid, id)
-  }
+  /** Reads a document into topics with the API keys best suited to it (see StudyAi.readingBackends). */
+  private suspend fun scanWithChosenReader(uid: String, id: Long): Boolean = repository.scanDocument(uid, id)
 
   /** A quiz on one document's topics. */
   fun startDocumentQuiz(doc: com.example.data.model.CourseDocument) {

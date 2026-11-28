@@ -57,6 +57,14 @@ enum class CloudProvider(
     emptyList(), "", "Any provider with an OpenAI-style API: enter its address.", 1000
   );
 
+  /** Reads a PDF itself, pictures included (scanned pages, diagrams, formulas), not just its text. */
+  val readsPdf: Boolean get() = this == GEMINI || this == ANTHROPIC
+
+  /** Quickest first: the order keys are tried for quiz work. */
+  val speedRank: Int get() = when (this) {
+    GROQ -> 0; GEMINI -> 1; MISTRAL -> 2; OPENROUTER -> 3; DEEPSEEK -> 4; OPENAI -> 5; ANTHROPIC -> 6; CUSTOM -> 7
+  }
+
   companion object {
     fun byName(name: String?): CloudProvider = entries.firstOrNull { it.name == name } ?: GROQ
   }
