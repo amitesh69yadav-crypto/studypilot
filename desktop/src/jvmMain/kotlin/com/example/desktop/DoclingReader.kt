@@ -34,13 +34,18 @@ class DoclingReader : LocalDocumentReader {
     command?.let { return it }
     if (System.currentTimeMillis() - checked < 30_000) return null
     checked = System.currentTimeMillis()
-    val candidates = listOf(
-      listOf("docling"),
-      listOf("python", "-m", "docling.cli.main"),
-      listOf("py", "-m", "docling.cli.main")
+    // PyTorch is loaded before Docling: on Windows another library Docling loads first can make
+    // PyTorch's DLLs fail to start (WinError 1114).
+    val launcher = "import torch, sys; sys.argv = ['docling'] + sys.argv[1:]; from docling.cli.main import app; app()"
+    // StudyPilot's own environment first (matching versions, nothing else's packages), then the system's.
+    val ownPython = File(System.getenv("LOCALAPPDATA") ?: "", "StudyPilot-Docling\\Scripts\\python.exe")
+    val candidates = listOfNotNull(
+      if (ownPython.isFile) listOf(ownPython.absolutePath, "-c", launcher) else null,
+      listOf("python", "-c", launcher),
+      listOf("docling")
     )
     for (c in candidates) {
-      val ok = runCatching { run(c + "--version", 60).first == 0 }.getOrDefault(false)
+      val ok = runCatching { run(c + "--version", 120).first == 0 }.getOrDefault(false)
       if (ok) { command = c; return c }
     }
     return null
