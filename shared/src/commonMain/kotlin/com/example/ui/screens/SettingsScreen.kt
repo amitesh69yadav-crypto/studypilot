@@ -712,6 +712,7 @@ fun SettingsScreen(
 
     deviceSyncCard?.let { card -> item { card() } }
     item { AiSettingsCard(viewModel) }
+    item { ConnectionsCard(viewModel) }
 
     // 2. Subject & Course Manager
     item {

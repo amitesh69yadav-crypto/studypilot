@@ -257,8 +257,8 @@ private fun CloudSection(viewModel: StudyPilotViewModel) {
     Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(14.dp).padding(top = 2.dp))
     Spacer(Modifier.width(6.dp))
     Text(
-      "Your key is kept only on this device. It isn't part of the app, isn't backed up or synced to your other devices, " +
-        "and is sent only to ${provider.label}. Anyone you share the app with has to add their own key.",
+      "Your key stays on your devices: it's shared only with your paired phone or PC, encrypted, and never " +
+        "backed up to the cloud or built into the app. It's sent only to ${provider.label}.",
       style = MaterialTheme.typography.bodySmall,
       color = MaterialTheme.colorScheme.onSurfaceVariant
     )

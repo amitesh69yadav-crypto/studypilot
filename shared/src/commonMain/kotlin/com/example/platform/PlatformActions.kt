@@ -21,6 +21,12 @@ interface PlatformActions {
 
   data class GoogleAccount(val idToken: String, val displayName: String?, val email: String?)
 
+  /**
+   * Asks Google for read-only access to the student's Classroom courses and returns an access
+   * token, or null if they said no. Null where unsupported (the PC).
+   */
+  val googleClassroomToken: (suspend () -> String?)? get() = null
+
   /** Does nothing; used in previews and tests. */
   object None : PlatformActions {
     override fun openUrl(url: String) {}

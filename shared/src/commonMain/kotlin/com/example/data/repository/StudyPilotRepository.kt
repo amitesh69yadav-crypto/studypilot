@@ -391,6 +391,143 @@ class StudyPilotRepository(
     return ai.summarizeMaterial(title, rawContent)
   }
 
+  // --- Connected services (calendar feeds, Canvas, Moodle, Google Classroom) ---
+
+  /** What one import changed, for the status line. */
+  data class ImportSummary(val subjects: Int = 0, val topics: Int = 0, val tasks: Int = 0, val sessions: Int = 0, val updated: Int = 0, val removed: Int = 0) {
+    private fun n(count: Int, one: String, many: String) = "$count ${if (count == 1) one else many}"
+    override fun toString(): String = listOfNotNull(
+      subjects.takeIf { it > 0 }?.let { n(it, "new subject", "new subjects") },
+      topics.takeIf { it > 0 }?.let { n(it, "new topic", "new topics") },
+      tasks.takeIf { it > 0 }?.let { n(it, "new task", "new tasks") },
+      sessions.takeIf { it > 0 }?.let { n(it, "new class", "new classes") },
+      updated.takeIf { it > 0 }?.let { "$it updated" },
+      removed.takeIf { it > 0 }?.let { "$it removed" }
+    ).joinToString(", ").ifBlank { "Already up to date" }
+  }
+
+  /**
+   * Puts a calendar feed's events into the timetable. Each imported class remembers its event
+   * ("ics:<feed>:<uid>:<date>"), so a re-import updates moved classes and drops cancelled future ones
+   * instead of adding duplicates. Imported classes have no alarm until the student turns one on.
+   */
+  suspend fun importCalendar(userId: String, feedUrl: String, events: List<com.example.data.connect.CalendarEvent>, today: String): ImportSummary {
+    val feed = "ics:" + feedUrl.trim().hashCode().toUInt().toString(16) + ":"
+    val existing = dao.getSessionsListForUser(userId)
+    val mine = existing.filter { it.googleCalendarEventId?.startsWith(feed) == true }.associateBy { it.googleCalendarEventId!! }
+    val subjects = dao.getSubjectsForUser(userId).first()
+    var added = 0
+    var updated = 0
+    var removed = 0
+    val seen = HashSet<String>()
+    for (e in events.filter { !it.allDay }) {
+      val ref = feed + e.uid + ":" + e.date
+      if (!seen.add(ref)) continue
+      val subject = subjects.firstOrNull { s ->
+        (s.code.isNotBlank() && e.summary.contains(s.code, ignoreCase = true)) || e.summary.contains(s.name, ignoreCase = true)
+      }
+      val subjectName = subject?.name ?: e.summary.split(',', ';', '|').first().split(" - ").first().trim().take(40).ifBlank { "General" }
+      val notes = listOf(e.description.take(1500), "From your calendar feed").filter { it.isNotBlank() }.joinToString("\n\n")
+      val old = mine[ref]
+      if (old != null) {
+        val changed = old.copy(startTime = e.startTime, endTime = e.endTime, location = e.location, topic = e.summary.take(120))
+        if (changed != old) {
+          dao.updateSession(changed)
+          updated++
+        }
+        continue
+      }
+      // A class the student already typed in by hand at the same time isn't added twice.
+      val duplicate = existing.any { it.date == e.date && it.startTime == e.startTime && (it.subjectName.equals(subjectName, true) || it.topic.equals(e.summary, true)) }
+      if (duplicate) continue
+      dao.insertSession(
+        TimetableSession(
+          userId = userId, subjectId = subject?.id ?: 0L, subjectName = subjectName, topic = e.summary.take(120),
+          date = e.date, startTime = e.startTime, endTime = e.endTime, location = e.location, notes = notes,
+          isAlarmEnabled = false, googleCalendarEventId = ref, sessionCategory = "ACADEMIC"
+        )
+      )
+      added++
+    }
+    // Future classes from this feed that it no longer lists were cancelled or moved.
+    mine.values.filter { it.googleCalendarEventId !in seen && it.date >= today }.forEach {
+      dao.deleteSessionById(it.id)
+      removed++
+    }
+    // All-day events that look like exams or deadlines become tasks.
+    val tasks = dao.getTasksForUser(userId).first()
+    var newTasks = 0
+    val deadline = Regex("(?i)exam|deadline|due|test|quiz|tenta|submission")
+    val exam = Regex("(?i)exam|tenta|test")
+    events.filter { it.allDay && it.date >= today && deadline.containsMatchIn(it.summary) }
+      .distinctBy { it.summary + it.date }
+      .forEach { e ->
+        if (tasks.none { it.title.equals(e.summary.take(120), true) && it.dueDate == e.date }) {
+          addTask(StudyTask(userId = userId, subjectName = "General", title = e.summary.take(120), dueDate = e.date, type = if (exam.containsMatchIn(e.summary)) "EXAM" else "ASSIGNMENT"))
+          newTasks++
+        }
+      }
+    return ImportSummary(sessions = added, tasks = newTasks, updated = updated, removed = removed)
+  }
+
+  /**
+   * Adds a learning system's courses: each course becomes a subject (matched by name or code if it
+   * exists), its syllabus and pages become topics, and assignments with a due date become tasks.
+   * Running it again only adds what's new and refreshes changed notes and due dates.
+   */
+  suspend fun importCourses(userId: String, courses: List<com.example.data.connect.LmsCourse>, today: String): ImportSummary {
+    var subjects = dao.getSubjectsForUser(userId).first()
+    val topics = dao.getTopicsForUser(userId).first()
+    val tasks = dao.getTasksForUser(userId).first()
+    val palette = listOf("#5B6CFF", "#2E9E6B", "#E0823A", "#C2477C", "#3A8FD8", "#8C5BD6", "#C9A227", "#3AA6A0")
+    var newSubjects = 0
+    var newTopics = 0
+    var newTasks = 0
+    var updated = 0
+    for (course in courses.filter { it.name.isNotBlank() }) {
+      val name = course.name.take(60)
+      var subject = subjects.firstOrNull { it.name.equals(name, true) || (course.code.isNotBlank() && it.code.equals(course.code, true)) }
+      if (subject == null) {
+        val code = course.code.take(20).ifBlank { name.take(8).uppercase() }
+        val id = addSubject(name, code, palette[(subjects.size + newSubjects) % palette.size], userId)
+        subject = Subject(id = id, userId = userId, name = name, code = code, colorHex = "")
+        subjects = subjects + subject
+        newSubjects++
+      }
+      for (t in course.topics) {
+        val title = t.title.trim().take(80)
+        if (title.isBlank()) continue
+        val notes = t.text.take(12_000)
+        val old = topics.firstOrNull { it.subjectId == subject.id && it.title.equals(title, true) }
+        if (old == null) {
+          addTopic(
+            StudyTopic(
+              userId = userId, subjectId = subject.id, subjectName = subject.name, title = title,
+              dateStudied = today, descriptionNotes = notes, sourceType = "IMPORTED_LMS", nextRevisionDate = today
+            )
+          )
+          newTopics++
+        } else if (old.descriptionNotes != notes && old.sourceType == "IMPORTED_LMS") {
+          updateTopic(old.copy(descriptionNotes = notes))
+          updated++
+        }
+      }
+      for (a in course.assignments.filter { it.dueDate.isNotBlank() }) {
+        val title = a.title.trim().take(120)
+        val old = tasks.firstOrNull { it.subjectName.equals(subject.name, true) && it.title.equals(title, true) }
+        if (old == null) {
+          if (a.dueDate < today) continue // past work isn't worth a task now
+          addTask(StudyTask(userId = userId, subjectName = subject.name, title = title, dueDate = a.dueDate, type = if (a.isExam) "EXAM" else "ASSIGNMENT"))
+          newTasks++
+        } else if (old.dueDate != a.dueDate && !old.isCompleted) {
+          updateTask(old.copy(dueDate = a.dueDate))
+          updated++
+        }
+      }
+    }
+    return ImportSummary(subjects = newSubjects, topics = newTopics, tasks = newTasks, updated = updated)
+  }
+
   // --- Notes ---
   fun notesFor(userId: String): Flow<List<com.example.data.model.StudyNote>> = dao.getNotesForUser(userId)
 

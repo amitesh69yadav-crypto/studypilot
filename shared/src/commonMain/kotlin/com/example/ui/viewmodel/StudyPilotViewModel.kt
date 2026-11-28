@@ -641,6 +641,10 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
     // Lets the phone-PC sync carry cloud keys (see KeyShare).
     com.example.data.sync.KeyShare.export = ::exportCloudKeys
     com.example.data.sync.KeyShare.import = ::importCloudKeys
+    viewModelScope.launch {
+      kotlinx.coroutines.delay(5_000) // after sign-in and the first sync settle
+      refreshConnectionsIfDue()
+    }
   }
 
   init {
@@ -1729,6 +1733,113 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
         ?: _ringingAlarmSession.value
         ?: TimetableSession(id = sessionId, subjectId = 0L, subjectName = "Alarm", topic = "Scheduled alarm", date = "", startTime = "", endTime = "")
     }
+  }
+
+  // --- Connected services ---
+
+  /** Saved connections and the result of the last import from each. Tokens stay on this device. */
+  data class Connections(
+    val calendarFeeds: List<String> = emptyList(),
+    val canvasUrl: String = "",
+    val canvasConnected: Boolean = false,
+    val moodleUrl: String = "",
+    val moodleConnected: Boolean = false,
+    val busy: Boolean = false,
+    /** Source label -> what the last import did, or why it failed. */
+    val results: Map<String, String> = emptyMap(),
+    val lastImportAt: Long = 0L
+  ) {
+    val hasAny get() = calendarFeeds.isNotEmpty() || canvasConnected || moodleConnected
+  }
+
+  private val connectPrefs = platform.prefs("studypilot_connections")
+  private val _connections = MutableStateFlow(loadConnections())
+  val connections: StateFlow<Connections> = _connections.asStateFlow()
+
+  private fun loadConnections() = Connections(
+    calendarFeeds = connectPrefs.getString("calendar_feeds", "").orEmpty().lines().filter { it.isNotBlank() },
+    canvasUrl = connectPrefs.getString("canvas_url", "").orEmpty(),
+    canvasConnected = !connectPrefs.getString("canvas_token", null).isNullOrBlank(),
+    moodleUrl = connectPrefs.getString("moodle_url", "").orEmpty(),
+    moodleConnected = !connectPrefs.getString("moodle_token", null).isNullOrBlank(),
+    lastImportAt = connectPrefs.getLong("last_import_at", 0L)
+  )
+
+  /** Adds a calendar subscription link ("webcal://", "https://...ics") and imports it. */
+  fun addCalendarFeed(url: String) {
+    val clean = url.trim().replace(Regex("^webcals?://", RegexOption.IGNORE_CASE), "https://")
+    if (clean.isBlank()) return
+    val feeds = (_connections.value.calendarFeeds + clean).distinct()
+    connectPrefs.edit { putString("calendar_feeds", feeds.joinToString("\n")) }
+    _connections.value = _connections.value.copy(calendarFeeds = feeds)
+    importConnections()
+  }
+
+  fun removeCalendarFeed(url: String) {
+    val feeds = _connections.value.calendarFeeds - url
+    connectPrefs.edit { putString("calendar_feeds", feeds.joinToString("\n")) }
+    _connections.value = _connections.value.copy(calendarFeeds = feeds, results = _connections.value.results - feedLabel(url))
+  }
+
+  /** Saves a Canvas or Moodle address and token ("canvas" / "moodle") and imports; a blank token disconnects. */
+  fun setLms(kind: String, url: String, token: String) {
+    connectPrefs.edit {
+      putString("${kind}_url", url.trim())
+      putString("${kind}_token", token.trim())
+    }
+    _connections.value = loadConnections().copy(results = _connections.value.results - kind.replaceFirstChar { it.uppercase() })
+    if (token.isNotBlank()) importConnections()
+  }
+
+  private fun feedLabel(url: String) = "Calendar · " + (url.substringAfter("://").substringBefore('/').ifBlank { url }).take(40)
+
+  /** Imports from every saved connection. [quiet] skips the snackbar (the automatic refresh). */
+  fun importConnections(quiet: Boolean = false) {
+    if (_connections.value.busy) return
+    viewModelScope.launch {
+      _connections.value = _connections.value.copy(busy = true)
+      val uid = _currentUser.value.id
+      val today = com.example.ui.orbit.todayDate()
+      val results = _connections.value.results.toMutableMap()
+      val now = System.currentTimeMillis()
+      for (url in _connections.value.calendarFeeds) {
+        results[feedLabel(url)] = runCatching {
+          val text = com.example.data.connect.LmsHttp.get(url)
+          if (!text.contains("BEGIN:VCALENDAR")) throw com.example.data.connect.LmsException("That link isn't a calendar feed (.ics).")
+          val events = com.example.data.connect.Ical.parse(text, now - 7 * 86_400_000L, now + 120 * 86_400_000L)
+          repository.importCalendar(uid, url, events, today).toString()
+        }.getOrElse { "Couldn't import: ${it.message}" }
+      }
+      val lms = listOfNotNull(
+        connectPrefs.getString("canvas_token", null)?.takeIf { it.isNotBlank() }?.let { com.example.data.connect.CanvasSource(connectPrefs.getString("canvas_url", "").orEmpty(), it) },
+        connectPrefs.getString("moodle_token", null)?.takeIf { it.isNotBlank() }?.let { com.example.data.connect.MoodleSource(connectPrefs.getString("moodle_url", "").orEmpty(), it) }
+      )
+      for (source in lms) {
+        results[source.label] = runCatching { repository.importCourses(uid, source.courses(), today).toString() }
+          .getOrElse { "Couldn't import: ${it.message}" }
+      }
+      connectPrefs.edit { putLong("last_import_at", now) }
+      _connections.value = _connections.value.copy(busy = false, results = results, lastImportAt = now)
+      if (!quiet) _snackbarMessage.emit(if (results.values.any { it.startsWith("Couldn't") }) "Import finished with problems; see Settings > Connections" else "Imported from your connected services")
+    }
+  }
+
+  /** Imports Google Classroom with an access token from Google sign-in (phone only). */
+  fun importClassroom(accessToken: String) {
+    viewModelScope.launch {
+      _connections.value = _connections.value.copy(busy = true)
+      val result = runCatching {
+        repository.importCourses(_currentUser.value.id, com.example.data.connect.ClassroomSource(accessToken).courses(), com.example.ui.orbit.todayDate()).toString()
+      }.getOrElse { "Couldn't import: ${it.message}" }
+      _connections.value = _connections.value.copy(busy = false, results = _connections.value.results + ("Google Classroom" to result))
+      _snackbarMessage.emit("Google Classroom: $result")
+    }
+  }
+
+  /** Called when the app opens: refreshes connected services at most every 12 hours. */
+  private fun refreshConnectionsIfDue() {
+    val c = _connections.value
+    if (c.hasAny && System.currentTimeMillis() - c.lastImportAt > 12 * 3_600_000L) importConnections(quiet = true)
   }
 
   fun dismissAlarm() {

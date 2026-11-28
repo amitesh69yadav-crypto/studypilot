@@ -92,4 +92,46 @@ class AndroidActions(private val context: Context) : PlatformActions {
       null
     }
   }
+
+  override val googleClassroomToken: (suspend () -> String?) = suspend {
+    val activity = context as? androidx.activity.ComponentActivity
+      ?: throw IllegalStateException("Open the app to connect Google Classroom.")
+    val request = com.google.android.gms.auth.api.identity.AuthorizationRequest.builder()
+      .setRequestedScopes(CLASSROOM_SCOPES.map { com.google.android.gms.common.api.Scope(it) })
+      .build()
+    val client = com.google.android.gms.auth.api.identity.Identity.getAuthorizationClient(activity)
+    val first: com.google.android.gms.auth.api.identity.AuthorizationResult =
+      kotlinx.coroutines.suspendCancellableCoroutine { cont ->
+        client.authorize(request)
+          .addOnSuccessListener { cont.resume(it) { _, _, _ -> } }
+          .addOnFailureListener { cont.resumeWith(Result.failure(it)) }
+      }
+    if (!first.hasResolution()) {
+      first.accessToken
+    } else {
+      // Google shows its own consent screen; wait for the answer.
+      val answer = kotlinx.coroutines.CompletableDeferred<androidx.activity.result.ActivityResult>()
+      val launcher = activity.activityResultRegistry.register(
+        "classroom-consent-" + System.nanoTime(),
+        androidx.activity.result.contract.ActivityResultContracts.StartIntentSenderForResult()
+      ) { answer.complete(it) }
+      try {
+        launcher.launch(androidx.activity.result.IntentSenderRequest.Builder(first.pendingIntent!!.intentSender).build())
+        val result = answer.await()
+        if (result.resultCode != android.app.Activity.RESULT_OK) null
+        else client.getAuthorizationResultFromIntent(result.data).accessToken
+      } finally {
+        launcher.unregister()
+      }
+    }
+  }
+
+  private companion object {
+    val CLASSROOM_SCOPES = listOf(
+      "https://www.googleapis.com/auth/classroom.courses.readonly",
+      "https://www.googleapis.com/auth/classroom.coursework.me.readonly",
+      "https://www.googleapis.com/auth/classroom.courseworkmaterials.readonly",
+      "https://www.googleapis.com/auth/classroom.announcements.readonly"
+    )
+  }
 }
