@@ -173,26 +173,14 @@ fun QuizScreen(
 
           if (subjectGroups.isNotEmpty()) {
             Spacer(modifier = Modifier.height(12.dp))
-            Row(
-              modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-              horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-              FilterChip(
-                selected = chosenGroup == null,
-                onClick = { viewModel.updateQuizConfig(quizConfig.copy(subjectId = null)) },
-                label = { Text("All subjects", maxLines = 1, softWrap = false) },
-                shape = RoundedCornerShape(10.dp)
-              )
-              subjectGroups.forEach { group ->
-                FilterChip(
-                  selected = chosenGroup?.id == group.id,
-                  onClick = { viewModel.updateQuizConfig(quizConfig.copy(subjectId = if (chosenGroup?.id == group.id) null else group.id)) },
-                  label = { Text("${group.name} (${group.topics.size})", maxLines = 1, softWrap = false) },
-                  enabled = group.topics.isNotEmpty(),
-                  shape = RoundedCornerShape(10.dp)
-                )
-              }
-            }
+            // Which subject the quiz is on: a dropdown, with how many topics each has.
+            Dropdown(
+              label = "Subject",
+              options = listOf(ALL_SUBJECTS to "All subjects (${topics.size})") +
+                subjectGroups.filter { it.topics.isNotEmpty() }.map { it.id.toString() to "${it.name} (${it.topics.size})" },
+              selected = chosenGroup?.id?.toString() ?: ALL_SUBJECTS,
+              onSelect = { key -> viewModel.updateQuizConfig(quizConfig.copy(subjectId = if (key == ALL_SUBJECTS) null else key.toLong())) }
+            )
           }
 
           Spacer(modifier = Modifier.height(16.dp))
@@ -647,3 +635,5 @@ private fun PreparingQuizzes(
     }
   }
 }
+
+private const val ALL_SUBJECTS = "all"

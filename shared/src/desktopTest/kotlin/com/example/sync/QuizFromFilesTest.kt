@@ -19,6 +19,38 @@ import kotlin.test.assertTrue
 /** Quizzes from course files: the topics they teach, not course information, and real questions. */
 class QuizFromFilesTest {
 
+  @Test
+  fun readingLocallyUsesDoclingMarkdownAndTheLocalModel() = runBlocking<Unit> {
+    val file = File.createTempFile("local-read", ".db").also { it.delete() }
+    val db = AppDatabase.configure(Room.databaseBuilder<AppDatabase>(name = file.absolutePath).setDriver(BundledSQLiteDriver()).setQueryCoroutineContext(Dispatchers.IO))
+    try {
+      val dao = db.studyPilotDao()
+      val repo = StudyPilotRepository(dao, ai = com.example.data.ai.StudyAi().also { it.source = com.example.data.ai.AiSource.BUILT_IN })
+      // A stand-in for Qwen3-VL in Ollama: it sees the Markdown sections and answers with topics.
+      val seen = mutableListOf<String>()
+      val qwen = object : com.example.data.ai.llm.LlmBackend {
+        override val label = "PC · qwen3-vl:8b"
+        override suspend fun generate(request: com.example.data.ai.llm.LlmRequest, onPartial: ((String) -> Unit)?): String {
+          seen += request.turns.last().text
+          return """{"topics":[{"title":"Hidden terminal problem","summary":"Two stations that cannot hear each other collide at a receiver both can reach.","keyPoints":["RTS/CTS reserves the channel"],"pages":[1]}]}"""
+        }
+      }
+      val docId = repo.addUploadedDocument("u", "Lecture 4.docx", ByteArray(0).let { java.io.ByteArrayOutputStream().also { o -> java.util.zip.ZipOutputStream(o).use { z -> z.putNextEntry(java.util.zip.ZipEntry("word/document.xml")); z.write("<w:p><w:r><w:t>plain text</w:t></w:r></w:p>".toByteArray()); z.closeEntry() } }.toByteArray() }, "Networks", null)
+      val markdown = "# Wireless MAC\n\nCSMA/CA listens before sending.\n\n<!-- image -->\n\n| Method | Detects |\n|---|---|\n| CSMA/CD | collisions |\n\n## Hidden terminals\n\nRTS/CTS reserves the channel."
+      assertTrue(repo.scanDocument("u", docId, markdown = { markdown }, model = qwen))
+      val doc = dao.getCourseDocument(docId)!!
+      assertEquals("ready", doc.quizStatus)
+      // The model got Docling's Markdown (with its table), not the plain text, and image placeholders were dropped.
+      assertTrue(seen.single().contains("| CSMA/CD | collisions |") && !seen.single().contains("<!-- image -->"))
+      assertTrue(doc.text.contains("# Wireless MAC"))
+      val topics = repo.topicsOfDocument("u", doc.externalId)
+      assertEquals(listOf("Hidden terminal problem"), topics.map { it.title })
+      assertTrue(topics.single().descriptionNotes.contains("RTS/CTS reserves the channel"))
+    } finally {
+      db.close(); file.delete()
+    }
+  }
+
   private val slides = listOf(
     "Info for students\nLecturer: Dr. Peeters\nEmail: peeters@vub.be\nOffice hours: Tuesday 14:00\nGrading: exam 70%, project 30%\nDeadline for the project: 20 December",
     "Medium Access Control\nCSMA/CA is a protocol that listens before sending and backs off randomly when the channel is busy.\nCollisions are avoided rather than detected in wireless networks.",

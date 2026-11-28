@@ -36,6 +36,9 @@ interface Platform {
    */
   val courseFilesDir: java.io.File? get() = null
 
+  /** Reads documents locally (Docling) for "Read documents with: this PC"; only on the PC. */
+  val localDocumentReader: LocalDocumentReader? get() = null
+
   /** Google sign-in for Drive storage and Classroom; only on the PC. */
   val google: com.example.data.connect.GoogleAuth? get() = null
 
@@ -161,3 +164,9 @@ object Log {
 }
 
 expect fun platformLog(level: Char, tag: String, message: String, error: Throwable?)
+
+/** Turns a document (PDF, slides, Word) into Markdown on this device, e.g. with Docling. */
+interface LocalDocumentReader {
+  suspend fun isAvailable(): Boolean
+  suspend fun toMarkdown(file: java.io.File): String
+}

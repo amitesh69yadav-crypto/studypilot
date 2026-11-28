@@ -313,7 +313,13 @@ class StudyAi(
    * first). Course administration is left out. Null when no model answered; then the built-in
    * [LectureQuiz.topicsFromPages] is used.
    */
-  suspend fun topicsInFile(fileTitle: String, subject: String, section: String): List<FileTopic>? {
+  suspend fun topicsInFile(
+    fileTitle: String,
+    subject: String,
+    section: String,
+    /** A specific model (e.g. Qwen3-VL on this PC) instead of the usual order. */
+    model: LlmBackend? = null
+  ): List<FileTopic>? {
     val request = """
       This is part of the lecture file "$fileTitle" from the course "$subject". Page numbers are marked [Page n].
 
@@ -333,8 +339,14 @@ class StudyAi(
     lastError = null
     if (quizBackends().isEmpty()) lastError = "no AI model is set up (add a Groq or other key in Settings > AI)"
     // Plain text: some providers' strict JSON mode rejects long answers; the JSON is read from the reply.
-    val raw = prompt(request, "You turn lecture material into clear, accurate study notes. You only use what the material says.", 0.2, json = false, preferCloud = true)
-      ?: return null
+    val system = "You turn lecture material into clear, accurate study notes. You only use what the material says."
+    val raw = if (model != null) {
+      runCatching { model.generate(LlmRequest(system, listOf(LlmTurn(true, request)), 0.2, false, maxOutputTokens = 4096)) }
+        .onFailure { lastError = "${model.label}: ${it.message}"; Log.w(TAG, "${model.label} failed", it) }
+        .getOrNull()?.takeIf { it.isNotBlank() } ?: return null
+    } else {
+      prompt(request, system, 0.2, json = false, preferCloud = true) ?: return null
+    }
     return runCatching {
       // A reply cut off mid-way still holds the topics before the cut: keep each complete one.
       val objects = runCatching { JSONObject(extractJson(raw) ?: raw).optJSONArray("topics")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) } } }

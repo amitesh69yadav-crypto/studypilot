@@ -101,6 +101,7 @@ private fun ChooseSubjectDialog(
   val names = listOf("General") + subjects.map { it.name }.filter { it.isNotBlank() && !it.equals("General", true) }
   var chosen by remember { mutableStateOf(preset ?: "General") }
   var newName by remember { mutableStateOf("") }
+  var creating by remember { mutableStateOf(false) }
   AlertDialog(
     onDismissRequest = onDismiss,
     containerColor = dialogBackground(MaterialTheme.colorScheme.surface),
@@ -112,15 +113,18 @@ private fun ChooseSubjectDialog(
           "The AI reads it into topics with study notes. The tutor uses them, and you can make a quiz from the subject or this file.",
           style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-          names.forEach { name ->
-            FilterChip(selected = newName.isBlank() && chosen == name, onClick = { chosen = name; newName = "" }, label = { Text(name, maxLines = 1) })
-          }
+        Dropdown(
+          label = "Subject",
+          options = names.map { it to it } + (NEW_SUBJECT to "New subject…"),
+          selected = if (creating) NEW_SUBJECT else chosen,
+          onSelect = { key -> if (key == NEW_SUBJECT) creating = true else { creating = false; chosen = key; newName = "" } }
+        )
+        if (creating) {
+          OutlinedTextField(value = newName, onValueChange = { newName = it }, singleLine = true, label = { Text("New subject name") }, modifier = Modifier.fillMaxWidth())
         }
-        OutlinedTextField(value = newName, onValueChange = { newName = it }, singleLine = true, label = { Text("Or a new subject") }, modifier = Modifier.fillMaxWidth())
       }
     },
-    confirmButton = { Button(onClick = { onConfirm(newName.trim().ifBlank { chosen }) }) { Text("Add") } },
+    confirmButton = { Button(onClick = { onConfirm(if (creating) newName.trim().ifBlank { chosen } else chosen) }, enabled = !creating || newName.isNotBlank()) { Text("Add") } },
     dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
   )
 }
@@ -178,6 +182,36 @@ fun UploadDocumentCard(viewModel: StudyPilotViewModel) {
         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
       )
       UploadDocumentButton(viewModel)
+    }
+  }
+}
+
+private const val NEW_SUBJECT = "\u0000new"
+
+/**
+ * A dropdown list: shows the chosen option in a field and opens a menu of [options] (key to label).
+ */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+fun Dropdown(label: String, options: List<Pair<String, String>>, selected: String?, onSelect: (String) -> Unit, modifier: Modifier = Modifier) {
+  var open by remember { mutableStateOf(false) }
+  androidx.compose.material3.ExposedDropdownMenuBox(expanded = open, onExpandedChange = { open = it }, modifier = modifier) {
+    OutlinedTextField(
+      value = options.firstOrNull { it.first == selected }?.second ?: "",
+      onValueChange = {},
+      readOnly = true,
+      singleLine = true,
+      label = { Text(label) },
+      trailingIcon = { androidx.compose.material3.ExposedDropdownMenuDefaults.TrailingIcon(expanded = open) },
+      modifier = Modifier.fillMaxWidth().menuAnchor(androidx.compose.material3.ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+    )
+    ExposedDropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+      options.forEach { (key, text) ->
+        androidx.compose.material3.DropdownMenuItem(
+          text = { Text(text, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+          onClick = { onSelect(key); open = false }
+        )
+      }
     }
   }
 }

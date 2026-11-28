@@ -104,6 +104,35 @@ fun AiSettingsCard(viewModel: StudyPilotViewModel) {
         androidx.compose.material3.Switch(checked = quizCloudFirst, onCheckedChange = { viewModel.setQuizCloudFirst(it) })
       }
       Spacer(Modifier.height(12.dp))
+      // Reading uploaded documents: the API key's model, or locally on the PC with Docling + Qwen3-VL.
+      val docReader by viewModel.docReader.collectAsState()
+      val localStatus by viewModel.localReaderStatus.collectAsState()
+      LaunchedEffect(docReader) { if (docReader == "local" && viewModel.canReadLocally) viewModel.checkLocalReader() }
+      Text("Read uploaded documents with", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+      listOf(
+        Triple("api", "Your API key", "Fast and accurate; the document's text goes to your AI provider."),
+        Triple("local", "This PC: Docling + Qwen3-VL", if (viewModel.canReadLocally) "Runs entirely on this PC. Docling reads layout, tables and scanned pages; Qwen3-VL in Ollama finds the topics. Slower, private." else "Available on the PC app. Uploads from this phone use your API key.")
+      ).forEach { (key, title, about) ->
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+          RadioButton(selected = docReader == key, onClick = { viewModel.setDocReader(key) }, enabled = key == "api" || viewModel.canReadLocally)
+          Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+            Text(about, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+          }
+        }
+      }
+      if (docReader == "local" && viewModel.canReadLocally) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Text(
+            localStatus ?: "",
+            style = MaterialTheme.typography.bodySmall,
+            color = if (localStatus?.startsWith("Ready") == true) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+            modifier = Modifier.weight(1f).padding(start = 12.dp)
+          )
+          androidx.compose.material3.TextButton(onClick = { viewModel.checkLocalReader() }) { Text("Check again") }
+        }
+      }
+      Spacer(Modifier.height(12.dp))
       Text("Use", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
       val onDesktop = !viewModel.hasPhoneModels
       // The desktop has no phone model; there "PC" means the Ollama on this computer.

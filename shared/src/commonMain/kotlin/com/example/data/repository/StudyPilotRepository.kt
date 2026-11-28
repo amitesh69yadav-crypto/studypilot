@@ -922,6 +922,8 @@ class StudyPilotRepository(
     )
   }
 
+  suspend fun document(id: Long) = dao.getCourseDocument(id)
+
   /** Removes a document: its topics (and their questions), its record, and the kept copy. */
   suspend fun removeDocument(userId: String, docId: Long) {
     val doc = dao.getCourseDocument(docId) ?: return
@@ -953,7 +955,14 @@ class StudyPilotRepository(
    * tutor and quizzes use them; questions are written when a quiz is made. Progress is saved on the
    * document as it goes, so both devices show it.
    */
-  suspend fun scanDocument(userId: String, docId: Long): Boolean {
+  suspend fun scanDocument(
+    userId: String,
+    docId: Long,
+    /** Read on this PC (Docling): the document as Markdown, used instead of the plain text. */
+    markdown: (suspend () -> String)? = null,
+    /** The model that finds topics (e.g. Qwen3-VL on this PC); null uses the usual order. */
+    model: com.example.data.ai.llm.LlmBackend? = null
+  ): Boolean {
     var doc = dao.getCourseDocument(docId) ?: return false
     suspend fun stage(status: String, progress: Int) = dao.setQuizStatus(doc.id, status, progress)
     return try {
@@ -962,6 +971,15 @@ class StudyPilotRepository(
         val pages = withContext(Dispatchers.Default) { com.example.data.docs.DocumentText.pages(java.io.File(doc.localPath).readBytes(), doc.fileType) }
         doc = doc.copy(text = pages.joinToString("\u000C").take(400_000), pageCount = pages.size, quizStatus = "reading", quizProgress = 10)
         dao.upsertCourseDocument(doc)
+      }
+      if (markdown != null) {
+        // Docling's Markdown keeps headings, lists and tables, and reads scanned pages; its sections
+        // (split at headings) take the place of pages.
+        val sectionsMd = markdownSections(markdown())
+        if (sectionsMd.isNotEmpty()) {
+          doc = doc.copy(text = sectionsMd.joinToString("\u000C").take(400_000), pageCount = sectionsMd.size, quizStatus = "reading", quizProgress = 12)
+          dao.upsertCourseDocument(doc)
+        }
       }
       val pages = doc.pages
       if (doc.text.isBlank()) {
@@ -976,8 +994,8 @@ class StudyPilotRepository(
       val builtIn = mutableListOf<Pair<String, String>>()
       var fallbackWhy: String? = null
       for ((i, section) in sections.withIndex()) {
-        ai.waitForCloud()
-        val found = ai.topicsInFile(doc.title, doc.subjectName, section.text)
+        if (model == null) ai.waitForCloud()
+        val found = ai.topicsInFile(doc.title, doc.subjectName, section.text, model)
         if (found != null) {
           found.forEach { t -> byTitle.getOrPut(t.title.lowercase().replace(Regex("[^a-z0-9]+"), " ").trim()) { mutableListOf() } += t }
         } else {
@@ -1030,6 +1048,22 @@ class StudyPilotRepository(
       stage("failed: ${e.message ?: "something went wrong"}".take(160), 0)
       false
     }
+  }
+
+  /** Markdown split at headings into parts of a reasonable size, each starting with its heading. */
+  private fun markdownSections(md: String): List<String> {
+    val out = mutableListOf<StringBuilder>()
+    var current = StringBuilder()
+    for (line in md.lines()) {
+      val heading = line.trimStart().startsWith("#")
+      if ((heading && current.length > 400) || current.length > 6000) {
+        out += current
+        current = StringBuilder()
+      }
+      if (line.trim() != "<!-- image -->") current.append(line).append('\n')
+    }
+    if (current.isNotBlank()) out += current
+    return out.map { it.toString().trim() }.filter { it.isNotBlank() }
   }
 
   private class Section(val text: String, val pages: Set<Int>)

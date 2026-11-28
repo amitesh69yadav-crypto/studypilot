@@ -82,6 +82,14 @@ class OllamaClient(
     return Backend(model)
   }
 
+  /** The installed model whose name starts with [family] (e.g. "qwen3-vl"), largest tag first; null if none. */
+  suspend fun backendFor(family: String): LlmBackend? {
+    val status = status(forceRefresh = true)
+    if (!status.reachable) return null
+    val model = status.models.filter { it.startsWith(family, ignoreCase = true) }.maxByOrNull { it.length } ?: return null
+    return Backend(model)
+  }
+
   private inner class Backend(private val model: String) : LlmBackend {
     override val label = "PC · $model"
 
