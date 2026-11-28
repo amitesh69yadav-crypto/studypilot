@@ -372,14 +372,20 @@ interface StudyPilotDao {
   @Query("SELECT * FROM course_documents WHERE userId = :userId ORDER BY subjectName, title")
   fun getCourseDocumentsForUser(userId: String): Flow<List<com.example.data.model.CourseDocument>>
 
-  @Query("SELECT id, userId, subjectId, subjectName, title, source, externalId, url, fileType, remoteUpdatedAt, pageCount, '' AS text, fetchedAt FROM course_documents WHERE userId = :userId")
+  @Query("SELECT id, userId, subjectId, subjectName, title, source, externalId, url, fileType, remoteUpdatedAt, pageCount, '' AS text, fetchedAt, localPath, sizeBytes, useForStudy FROM course_documents WHERE userId = :userId")
   suspend fun getCourseDocumentHeaders(userId: String): List<com.example.data.model.CourseDocument>
 
-  @Query("SELECT COUNT(*) || ':' || IFNULL(MAX(fetchedAt), 0) FROM course_documents WHERE userId = :userId")
+  @Query("SELECT COUNT(*) || ':' || IFNULL(MAX(fetchedAt), 0) || ':' || IFNULL(SUM(useForStudy), 0) || ':' || IFNULL(SUM(LENGTH(text)), 0) FROM course_documents WHERE userId = :userId AND useForStudy = 1")
   suspend fun courseDocumentsSignature(userId: String): String
 
   @Insert(onConflict = OnConflictStrategy.REPLACE)
   suspend fun upsertCourseDocument(doc: com.example.data.model.CourseDocument): Long
+
+  @Query("SELECT * FROM course_documents WHERE id = :id")
+  suspend fun getCourseDocument(id: Long): com.example.data.model.CourseDocument?
+
+  @Query("UPDATE course_documents SET useForStudy = :use WHERE id IN (:ids)")
+  suspend fun setUseForStudy(ids: List<Long>, use: Boolean)
 
   @Query("DELETE FROM course_documents WHERE id = :id")
   suspend fun deleteCourseDocument(id: Long)

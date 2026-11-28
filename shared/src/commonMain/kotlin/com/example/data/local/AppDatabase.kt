@@ -32,7 +32,7 @@ import com.example.data.model.ExtractedConcept
     com.example.data.model.StudyNote::class,
     com.example.data.model.CourseDocument::class
   ],
-  version = 11,
+  version = 12,
   exportSchema = false
 )
 @ConstructedBy(AppDatabaseConstructor::class)
@@ -48,7 +48,7 @@ abstract class AppDatabase : RoomDatabase() {
       .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
       // Real migrations come first, so an upgrade keeps everyone's data; the destructive fallback is
       // only for versions with no migration.
-      .addMigrations(MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
+      .addMigrations(MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12)
       .fallbackToDestructiveMigration(dropAllTables = true)
       .build()
   }
@@ -56,6 +56,25 @@ abstract class AppDatabase : RoomDatabase() {
 
 /** Version 9 adds the user's own notes and changes nothing else. */
 /** Version 10 gives notes a topic (heading) under their chapter (title). */
+/**
+ * Version 12 keeps course files as files on the PC (their path and size) and lets the student choose
+ * which ones the tutor and quizzes use; none are chosen at first.
+ */
+val MIGRATION_11_12 = object : androidx.room.migration.Migration(11, 12) {
+  override fun migrate(connection: androidx.sqlite.SQLiteConnection) {
+    // Only the columns that aren't there yet, so a database that already has them upgrades too.
+    val existing = mutableSetOf<String>()
+    connection.prepare("PRAGMA table_info(`course_documents`)").use { st -> while (st.step()) existing += st.getText(1) }
+    listOf(
+      "localPath" to "TEXT NOT NULL DEFAULT ''",
+      "sizeBytes" to "INTEGER NOT NULL DEFAULT 0",
+      "useForStudy" to "INTEGER NOT NULL DEFAULT 0"
+    ).filter { it.first !in existing }.forEach { (name, type) ->
+      connection.prepare("ALTER TABLE `course_documents` ADD COLUMN `$name` $type").use { it.step() }
+    }
+  }
+}
+
 /** Version 11 adds course files' text for "College notes". */
 val MIGRATION_10_11 = object : androidx.room.migration.Migration(10, 11) {
   override fun migrate(connection: androidx.sqlite.SQLiteConnection) {

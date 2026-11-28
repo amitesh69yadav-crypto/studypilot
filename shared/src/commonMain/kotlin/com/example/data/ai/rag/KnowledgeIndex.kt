@@ -146,7 +146,7 @@ class KnowledgeIndex private constructor(private val passages: List<KnowledgePas
      */
     fun buildCourseMaterial(docs: List<com.example.data.model.CourseDocument>, topics: List<StudyTopic>): KnowledgeIndex {
       val out = ArrayList<KnowledgePassage>()
-      for (doc in docs) {
+      for (doc in docs.filter { it.useForStudy }) {
         val unit = if (doc.fileType == "pptx") "slide" else "p."
         doc.pages.forEachIndexed { i, page ->
           val where = if (doc.fileType == "docx") doc.title else "${doc.title}, $unit ${i + 1}"

@@ -101,8 +101,8 @@ private fun subjectOf(name: String) = name.trim().ifBlank { GENERAL }
 private fun sameSubject(a: String, b: String) = subjectOf(a).equals(subjectOf(b), ignoreCase = true)
 
 /** One subject on the Notes front page, with how much is filed under it. */
-private data class SubjectShelf(val name: String, val colorHex: String?, val notes: Int, val tutor: Int, val links: Int) {
-  val isEmpty get() = notes + tutor + links == 0
+private data class SubjectShelf(val name: String, val colorHex: String?, val notes: Int, val tutor: Int, val links: Int, val files: Int = 0) {
+  val isEmpty get() = notes + tutor + links + files == 0
 }
 
 /**
@@ -128,7 +128,7 @@ fun NotesScreen(viewModel: StudyPilotViewModel) {
   }
   val conceptsByChat = remember(concepts) { concepts.groupBy { it.sourceChatId } }
 
-  val shelves = remember(subjects, notes, tutorThreads, linkThreads) {
+  val shelves = remember(subjects, notes, tutorThreads, linkThreads, courseDocs) {
     val names = LinkedHashMap<String, String>() // lowercase -> display name, in the subjects' own order
     val colors = HashMap<String, String>()
     subjects.filter { it.name.isNotBlank() }.forEach {
@@ -143,7 +143,8 @@ fun NotesScreen(viewModel: StudyPilotViewModel) {
         colorHex = colors[name.lowercase()],
         notes = notes.count { sameSubject(it.subjectName, name) },
         tutor = tutorThreads.count { sameSubject(it.subjectName, name) },
-        links = linkThreads.count { sameSubject(it.second.subjectName, name) }
+        links = linkThreads.count { sameSubject(it.second.subjectName, name) },
+        files = courseDocs.count { sameSubject(it.subjectName, name) }
       )
     }
   }
@@ -169,7 +170,9 @@ fun NotesScreen(viewModel: StudyPilotViewModel) {
       onOpenNote = { editing = it },
       onNewNote = { chapter -> editing = StudyNote(title = chapter, body = "", subjectName = current) },
       onSaveAsNote = { thread, pair -> viewModel.saveNote(noteFrom(thread, pair)) },
-      courseFiles = courseDocs.filter { sameSubject(it.subjectName, current) }
+      courseFiles = courseDocs.filter { sameSubject(it.subjectName, current) },
+      onUseFiles = { docs, use -> viewModel.setUseForStudy(docs, use) },
+      filesOnThisDevice = viewModel.connectsHere
     )
   }
 
@@ -233,7 +236,8 @@ private fun SubjectShelves(shelves: List<SubjectShelf>, onOpen: (String) -> Unit
                 else listOfNotNull(
                   shelf.notes.takeIf { it > 0 }?.let { countOf(it, "note") },
                   shelf.tutor.takeIf { it > 0 }?.let { countOf(it, "tutor chat") },
-                  shelf.links.takeIf { it > 0 }?.let { countOf(it, "link") }
+                  shelf.links.takeIf { it > 0 }?.let { countOf(it, "link") },
+                  shelf.files.takeIf { it > 0 }?.let { countOf(it, "file") }
                 ).joinToString(" · "),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -259,7 +263,9 @@ private fun SubjectNotes(
   onBack: () -> Unit,
   onOpenNote: (StudyNote) -> Unit,
   onNewNote: (chapter: String) -> Unit,
-  onSaveAsNote: (QaThread, QaPair) -> Unit
+  onSaveAsNote: (QaThread, QaPair) -> Unit,
+  onUseFiles: (List<com.example.data.model.CourseDocument>, Boolean) -> Unit = { _, _ -> },
+  filesOnThisDevice: Boolean = false
 ) {
   var tab by rememberSaveable(subject) { mutableIntStateOf(0) }
   var query by rememberSaveable(subject) { mutableStateOf("") }
@@ -267,7 +273,7 @@ private fun SubjectNotes(
   fun matches(text: String) = q.isEmpty() || text.contains(q, ignoreCase = true)
   fun threadMatches(t: QaThread) = matches(t.title) || t.pairs.any { matches(it.question) || matches(it.answer) }
 
-  val tabs = listOf("My notes", "Tutor Q&A", "From links", "Course files")
+  val tabs = listOf("Notes", "Tutor", "Links", "Files")
   val tabRow: @Composable () -> Unit = {
     TabRow(selectedTabIndex = tab, modifier = Modifier.padding(horizontal = 16.dp)) {
       tabs.forEachIndexed { i, label ->
@@ -324,7 +330,7 @@ private fun SubjectNotes(
         onSaveAsNote = onSaveAsNote,
         conceptsFor = { thread -> linkThreads.firstOrNull { it.second == thread }?.first?.let { conceptsByChat[it] }.orEmpty() }
       )
-      3 -> CourseFileList(courseFiles.filter { matches(it.title) || matches(it.text) }, subject)
+      3 -> CourseFileList(courseFiles.filter { matches(it.title) || matches(it.text) }, subject, onUseFiles, filesOnThisDevice)
     }
   }
 }
@@ -606,49 +612,82 @@ private fun NoteEditor(
   )
 }
 
-/** Course files read from Canvas or Moodle: what the tutor's "College notes" answers from. */
+/**
+ * The course's files (PDFs, slides, documents) as fetched from Canvas or Moodle. They open as the
+ * originals on the PC; switching one on makes it material for quizzes and the tutor's College notes.
+ */
 @Composable
-private fun CourseFileList(files: List<com.example.data.model.CourseDocument>, subject: String) {
+private fun CourseFileList(
+  files: List<com.example.data.model.CourseDocument>,
+  subject: String,
+  onUse: (List<com.example.data.model.CourseDocument>, Boolean) -> Unit,
+  onThisDevice: Boolean
+) {
   if (files.isEmpty()) {
     EmptyState(
       icon = Icons.Default.EditNote,
       title = "No course files for $subject",
-      description = "Connect Canvas or Moodle in Settings > Connections with \"Course files\" on. Their PDFs and slides show up here, and College notes in the tutor answers from them.",
+      description = if (onThisDevice) "Connect Canvas or Moodle in Settings > Connections. Each course's PDFs and slides are kept here, under their subject."
+      else "Course files are fetched on your PC (Settings > Connections there) and listed here after the next sync.",
       modifier = Modifier.fillMaxSize()
     )
     return
   }
   val actions = LocalPlatformActions.current
-  var open by rememberSaveable { mutableStateOf<Long?>(null) }
+  val chosen = files.count { it.useForStudy }
   LazyColumn(
     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 32.dp),
     verticalArrangement = Arrangement.spacedBy(10.dp),
     modifier = Modifier.fillMaxSize()
   ) {
+    item(key = "header") {
+      Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+          "${countOf(files.size, "file")} · $chosen used for quizzes and the tutor",
+          style = MaterialTheme.typography.labelMedium,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+          modifier = Modifier.weight(1f)
+        )
+        if (chosen < files.size) TextButton(onClick = { onUse(files.filter { !it.useForStudy }, true) }) { Text("Use all") }
+        else TextButton(onClick = { onUse(files, false) }) { Text("Stop using all") }
+      }
+    }
     items(files, key = { it.id }) { doc ->
-      val expanded = open == doc.id
-      Card(onClick = { open = if (expanded) null else doc.id }, modifier = Modifier.fillMaxWidth().animateContentSize()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-          Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SmallTag(doc.fileType.uppercase())
-            Text(doc.title, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, contentDescription = null)
-          }
-          val unit = if (doc.fileType == "pptx") "slide" else "page"
-          Text(
-            if (doc.text.isBlank()) "No readable text (scanned or image-only)" else "${countOf(doc.pageCount, unit)} · read ${friendlyTime(doc.fetchedAt)}",
-            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant
-          )
-          if (expanded) {
-            val preview = doc.pages.firstOrNull { it.isNotBlank() }.orEmpty().take(1200)
-            if (preview.isNotBlank()) Text(preview, style = MaterialTheme.typography.bodySmall)
-            if (doc.url.isNotBlank()) {
-              TextButton(onClick = { actions.openUrl(doc.url) }) {
-                Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("Open the original")
+      Card(modifier = Modifier.fillMaxWidth()) {
+        Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+          Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+              SmallTag(doc.fileType.uppercase())
+              Text(doc.title, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold), maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+            val unit = if (doc.fileType == "pptx") "slide" else "page"
+            Text(
+              listOfNotNull(
+                doc.sizeBytes.takeIf { it > 0 }?.let { if (it >= 1_048_576) "%.1f MB".format(it / 1_048_576.0) else "${it / 1024} KB" },
+                doc.pageCount.takeIf { it > 0 && doc.useForStudy }?.let { countOf(it, unit) },
+                when {
+                  !doc.useForStudy -> null
+                  doc.text.isNotBlank() -> "in quizzes and tutor"
+                  onThisDevice -> "no readable text (scanned?)"
+                  else -> "your PC reads it at the next sync"
+                }
+              ).joinToString(" · "),
+              style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+              if (onThisDevice && doc.localPath.isNotBlank()) {
+                TextButton(onClick = { actions.openFile(doc.localPath) }, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("Open") }
+              }
+              if (doc.url.isNotBlank()) {
+                TextButton(onClick = { actions.openUrl(doc.url) }, contentPadding = PaddingValues(horizontal = 8.dp)) {
+                  Text(if (onThisDevice) "On Canvas" else "Open on Canvas")
+                }
               }
             }
+          }
+          Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            androidx.compose.material3.Switch(checked = doc.useForStudy, onCheckedChange = { onUse(listOf(doc), it) })
+            Text("Quizzes\n& tutor", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
           }
         }
       }

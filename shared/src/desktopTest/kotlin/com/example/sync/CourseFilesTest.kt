@@ -109,21 +109,35 @@ class CourseFilesTest {
       val repo = StudyPilotRepository(db.studyPilotDao())
       repo.addSubject("Advanced IT Networks", "AIN", "#5B6CFF", "u")
       val canvas = CanvasSource(base(), "token")
+      val dir = kotlin.io.path.createTempDirectory("course-files").toFile()
 
-      val first = repo.importCourseFiles("u", canvas, "canvas", emptySet())
+      val first = repo.importCourseFiles("u", canvas, "canvas", emptySet(), dir)
       assertEquals(1, first.added) // the old .ppt is ignored
       assertEquals(1, downloads.get())
-      val doc = db.studyPilotDao().getCourseDocumentsForUser("u").first().single()
+      var doc = db.studyPilotDao().getCourseDocumentsForUser("u").first().single()
       assertEquals("Advanced IT Networks", doc.subjectName)
-      assertEquals(2, doc.pageCount)
       assertEquals("${base()}/courses/7/files/1", doc.url)
+      // The original is kept under its subject, and nothing is read until the student chooses it.
+      assertEquals(File(File(dir, "Advanced IT Networks"), "Lecture 5 - Routing.pdf").absolutePath, doc.localPath)
+      assertTrue(lecture.contentEquals(File(doc.localPath).readBytes()))
+      assertTrue(doc.text.isBlank() && !doc.useForStudy)
+      assertTrue(repo.searchCourseMaterial("u", "distance vector routing table", null).isEmpty())
 
-      // Unchanged: nothing downloaded again. Replaced on Canvas: read again.
-      assertEquals("Files up to date", repo.importCourseFiles("u", canvas, "canvas", emptySet()).toString())
+      // Unchanged: nothing downloaded again. Replaced on Canvas: downloaded again.
+      assertEquals("Files up to date", repo.importCourseFiles("u", canvas, "canvas", emptySet(), dir).toString())
       assertEquals(1, downloads.get())
       updatedAt = "2026-11-20T10:00:00Z"
-      assertEquals(1, repo.importCourseFiles("u", canvas, "canvas", emptySet()).updated)
+      assertEquals(1, repo.importCourseFiles("u", canvas, "canvas", emptySet(), dir).updated)
       assertEquals(2, downloads.get())
+
+      // Chosen for study: read, made a quiz topic under its subject.
+      repo.setUseForStudy(listOf(doc.id), true)
+      assertEquals(1, repo.prepareChosenFiles("u"))
+      doc = db.studyPilotDao().getCourseDocumentsForUser("u").first().single()
+      assertEquals(2, doc.pageCount)
+      val topic = db.studyPilotDao().getTopicsForUser("u").first().single { it.sourceType == "COURSE_FILE" }
+      assertEquals("Lecture 5 - Routing" to "Advanced IT Networks", topic.title to topic.subjectName)
+      assertTrue("Distance-vector" in topic.descriptionNotes)
 
       // College notes finds the right page and cites it.
       val hits = repo.searchCourseMaterial("u", "how often does distance vector routing send its table", "Advanced IT Networks")
@@ -133,11 +147,40 @@ class CourseFilesTest {
       // Nothing on an unrelated question.
       assertTrue(repo.searchCourseMaterial("u", "photosynthesis chlorophyll", null).isEmpty())
 
-      // Removing the course removes its files' text.
+      // No longer chosen: its quiz topic goes, the file stays.
+      repo.setUseForStudy(listOf(doc.id), false)
+      repo.prepareChosenFiles("u")
+      assertTrue(db.studyPilotDao().getTopicsForUser("u").first().none { it.sourceType == "COURSE_FILE" })
+      assertTrue(File(doc.localPath).isFile)
+
+      // Removing the course removes its files, from the app and the disk.
       repo.deleteSubject(db.studyPilotDao().getSubjectsForUser("u").first().single())
       assertTrue(db.studyPilotDao().getCourseDocumentsForUser("u").first().isEmpty())
+      assertTrue(!File(doc.localPath).exists())
+      dir.deleteRecursively()
     } finally {
       server.stop(0)
+      db.close(); file.delete()
+    }
+  }
+
+  @Test
+  fun upgradeFromVersion11KeepsFilesUnchosen() = runBlocking<Unit> {
+    val file = File.createTempFile("upgrade11", ".db").also { it.delete() }
+    fun open() = AppDatabase.configure(Room.databaseBuilder<AppDatabase>(name = file.absolutePath).setDriver(BundledSQLiteDriver()).setQueryCoroutineContext(Dispatchers.IO))
+    open().also { it.studyPilotDao().getSubjectsForUser("u").first(); it.close() }
+    BundledSQLiteDriver().open(file.absolutePath).use { c ->
+      c.execSQL("DROP TABLE course_documents")
+      c.execSQL("CREATE TABLE `course_documents` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `userId` TEXT NOT NULL, `subjectId` INTEGER NOT NULL, `subjectName` TEXT NOT NULL, `title` TEXT NOT NULL, `source` TEXT NOT NULL, `externalId` TEXT NOT NULL, `url` TEXT NOT NULL, `fileType` TEXT NOT NULL, `remoteUpdatedAt` TEXT NOT NULL, `pageCount` INTEGER NOT NULL, `text` TEXT NOT NULL, `fetchedAt` INTEGER NOT NULL)")
+      c.execSQL("INSERT INTO course_documents VALUES (1,'u',0,'Nets','L1.pdf','canvas','9','','pdf','x',3,'old text',0)")
+      c.execSQL("PRAGMA user_version = 11")
+    }
+    val db = open()
+    try {
+      val doc = db.studyPilotDao().getCourseDocumentsForUser("u").first().single()
+      assertEquals("old text", doc.text)
+      assertTrue(!doc.useForStudy && doc.localPath.isBlank())
+    } finally {
       db.close(); file.delete()
     }
   }

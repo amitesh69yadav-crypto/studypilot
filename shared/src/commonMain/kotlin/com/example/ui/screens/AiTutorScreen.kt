@@ -820,8 +820,8 @@ private fun ChatTabContent(
           Text(
             when {
               !collegeNotes -> "Answer from anything"
-              courseFiles.isEmpty() -> "Only your course pages. Import files in Settings > Connections"
-              else -> "Only your course material (${courseFiles.size} files)" + (selectedSubject?.let { ", ${it.code} first" } ?: "")
+              courseFiles.none { it.useForStudy } -> "Only your course pages. Choose files in Notes > a subject > Course files"
+              else -> "Only your course material (${courseFiles.count { it.useForStudy }} files)" + (selectedSubject?.let { ", ${it.code} first" } ?: "")
             },
             fontSize = 11.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,

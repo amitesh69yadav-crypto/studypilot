@@ -30,6 +30,15 @@ interface Platform {
   /** "Android" or "Desktop", for labels. */
   val name: String
 
+  /**
+   * Where original course files (PDFs, slides) are kept, under a folder per subject. Only the PC keeps
+   * them and talks to course sites; null on the phone, which gets everything else through sync.
+   */
+  val courseFilesDir: java.io.File? get() = null
+
+  /** Google sign-in for Drive storage and Classroom; only on the PC. */
+  val google: com.example.data.connect.GoogleAuth? get() = null
+
   /** Phone-PC sync for [database]; create it once per process. */
   val syncEngine: SyncEngine
 }

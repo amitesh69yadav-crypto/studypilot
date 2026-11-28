@@ -254,7 +254,12 @@ data class CourseDocument(
   val pageCount: Int,
   /** Page (or slide) texts separated by form feeds, so answers can cite "p. 12". */
   val text: String,
-  val fetchedAt: Long = System.currentTimeMillis()
+  val fetchedAt: Long = System.currentTimeMillis(),
+  /** Where the original file is kept on the PC; blank on the phone and before it's downloaded. */
+  @androidx.room.ColumnInfo(defaultValue = "") val localPath: String = "",
+  @androidx.room.ColumnInfo(defaultValue = "0") val sizeBytes: Long = 0,
+  /** The student chose this file for quizzes and the tutor's College notes. */
+  @androidx.room.ColumnInfo(defaultValue = "0") val useForStudy: Boolean = false
 ) {
   val pages: List<String> get() = text.split('\u000C')
 }

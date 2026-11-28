@@ -16,6 +16,10 @@ interface PlatformActions {
   fun saveFile(fileName: String, mimeType: String, bytes: ByteArray) {
     showMessage("Saving files isn't available here.")
   }
+  /** Opens a file kept on this device in its usual app (a PDF viewer, PowerPoint). */
+  fun openFile(path: String) {
+    showMessage("Course files open on your PC.")
+  }
   /** Google sign-in returning an ID token for Firebase, or null where unsupported. */
   val googleSignIn: (suspend () -> GoogleAccount?)?
 

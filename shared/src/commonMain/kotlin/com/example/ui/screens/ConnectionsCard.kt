@@ -59,6 +59,10 @@ import java.util.Locale
 fun ConnectionsCard(viewModel: StudyPilotViewModel) {
   val c by viewModel.connections.collectAsState()
   val docs by viewModel.courseDocuments.collectAsState()
+  if (!viewModel.connectsHere) {
+    PhoneConnectionsNote(docs)
+    return
+  }
   val actions = LocalPlatformActions.current
   val scope = rememberCoroutineScope()
   var feed by remember { mutableStateOf("") }
@@ -133,9 +137,9 @@ fun ConnectionsCard(viewModel: StudyPilotViewModel) {
         Column(Modifier.weight(1f)) {
           Text("Course files", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleSmall)
           Text(
-            (if (docs.isEmpty()) "Reads the text of PDFs, slides (.pptx) and Word files from Canvas and Moodle"
-            else "${docs.size} files read · ${docs.sumOf { it.pageCount }} pages") +
-              ". The tutor's College notes answers from them.",
+            (if (docs.isEmpty()) "Keeps each course's PDFs, slides and Word files on this PC, in a folder per subject."
+            else "${docs.size} files kept · ${docs.count { it.useForStudy }} used for quizzes and the tutor.") +
+              " Choose which ones to use in Notes > a subject > Course files.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
           )
         }
@@ -143,25 +147,7 @@ fun ConnectionsCard(viewModel: StudyPilotViewModel) {
       }
       c.progress?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
       HorizontalDivider()
-      Row(verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-          Text("Google Classroom", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleSmall)
-          Text(
-            if (actions.googleClassroomToken != null) "Classes, coursework, materials and announcements, read-only."
-            else "Connect from the phone app; what it imports shows up here after the next sync.",
-            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
-          )
-        }
-        actions.googleClassroomToken?.let { getToken ->
-          OutlinedButton(enabled = !c.busy, onClick = {
-            scope.launch {
-              runCatching { getToken() }
-                .onSuccess { token -> if (token != null) viewModel.importClassroom(token) }
-                .onFailure { actions.showMessage("Google Classroom: ${it.message ?: "couldn't connect"}") }
-            }
-          }) { Text("Import") }
-        }
-      }
+      GoogleConnectionRow(viewModel, c.busy)
 
       if (c.results.isNotEmpty()) {
         HorizontalDivider()
@@ -221,5 +207,50 @@ private fun LmsRow(
       Button(onClick = { onSave(url, token); token = "" }, enabled = url.isNotBlank() && token.isNotBlank()) { Text("Connect and import") }
       Spacer(Modifier.height(2.dp))
     }
+  }
+}
+
+/** On the phone: connections live on the PC; this says what has come over from it. */
+@Composable
+private fun PhoneConnectionsNote(docs: List<com.example.data.model.CourseDocument>) {
+  Card(
+    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+    shape = RoundedCornerShape(16.dp),
+    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+  ) {
+    Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
+      Box(Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
+        Icon(Icons.Default.Link, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+      }
+      Spacer(Modifier.width(12.dp))
+      Column {
+        Text("Connections", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+        Text(
+          "Canvas, Moodle, calendars and Google are connected on your PC. Their subjects, syllabus, deadlines and course files come here through sync" +
+            (if (docs.isNotEmpty()) " (${docs.size} files so far, ${docs.count { it.useForStudy }} used for quizzes)." else "."),
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+      }
+    }
+  }
+}
+
+/** Google Classroom is imported through the Google account signed in under Storage. */
+@Composable
+internal fun GoogleConnectionRow(viewModel: StudyPilotViewModel, busy: Boolean) {
+  val email by viewModel.googleEmail.collectAsState()
+  val c by viewModel.connections.collectAsState()
+  Column {
+    Text("Google Classroom", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleSmall)
+    Text(
+      when {
+        email == null -> "Sign in with Google under Storage below, then turn Classroom on there."
+        c.classroomEnabled -> "Importing through $email."
+        else -> "Turn it on under Storage below ($email)."
+      },
+      style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
   }
 }

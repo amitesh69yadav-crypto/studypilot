@@ -17,6 +17,19 @@ class DesktopActions : PlatformActions {
   /** Short messages for the window's snackbar. */
   val messages: SharedFlow<String> = _messages
 
+  override fun openFile(path: String) {
+    val file = java.io.File(path)
+    if (!file.isFile) {
+      showMessage("That file isn't on this PC any more. Import from Canvas again to get it back.")
+      return
+    }
+    try {
+      Desktop.getDesktop().open(file)
+    } catch (e: Exception) {
+      showMessage("Couldn't open it: ${e.message ?: "no app for this file type"}")
+    }
+  }
+
   override fun openUrl(url: String) {
     try {
       Desktop.getDesktop().browse(URI(url))

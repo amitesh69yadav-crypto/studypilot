@@ -41,6 +41,10 @@ class DesktopPlatform : Platform {
 
   val dataDir: File = File(System.getenv("APPDATA") ?: System.getProperty("user.home"), "StudyPilot").apply { mkdirs() }
 
+  override val courseFilesDir: File = File(dataDir, "Course files")
+
+  override val google: com.example.data.connect.GoogleAuth by lazy { DesktopGoogleAuth(prefs("studypilot_google")) }
+
   val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
   override val database: AppDatabase by lazy {

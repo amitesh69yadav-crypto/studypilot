@@ -234,6 +234,8 @@ class StudyPilotRepository(
     val owned = if (subject.userId.isNotBlank()) dao.getTopicsForUser(subject.userId).first() else dao.getAllTopics().first()
     val (imported, own) = owned.filter { it.subjectId == subject.id }.partition { it.sourceType == "IMPORTED_LMS" }
     imported.forEach { deleteTopic(it.id, subject.userId) }
+    dao.getCourseDocumentHeaders(subject.userId).filter { it.subjectId == subject.id && it.localPath.isNotBlank() }
+      .forEach { runCatching { java.io.File(it.localPath).delete() } }
     dao.deleteCourseDocumentsForSubject(subject.userId, subject.id)
     val moved = own.map { it.copy(subjectId = 0L, subjectName = "General") }
     if (moved.isNotEmpty()) dao.updateTopics(moved)
@@ -868,6 +870,12 @@ class StudyPilotRepository(
 
   fun courseDocuments(userId: String) = dao.getCourseDocumentsForUser(userId)
 
+  /** Marks course files as chosen (or not) for quizzes and the tutor. */
+  suspend fun setUseForStudy(ids: List<Long>, use: Boolean) {
+    if (ids.isNotEmpty()) dao.setUseForStudy(ids, use)
+    courseCache = null
+  }
+
   /** What reading course files did, for the status line. */
   data class FileImport(val added: Int = 0, val updated: Int = 0, val unreadable: Int = 0, val skipped: Int = 0, val failed: Int = 0) {
     override fun toString(): String = listOfNotNull(
@@ -880,53 +888,124 @@ class StudyPilotRepository(
   }
 
   /**
-   * Reads the text of course files into the app. Files already read and unchanged are skipped, so a
-   * refresh only downloads what's new. Files of removed courses ([skip]) aren't read.
+   * Keeps a course site's files on this PC under [filesDir]/<subject>/, as the original PDFs and
+   * slides. Unchanged files aren't downloaded again; a changed one is replaced. Text is read only for
+   * files the student chose for study ([prepareChosenFiles]). Files of removed courses ([skip]) aren't kept.
    */
   suspend fun importCourseFiles(
     userId: String,
     source: com.example.data.connect.LmsSource,
     sourceKey: String,
     skip: Set<String>,
+    filesDir: java.io.File,
     maxBytes: Long = 30L * 1024 * 1024,
     onProgress: (done: Int, total: Int) -> Unit = { _, _ -> }
   ): FileImport {
     val files = source.files().filter { it.courseName.take(60).lowercase() !in skip }
     val known = dao.getCourseDocumentHeaders(userId).filter { it.source == sourceKey }.associateBy { it.externalId }
     val subjects = dao.getSubjectsForUser(userId).first()
-    var added = 0; var updated = 0; var unreadable = 0; var skipped = 0; var failed = 0
+    var added = 0; var updated = 0; val unreadable = 0; var skipped = 0; var failed = 0
     files.forEachIndexed { i, f ->
       onProgress(i, files.size)
       val old = known[f.id]
-      if (old != null && old.remoteUpdatedAt == f.updatedAt) return@forEachIndexed
+      val haveFile = old != null && old.localPath.isNotBlank() && java.io.File(old.localPath).isFile
+      if (old != null && old.remoteUpdatedAt == f.updatedAt && haveFile) return@forEachIndexed
       if (f.size > maxBytes) { skipped++; return@forEachIndexed }
       val type = com.example.data.docs.DocumentText.typeOf(f.name, f.contentType) ?: return@forEachIndexed
       val bytes = runCatching { source.download(f) }.getOrNull()
       if (bytes == null) { failed++; return@forEachIndexed }
-      val pages = withContext(Dispatchers.Default) { com.example.data.docs.DocumentText.pages(bytes, type) }
-      if (pages.none { it.isNotBlank() }) unreadable++
       val subject = subjects.firstOrNull { it.name.equals(f.courseName.take(60), ignoreCase = true) }
+      val subjectName = subject?.name ?: f.courseName.take(60)
+      val target = old?.localPath?.takeIf { it.isNotBlank() }?.let { java.io.File(it) }
+        ?: uniqueFile(java.io.File(filesDir, safeName(subjectName)), safeName(f.name.take(160)))
+      withContext(Dispatchers.IO) {
+        target.parentFile?.mkdirs()
+        target.writeBytes(bytes)
+      }
+      val changed = old != null && old.remoteUpdatedAt != f.updatedAt
       dao.upsertCourseDocument(
         com.example.data.model.CourseDocument(
           id = old?.id ?: 0L,
           userId = userId,
           subjectId = subject?.id ?: 0L,
-          subjectName = subject?.name ?: f.courseName.take(60),
+          subjectName = subjectName,
           title = f.name.take(160),
           source = sourceKey,
           externalId = f.id,
           url = f.viewUrl,
           fileType = type,
           remoteUpdatedAt = f.updatedAt,
-          pageCount = pages.size,
-          // Very long books are cut; a lecture's worth of text fits easily.
-          text = pages.joinToString("\u000C").take(400_000)
+          // A replaced file is read again when it's in use; until then its old text goes.
+          pageCount = if (changed) 0 else old?.pageCount ?: 0,
+          text = if (changed || old == null) "" else (dao.getCourseDocument(old.id)?.text ?: ""),
+          localPath = target.absolutePath,
+          sizeBytes = bytes.size.toLong(),
+          useForStudy = old?.useForStudy ?: false
         )
       )
       if (old == null) added++ else updated++
     }
     onProgress(files.size, files.size)
+    prepareChosenFiles(userId)
     return FileImport(added, updated, unreadable, skipped, failed)
+  }
+
+  private fun safeName(name: String) = name.replace(Regex("""[\\/:*?"<>|\u0000-\u001F]"""), "_").trim().trimEnd('.').ifBlank { "file" }
+
+  private fun uniqueFile(dir: java.io.File, name: String): java.io.File {
+    var f = java.io.File(dir, name)
+    var n = 2
+    while (f.exists()) {
+      f = java.io.File(dir, name.substringBeforeLast('.') + " ($n)." + name.substringAfterLast('.', "pdf"))
+      n++
+    }
+    return f
+  }
+
+  /**
+   * Turns the student's choices into study material, on the PC where the originals are: a chosen
+   * file's text is read (once) and it becomes a topic under its subject, which quizzes and the tutor
+   * use; a file no longer chosen loses its topic. Returns how many files were read.
+   */
+  suspend fun prepareChosenFiles(userId: String): Int {
+    val docs = dao.getCourseDocumentHeaders(userId)
+    val topics = dao.getTopicsForUser(userId).first().filter { it.sourceType == "COURSE_FILE" }
+    val topicByFile = topics.associateBy { it.uploadedFileName }
+    val today = com.example.data.repository.todayIso()
+    var read = 0
+    for (header in docs) {
+      val topic = topicByFile[header.externalId]
+      if (!header.useForStudy) {
+        topic?.let { deleteTopic(it.id, userId) }
+        continue
+      }
+      var doc = dao.getCourseDocument(header.id) ?: continue
+      if (doc.text.isBlank() && doc.localPath.isNotBlank()) {
+        val file = java.io.File(doc.localPath)
+        if (file.isFile) {
+          val pages = withContext(Dispatchers.Default) { com.example.data.docs.DocumentText.pages(file.readBytes(), doc.fileType) }
+          doc = doc.copy(text = pages.joinToString("\u000C").take(400_000), pageCount = pages.size)
+          dao.upsertCourseDocument(doc)
+          read++
+        }
+      }
+      if (doc.text.isBlank()) continue
+      val notes = doc.text.replace('\u000C', '\n').take(60_000)
+      val title = doc.title.substringBeforeLast('.').take(80)
+      if (topic == null) {
+        addTopic(
+          StudyTopic(
+            userId = userId, subjectId = doc.subjectId, subjectName = doc.subjectName, title = title,
+            dateStudied = today, descriptionNotes = notes, sourceType = "COURSE_FILE",
+            uploadedFileName = doc.externalId, nextRevisionDate = today
+          )
+        )
+      } else if (topic.descriptionNotes != notes) {
+        updateTopic(topic.copy(descriptionNotes = notes))
+      }
+    }
+    if (read > 0) courseCache = null
+    return read
   }
 
   suspend fun resolveOrCreateSubjectForImport(
@@ -2091,3 +2170,6 @@ fun newChatMaterial(old: String, new: String): String {
   return n.split(Regex("""\n\s*\n""")).filter { it.isNotBlank() && norm(it) !in known }.joinToString("\n\n")
 
 }
+
+/** Today as "yyyy-MM-dd" in this device's time zone. */
+internal fun todayIso(): String = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())

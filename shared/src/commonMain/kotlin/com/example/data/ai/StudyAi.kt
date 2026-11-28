@@ -231,6 +231,17 @@ class StudyAi(
   }
 
   /**
+   * About 3,000 characters of [notes] to write questions from. Long material (a whole lecture file)
+   * gives a different stretch each time, starting at a paragraph, so quizzes cover all of it.
+   */
+  private fun notesExcerpt(notes: String): String {
+    if (notes.length <= 3000) return notes
+    val start = kotlin.random.Random.nextInt(0, notes.length - 2500)
+    val from = notes.lastIndexOf('\n', start).let { if (it < 0) 0 else it + 1 }
+    return notes.substring(from, minOf(notes.length, from + 3000))
+  }
+
+  /**
    * New questions on [topic] from the model, or empty when no model answered. Only [types] are kept;
    * [avoid] lists questions the student already has.
    */
@@ -244,7 +255,7 @@ class StudyAi(
     val prompt = """
       Write exactly $count revision questions on "${topic.title}" (${topic.subjectName}), difficulty $difficulty.
       Base them only on this material (the student's notes, or a conversation they had while studying):
-      "${topic.descriptionNotes.take(3000)}"
+      "${notesExcerpt(topic.descriptionNotes)}"
 
       ${freshnessNote(avoid)}
 

@@ -645,6 +645,14 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
       kotlinx.coroutines.delay(5_000) // after sign-in and the first sync settle
       refreshConnectionsIfDue()
     }
+    // Started after setup (the file list is declared further down), on the PC only.
+    if (connectsHere) viewModelScope.launch {
+      kotlinx.coroutines.delay(3_000)
+      courseDocuments
+        .map { docs -> docs.filter { it.useForStudy }.joinToString { "${it.id}:${it.text.isNotBlank()}" } to docs.count { !it.useForStudy } }
+        .distinctUntilChanged()
+        .collect { runCatching { repository.prepareChosenFiles(_currentUser.value.id) } }
+    }
   }
 
   init {
@@ -1799,12 +1807,19 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
     /** Read the text of course PDFs and slides too, for "College notes". */
     val includeFiles: Boolean = true,
     /** "Reading files 12 of 140" while course files are being read. */
-    val progress: String? = null
+    val progress: String? = null,
+    val classroomEnabled: Boolean = false
   ) {
     val hasAny get() = calendarFeeds.isNotEmpty() || canvasConnected || moodleConnected
   }
 
   private val connectPrefs = platform.prefs("studypilot_connections")
+
+  /**
+   * The PC connects to course sites, fetches, and keeps the original files; the phone gets the
+   * results (subjects, topics, tasks, file lists, chosen material) through sync.
+   */
+  val connectsHere: Boolean get() = platform.courseFilesDir != null
   private val _connections = MutableStateFlow(loadConnections())
   val connections: StateFlow<Connections> = _connections.asStateFlow()
 
@@ -1818,8 +1833,160 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
     moodleUrl = connectPrefs.getString("moodle_url", "").orEmpty(),
     moodleConnected = !connectPrefs.getString("moodle_token", null).isNullOrBlank(),
     lastImportAt = connectPrefs.getLong("last_import_at", 0L),
-    includeFiles = connectPrefs.getBoolean("include_files", true)
+    includeFiles = connectPrefs.getBoolean("include_files", true),
+    classroomEnabled = connectPrefs.getBoolean("classroom_enabled", false)
   )
+
+  /**
+   * Chooses course files for quizzes and the tutor (or stops using them). On the PC the chosen files
+   * are read and become topics right away; on the phone the choice syncs to the PC, which does it.
+   */
+  fun setUseForStudy(docs: List<com.example.data.model.CourseDocument>, use: Boolean) {
+    viewModelScope.launch {
+      repository.setUseForStudy(docs.map { it.id }, use)
+      if (connectsHere) {
+        _connections.value = _connections.value.copy(progress = if (use) "Reading ${docs.size} file${if (docs.size == 1) "" else "s"}…" else null)
+        runCatching { repository.prepareChosenFiles(_currentUser.value.id) }
+        _connections.value = _connections.value.copy(progress = null)
+      }
+      _snackbarMessage.emit(
+        when {
+          !use -> "No longer used for quizzes and the tutor"
+          connectsHere -> "Ready for quizzes and the tutor"
+          else -> "Chosen. Your PC reads ${if (docs.size == 1) "it" else "them"} at the next sync"
+        }
+      )
+    }
+  }
+
+  // --- Storage: on the devices, or also in Google Drive (managed on the PC) ---
+
+  /** "device" (phone and PC only) or "drive" (also backed up to the student's Google Drive). */
+  private val _storageMode = MutableStateFlow(connectPrefs.getString("storage_mode", "device") ?: "device")
+  val storageMode: StateFlow<String> = _storageMode.asStateFlow()
+
+  private val _googleEmail = MutableStateFlow(platform.google?.email)
+  val googleEmail: StateFlow<String?> = _googleEmail.asStateFlow()
+
+  val canUseGoogle: Boolean get() = platform.google != null
+
+  private val _lastDriveBackup = MutableStateFlow(connectPrefs.getLong("drive_last_backup", 0L))
+  val lastDriveBackup: StateFlow<Long> = _lastDriveBackup.asStateFlow()
+
+  /** Opens Google's sign-in in the browser (PC). The client comes from the student's Google Cloud project. */
+  fun signInGoogle(clientId: String, clientSecret: String) {
+    val google = platform.google ?: return
+    viewModelScope.launch {
+      _connections.value = _connections.value.copy(busy = true, progress = "Finish signing in in your browser…")
+      val result = runCatching { google.signIn(clientId.trim(), clientSecret.trim()) }
+      _connections.value = _connections.value.copy(busy = false, progress = null)
+      result.onSuccess { mail ->
+        _googleEmail.value = mail
+        _snackbarMessage.emit("Signed in to Google as $mail")
+        if (_storageMode.value == "drive") backupToDrive()
+      }.onFailure { _snackbarMessage.emit(it.message ?: "Google sign-in failed") }
+    }
+  }
+
+  fun signOutGoogle() {
+    platform.google?.signOut()
+    _googleEmail.value = null
+  }
+
+  fun setStorageMode(mode: String) {
+    _storageMode.value = mode
+    connectPrefs.edit { putString("storage_mode", mode) }
+    if (mode == "drive" && _googleEmail.value != null) backupToDrive()
+  }
+
+  fun setClassroomEnabled(on: Boolean) {
+    connectPrefs.edit { putBoolean("classroom_enabled", on) }
+    _connections.value = _connections.value.copy(classroomEnabled = on)
+    if (on) importConnections()
+  }
+
+  /**
+   * Copies everything to the student's Google Drive: all app data as "StudyPilot data.json" (the same
+   * format the phone-PC sync uses, so it restores exactly) and each course file into a folder per
+   * subject. Only files that are new or changed since the last backup are uploaded.
+   */
+  fun backupToDrive(quiet: Boolean = false) {
+    val google = platform.google ?: return
+    if (_googleEmail.value == null) return
+    viewModelScope.launch {
+      val before = _connections.value.busy
+      _connections.value = _connections.value.copy(busy = true, progress = "Backing up to Google Drive…")
+      val result = runCatching {
+        val drive = com.example.data.connect.DriveClient(token = { google.accessToken() })
+        val root = drive.folder("StudyPilot", null)
+        // 1. The data.
+        val engine = platform.syncEngine
+        engine.prepare()
+        val seq = engine.currentSeq()
+        val payload = org.json.JSONObject()
+          .put("app", "StudyPilot").put("version", 1).put("savedAt", System.currentTimeMillis())
+          .put("changes", engine.changesSince(0L, seq, excludeDevice = null))
+          .put("accounts", engine.accountsPayload())
+        val bytes = payload.toString().toByteArray()
+        val known = connectPrefs.getString("drive_backup_id", null)
+        val id = runCatching { drive.put("StudyPilot data.json", root, bytes, "application/json", known) }
+          .getOrElse { drive.put("StudyPilot data.json", root, bytes, "application/json", null) } // the old copy was deleted
+        connectPrefs.edit { putString("drive_backup_id", id) }
+        // 2. The course files, in a folder per subject.
+        val uploaded = org.json.JSONObject(connectPrefs.getString("drive_files", "{}") ?: "{}")
+        val docs = courseDocuments.value.filter { it.localPath.isNotBlank() && java.io.File(it.localPath).isFile }
+        val todo = docs.filter { uploaded.optJSONObject(it.externalId)?.optString("v") != it.remoteUpdatedAt }
+        val folders = HashMap<String, String>()
+        var sent = 0
+        val subjectsRoot = drive.folder("Course files", root)
+        todo.forEachIndexed { i, doc ->
+          _connections.value = _connections.value.copy(progress = "Copying course files to Google Drive ${i + 1} of ${todo.size}")
+          val folder = folders.getOrPut(doc.subjectName) { drive.folder(doc.subjectName, subjectsRoot) }
+          val prev = uploaded.optJSONObject(doc.externalId)?.optString("id")?.takeIf { it.isNotBlank() }
+          val fileBytes = java.io.File(doc.localPath).readBytes()
+          val mime = com.example.data.connect.DriveClient.mimeFor(doc.fileType)
+          val fileId = runCatching { drive.put(doc.title, folder, fileBytes, mime, prev) }.getOrElse { drive.put(doc.title, folder, fileBytes, mime, null) }
+          uploaded.put(doc.externalId, org.json.JSONObject().put("id", fileId).put("v", doc.remoteUpdatedAt))
+          connectPrefs.edit { putString("drive_files", uploaded.toString()) }
+          sent++
+        }
+        sent
+      }
+      val now = System.currentTimeMillis()
+      result.onSuccess {
+        connectPrefs.edit { putLong("drive_last_backup", now) }
+        _lastDriveBackup.value = now
+      }
+      _connections.value = _connections.value.copy(
+        busy = before, progress = null,
+        results = _connections.value.results + ("Google Drive" to result.fold(
+          { n -> "Backed up your data" + if (n > 0) " and $n course file${if (n == 1) "" else "s"}" else "" },
+          { "Couldn't back up: ${it.message}" }
+        ))
+      )
+      if (!quiet) _snackbarMessage.emit(if (result.isSuccess) "Backed up to Google Drive" else "Google Drive backup failed; see Settings")
+    }
+  }
+
+  /** Brings back everything from the Drive backup, merged with what's on this device. */
+  fun restoreFromDrive() {
+    val google = platform.google ?: return
+    viewModelScope.launch {
+      _connections.value = _connections.value.copy(busy = true, progress = "Restoring from Google Drive…")
+      val result = runCatching {
+        val drive = com.example.data.connect.DriveClient(token = { google.accessToken() })
+        val root = drive.find("StudyPilot", null, folder = true) ?: throw com.example.data.connect.LmsException("There's no StudyPilot backup in this Google Drive yet.")
+        val id = drive.find("StudyPilot data.json", root, folder = false) ?: throw com.example.data.connect.LmsException("There's no StudyPilot backup in this Google Drive yet.")
+        val payload = org.json.JSONObject(String(drive.download(id)))
+        val engine = platform.syncEngine
+        engine.prepare()
+        payload.optJSONObject("accounts")?.let { engine.mergeAccounts(it) }
+        engine.apply(payload.optJSONArray("changes") ?: org.json.JSONArray(), fromDevice = "google-drive-backup")
+      }
+      _connections.value = _connections.value.copy(busy = false, progress = null)
+      _snackbarMessage.emit(result.fold({ "Restored from Google Drive ($it changes)" }, { it.message ?: "Restore failed" }))
+    }
+  }
 
   fun setIncludeCourseFiles(on: Boolean) {
     connectPrefs.edit { putBoolean("include_files", on) }
@@ -1864,7 +2031,7 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
 
   /** Imports from every saved connection. [quiet] skips the snackbar (the automatic refresh). */
   fun importConnections(quiet: Boolean = false) {
-    if (_connections.value.busy) return
+    if (_connections.value.busy || !connectsHere) return
     viewModelScope.launch {
       _connections.value = _connections.value.copy(busy = true)
       val uid = _currentUser.value.id
@@ -1889,15 +2056,22 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
         if (connectPrefs.getBoolean("include_files", true) && results[source.label]?.startsWith("Couldn't") != true) {
           val key = source.label.lowercase()
           results["${source.label} files"] = runCatching {
-            repository.importCourseFiles(uid, source, key, skippedCourses()) { done, total ->
+            repository.importCourseFiles(uid, source, key, skippedCourses(), platform.courseFilesDir!!) { done, total ->
               _connections.value = _connections.value.copy(progress = if (done < total) "Reading ${source.label} files ${done + 1} of $total" else null)
             }.toString()
           }.getOrElse { "Couldn't read files: ${it.message}" }
           _connections.value = _connections.value.copy(progress = null)
         }
       }
+      val google = platform.google
+      if (google != null && google.email != null && connectPrefs.getBoolean("classroom_enabled", false)) {
+        results["Google Classroom"] = runCatching {
+          repository.importCourses(uid, com.example.data.connect.ClassroomSource(google.accessToken()).courses(), today, skippedCourses()).toString()
+        }.getOrElse { "Couldn't import: ${it.message}" }
+      }
       connectPrefs.edit { putLong("last_import_at", now) }
       _connections.value = _connections.value.copy(busy = false, results = results, lastImportAt = now)
+      if (_storageMode.value == "drive") backupToDrive(quiet = true)
       if (!quiet) _snackbarMessage.emit(if (results.values.any { it.startsWith("Couldn't") }) "Import finished with problems; see Settings > Connections" else "Imported from your connected services")
     }
   }
@@ -1917,7 +2091,8 @@ class StudyPilotViewModel(private val platform: Platform) : ViewModel() {
   /** Called when the app opens: refreshes connected services at most every 12 hours. */
   private fun refreshConnectionsIfDue() {
     val c = _connections.value
-    if (c.hasAny && System.currentTimeMillis() - c.lastImportAt > 12 * 3_600_000L) importConnections(quiet = true)
+    if (connectsHere && (c.hasAny || c.classroomEnabled) && System.currentTimeMillis() - c.lastImportAt > 12 * 3_600_000L) importConnections(quiet = true)
+    else if (connectsHere && _storageMode.value == "drive" && System.currentTimeMillis() - _lastDriveBackup.value > 12 * 3_600_000L) backupToDrive(quiet = true)
   }
 
   fun dismissAlarm() {
